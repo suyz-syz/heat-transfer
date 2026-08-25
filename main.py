@@ -65,23 +65,18 @@ _setup_cjk_font()
 
 # ============ 输入控件 ============
 class FloatInput(TextInput):
-    """仅允许输入合法浮点数的文本框。"""
+    """仅允许输入合法浮点数的文本框。
+
+    使用 Kivy 内置 input_filter='float'：它允许 '.' / '-' / 'e' 等部分输入
+    （例如先敲小数点 '.' 再补数字），避免自定义过滤器收到单字符 '.' 时
+    因 float('.') 抛 ValueError 而把小数点丢弃的问题。
+    """
 
     def __init__(self, **kwargs):
         kwargs.setdefault("multiline", False)
         kwargs.setdefault("halign", "center")
         super().__init__(**kwargs)
-        self.input_filter = self._filter
-
-    @staticmethod
-    def _filter(text, from_undo=False):
-        if text == "":
-            return text
-        try:
-            float(text)
-            return text
-        except ValueError:
-            return ""
+        self.input_filter = "float"
 
 
 class IntInput(TextInput):
