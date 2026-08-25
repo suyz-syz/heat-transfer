@@ -15,11 +15,14 @@ Android 打包（需先安装 buildozer，详见 buildozer.spec）：
 
 from kiln_ht import Layer, KilnParams, solve_wall, compute_temperature_curve
 
+import os
+
 import kivy
 
 kivy.require("2.1.0")
 
 from kivy.app import App
+from kivy.core.text import LabelBase
 from kivy.graphics import Color, Line
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
@@ -30,6 +33,34 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
+from kivy.utils import platform
+
+
+def _setup_cjk_font():
+    """在 Android 上启用系统自带的中文字体（Google Noto CJK），不打包字体文件。
+
+    Android 默认的 Roboto 字体不含 CJK 字形，中文会显示为"方框+叉"。
+    Android 系统自带 Google 的 Noto Sans CJK 字体，覆盖中/日/韩字符，
+    将其注册为 Kivy 默认字体 'Roboto'，所有控件（Label/Button 等）即可正常显示中文。
+    非 Android 平台（桌面调试）保持默认字体，不做修改。
+    """
+    if platform != "android":
+        return
+    # 常见 Android 系统 CJK 字体路径（按优先级尝试）
+    candidates = [
+        "/system/fonts/NotoSansCJK-Regular.ttc",   # Android 7.0+（API 24）
+        "/system/fonts/NotoSansSC-Regular.otf",    # 部分设备提供 SC 单语言版
+        "/system/fonts/DroidSansFallback.ttf",     # 旧设备兜底
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            LabelBase.register(name="Roboto", fn_regular=path)
+            print(f"[字体] 已启用系统 CJK 字体: {path}")
+            return
+    print("[字体] 未找到系统 CJK 字体，中文可能无法显示")
+
+
+_setup_cjk_font()
 
 
 # ============ 输入控件 ============
