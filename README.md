@@ -17,7 +17,7 @@ Kivy 跨平台移动端（Android APK）、FastAPI RESTful API（Docker 部署�
 
 | 组件 | 技术 |
 |---|---|
-| 计算核心 | Python + NumPy |
+| 计算核心 | Python 标准库（零第三方依赖，便于 Android 交叉编译） |
 | 移动端 UI | Kivy（Android / iOS / 桌面） |
 | API 服务 | FastAPI + Uvicorn |
 | 容器化 | Docker（多架构镜像发布至 GitHub Packages / ghcr.io） |
@@ -46,10 +46,9 @@ cement-kiln-heat-transfer/
 
 ## 本地运行
 
-### 1. 计算核心（直接调用）
+### 1. 计算核心（直接调用，无需安装任何第三方库）
 
 ```bash
-pip install numpy
 python -c "
 from kiln_ht import Layer, KilnParams, solve_wall
 layers = [Layer('硅酸铝纤维', 0.150, 0.10),
@@ -91,7 +90,7 @@ curl -X POST http://localhost:8000/solve \
 ## 单元测试
 
 ```bash
-pip install pytest numpy
+pip install pytest
 python -m pytest tests/ -v
 ```
 

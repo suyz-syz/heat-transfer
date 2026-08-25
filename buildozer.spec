@@ -31,14 +31,16 @@ version = 1.0.0
 version.code = 1
 
 # (list) Buildozer 使用的依赖（Android 平台通过 python-for-android 打包）
-# python3 与 hostpython3 都必须固定 3.12.10：p4a 要求两者版本一致，
-#   否则报 "python3 should have same version as hostpython3"。
-# 选择 3.12 的原因：Kivy 2.3.0 的 Cython 生成代码仅兼容 CPython <=3.12
-#   （_PyList_Extend 在 3.13 移除、_PyUnicode_FastCopyCharacters 在 3.14 移除），
-#   而 p4a python3 配方默认 3.14.2，直接编译会大量报错。
-# numpy 固定为 v2.3.0：p4a numpy recipe 的 git 源使用带 v 前缀的 tag（version = "v2.3.0"），
-# 若写成 numpy==2.3.0 会导致 p4a 执行 git checkout 2.3.0 失败（pathspec 不匹配）
-requirements = hostpython3==3.12.10,python3==3.12.10,kivy==2.3.0,numpy==v2.3.0
+# 采用 p4a develop 分支测试过的默认组合：python3==3.14.2 + kivy==2.3.1。
+# 原因：
+#  - python3==3.12 在 p4a develop 上会触发 grpmodule 编译失败（bionic 不声明 setgrent 等），
+#    而 3.14.2 是 p4a 默认且带专属补丁（3.14_armv7l_fix.patch 等），CI 已验证；
+#  - kivy==2.3.1 是 p4a kivy 配方默认版本，已支持 CPython 3.14
+#    （2.3.0 因 Cython 代码兼容问题无法在 3.14 上编译）；
+#  - hostpython3 与 python3 必须同版本，故两者都固定 3.14.2。
+# 计算核心 kiln_ht/calc.py 零第三方依赖（不含 numpy），因此 Android 打包无需
+# numpy，彻底避开 numpy 交叉编译这一最脆弱环节。
+requirements = hostpython3==3.14.2,python3==3.14.2,kivy==2.3.1
 
 # (str) 屏幕方向：portrait / landscape
 orientation = portrait

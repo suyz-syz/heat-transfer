@@ -105,8 +105,8 @@ def temperature_curve(req: SolveRequest, n_points: int = 500):
         sol = solve_wall(layers, params)
         x_mm, T_c = compute_temperature_curve(layers, sol, n_points=params.N_total)
         return {
-            "x_mm": x_mm.tolist(),
-            "T_c": T_c.tolist(),
+            "x_mm": list(x_mm),
+            "T_c": list(T_c),
             "solution": sol.as_dict(),
         }
     except ValueError as exc:

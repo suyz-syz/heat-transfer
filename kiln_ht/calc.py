@@ -14,16 +14,15 @@
 - 外壳散热：github.com/mvoggu/heat_simulation（水泥窑壳散热）
 - 传热学关联式：Gnielinski、Churchill-Chu、Zhukauskas、Hottel/Leckner
 
-本模块只依赖 numpy，可被 Kivy 移动端、FastAPI 服务、命令行工具任意复用。
+本模块零第三方依赖，仅使用 Python 标准库（math），可在任意平台直接运行；
+也是为了避免 Android 交叉编译 numpy 带来的脆弱性，便于 Kivy 移动端打包。
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-
-import numpy as np
 
 # ============ 物理常数 ============
 SIGMA = 5.670374419e-8      # Stefan-Boltzmann 常数 W/(m²·K⁴)
@@ -148,16 +147,16 @@ def inner_convection_h(v: float, D: float, L: float, T_f: float) -> float:
     lam, Pr, nu = air_properties(T_f)
     Re = v * D / nu
     if Re >= 10000:
-        f = (0.79 * np.log(Re) - 1.64) ** -2          # Petukhov 摩擦因子
+        f = (0.79 * math.log(Re) - 1.64) ** -2        # Petukhov 摩擦因子
         Nu_fd = (f / 8.0) * (Re - 1000) * Pr / (
-            1 + 12.7 * np.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1))
+            1 + 12.7 * math.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1))
     elif Re <= 2300:
         Nu_fd = 3.66
     else:
         # 过渡区（2300~10000）线性插值，避免层流/湍流突变
-        f = (0.79 * np.log(Re) - 1.64) ** -2
+        f = (0.79 * math.log(Re) - 1.64) ** -2
         Nu_turb = (f / 8.0) * (Re - 1000) * Pr / (
-            1 + 12.7 * np.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1))
+            1 + 12.7 * math.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1))
         x = (Re - 2300) / (10000 - 2300)
         Nu_fd = 3.66 + x * (Nu_turb - 3.66)
     # 入口效应修正（有限长管内平均 Nu）
@@ -353,10 +352,10 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         h_out = h_conv_out + h_rad_out
 
         # 单位长度热阻网络
-        R_in = 1.0 / (h_in * 2.0 * np.pi * r_in)
-        R_wall = [math.log(radii[i + 1] / radii[i]) / (2.0 * np.pi * l.k)
+        R_in = 1.0 / (h_in * 2.0 * math.pi * r_in)
+        R_wall = [math.log(radii[i + 1] / radii[i]) / (2.0 * math.pi * l.k)
                   for i, l in enumerate(layers)]
-        R_out = 1.0 / (h_out * 2.0 * np.pi * r_out)
+        R_out = 1.0 / (h_out * 2.0 * math.pi * r_out)
         R_tot = R_in + sum(R_wall) + R_out
 
         Qprime = (T_g - T_a) / R_tot
@@ -381,8 +380,8 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     # 最外层界面温度与已收敛的外壁迭代值严格一致（消除收敛残差造成的不一致）
     T_iface[-1] = T_wN
 
-    q_in = Qprime / (2.0 * np.pi * r_in)     # 内壁面热流密度 W/m²
-    q_out = Qprime / (2.0 * np.pi * r_out)   # 外壁面热流密度 W/m²
+    q_in = Qprime / (2.0 * math.pi * r_in)     # 内壁面热流密度 W/m²
+    q_out = Qprime / (2.0 * math.pi * r_out)   # 外壁面热流密度 W/m²
 
     return WallSolution(
         Qprime=Qprime, q_in=q_in, q_out=q_out,
@@ -400,23 +399,27 @@ def compute_temperature_curve(
     layers: List[Layer],
     sol: WallSolution,
     n_points: Optional[int] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[List[float], List[float]]:
     """计算沿壁厚方向的温度分布。
 
     返回 (x_mm, T_c)：
         x_mm — 距内壁距离 (mm)
         T_c  — 温度 (℃)
-    各层内采用圆筒壁对数分布精确解。
+    各层内采用圆筒壁对数分布精确解。纯标准库实现，不依赖 numpy。
     """
-    n_points = n_points or 500
-    thicknesses = np.array([l.thickness for l in layers])
-    positions = np.cumsum(np.concatenate(([0.0], thicknesses)))
-    x_all = np.linspace(0.0, positions[-1], n_points)
-    T_all = np.empty_like(x_all)
-    for i, l in enumerate(layers):
-        mask = (x_all >= positions[i]) & (x_all <= positions[i + 1])
-        if np.any(mask):
-            r_i = sol.r_in + positions[i]
-            T_all[mask] = sol.T_iface[i] - (sol.Qprime / (2.0 * np.pi * l.k)) * np.log(
-                (sol.r_in + x_all[mask]) / r_i)
-    return x_all * 1000.0, T_all - 273.15
+    n_points = max(n_points or 500, 2)
+    # 各层界面位置 (m)
+    positions = [0.0]
+    for l in layers:
+        positions.append(positions[-1] + l.thickness)
+    total = positions[-1]
+    x_all = [total * i / (n_points - 1) for i in range(n_points)]
+    T_all = [0.0] * n_points
+    for j, x in enumerate(x_all):
+        for i, l in enumerate(layers):
+            if positions[i] <= x <= positions[i + 1]:
+                r_i = sol.r_in + positions[i]
+                T_all[j] = sol.T_iface[i] - (sol.Qprime / (2.0 * math.pi * l.k)) * math.log(
+                    (sol.r_in + x) / r_i)
+                break
+    return [x * 1000.0 for x in x_all], [t - 273.15 for t in T_all]

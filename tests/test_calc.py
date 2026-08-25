@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """核心计算单元测试：python -m pytest tests/ -v"""
-import numpy as np
+import math
+import pytest
 
 from kiln_ht import (
     KilnParams,
@@ -29,7 +30,7 @@ LAYERS = [
 def test_solve_energy_balance():
     p = default_params()
     sol = solve_wall(LAYERS, p)
-    assert np.isfinite(sol.Qprime) and sol.Qprime > 0
+    assert math.isfinite(sol.Qprime) and sol.Qprime > 0
     # 能量守恒自检：Q' = (T_g - T_a) / R_tot
     assert abs(sol.Qprime - (p.T_gas - p.T_env) / sol.R_tot) < 1e-6
     # 温度界内且有序
@@ -62,13 +63,12 @@ def test_temperature_curve_monotonic():
     x_mm, T_c = compute_temperature_curve(LAYERS, sol, n_points=p.N_total)
     assert len(x_mm) == len(T_c) == p.N_total
     assert x_mm[0] == 0.0 and x_mm[-1] > 0.0
-    # 温度沿径向向外应单调下降（圆筒壁对数分布）
-    assert np.all(np.diff(T_c) <= 1e-9)
+    # 温度沿径向向外应单调下降
+    for i in range(1, len(T_c)):
+        assert T_c[i] <= T_c[i - 1] + 1e-9, f"温度不单调下降 at idx {i}: {T_c[i-1]} -> {T_c[i]}"
 
 
 def test_validate_params():
-    import pytest
-
     with pytest.raises(ValueError):
         solve_wall(LAYERS, default_params(v_gas=0.0))
     with pytest.raises(ValueError):

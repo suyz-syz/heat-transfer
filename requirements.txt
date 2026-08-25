@@ -2,10 +2,8 @@
 # 完整依赖（计算核心 + API 服务 + Kivy 移动端）
 # 安装：pip install -r requirements.txt
 # 注：Docker 镜像不安装 Kivy，使用 requirements-server.txt 保持轻量。
+# 注：计算核心 kiln_ht/calc.py 零第三方依赖，仅使用 Python 标准库。
 # ============================================================
-
-# ---- 计算核心 ----
-numpy>=1.26,<3
 
 # ---- API 服务（FastAPI / Uvicorn）----
 fastapi>=0.110,<1
