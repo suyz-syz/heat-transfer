@@ -1,0 +1,5 @@
+# Docker 镜像专用精简依赖（不包含 Kivy，保证镜像轻量）
+numpy>=1.26,<3
+fastapi>=0.110,<1
+uvicorn>=0.29
+pydantic>=2.6
