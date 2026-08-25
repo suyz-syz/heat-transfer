@@ -40,7 +40,14 @@ version.code = 1
 #  - hostpython3 与 python3 必须同版本，故两者都固定 3.14.2。
 # 计算核心 kiln_ht/calc.py 零第三方依赖（不含 numpy），因此 Android 打包无需
 # numpy，彻底避开 numpy 交叉编译这一最脆弱环节。
-requirements = hostpython3==3.14.2,python3==3.14.2,kivy==2.3.1
+#
+# requests / charset_normalizer 固定版本的原因：
+#  kivy 配方的 python_depends 含 requests，而 requests 依赖 charset_normalizer；
+#  charset_normalizer >=3.4 使用 mypyc 编译成 cp314-cp314-android_* 平台专用 wheel，
+#  在 Android 上无预编译 wheel、p4a 本地交叉编译后安装会被 pip 拒绝
+#  （"not a supported wheel on this platform"）。固定 3.3.2（纯 Python 通用 wheel）
+#  可避免该问题；requests 固定 2.32.3 保证解析确定性。
+requirements = hostpython3==3.14.2,python3==3.14.2,kivy==2.3.1,requests==2.32.3,charset_normalizer==3.3.2
 
 # (str) 屏幕方向：portrait / landscape
 orientation = portrait
