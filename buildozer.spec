@@ -44,6 +44,9 @@ fullscreen = 0
 # (list) Android 权限
 android.permissions = INTERNET
 
+# (bool) 自动接受 Android SDK 许可证协议（仅用于自动化/CI，避免 sdkmanager 交互卡死）
+android.accept_sdk_license = True
+
 # (int) 目标 API 级别与最低支持
 android.api = 34
 # numpy==2.3.0 的 p4a recipe 要求 min_ndk_api_support = 24
