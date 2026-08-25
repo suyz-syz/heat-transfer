@@ -52,6 +52,10 @@ android.api = 34
 # numpy==2.3.0 的 p4a recipe 要求 min_ndk_api_support = 24
 android.minapi = 24
 
+# (str) 固定 NDK 版本为 r27c：与 GitHub Actions ubuntu 镜像预装的
+# 27.3.13750724 (=r27c) 一致，避免 buildozer 自动选用过新的 r28c 导致 p4a 交叉编译失败
+android.ndk = 27c
+
 # (list) 目标 CPU 架构
 android.archs = arm64-v8a, armeabi-v7a
 

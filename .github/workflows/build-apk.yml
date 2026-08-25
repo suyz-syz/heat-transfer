@@ -58,6 +58,23 @@ jobs:
           path: .buildozer
           key: ${{ runner.os }}-buildozer-local-${{ hashFiles('buildozer.spec') }}
 
+      - name: Reuse preinstalled Android NDK r27c (skip 1GB download)
+        run: |
+          # GitHub ubuntu 镜像预装 NDK 27.3.13750724（= r27c，与 spec 中 android.ndk=27c 对应）
+          NDK_DIR="$(ls -d /usr/local/lib/android/sdk/ndk/27.3.* 2>/dev/null | head -n1)"
+          if [ -z "$NDK_DIR" ]; then
+            echo "未找到预装 NDK r27c，buildozer 将按 android.ndk=27c 自行下载"
+            exit 0
+          fi
+          DEST="$HOME/.buildozer/android/platform/android-ndk-r27c"
+          mkdir -p "$HOME/.buildozer/android/platform"
+          if [ ! -d "$DEST" ] || [ -L "$DEST" ]; then
+            ln -sfn "$NDK_DIR" "$DEST"
+            echo "已将预装 NDK 链接到 $DEST"
+          else
+            echo "android-ndk-r27c 已存在（缓存），跳过链接"
+          fi
+
       - name: Build debug APK
         run: buildozer -v android debug
 
