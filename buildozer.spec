@@ -57,7 +57,9 @@ android.minapi = 24
 android.ndk = 27c
 
 # (list) 目标 CPU 架构
-android.archs = arm64-v8a, armeabi-v7a
+# 仅 arm64-v8a：规避 numpy 2.x 在 32 位 armeabi-v7a 上脆弱的交叉编译，
+# 现代手机均为 64 位，且 CI 构建时间减半
+android.archs = arm64-v8a
 
 # (bool) 启用 AndroidX
 android.enable_androidx = True
