@@ -31,8 +31,9 @@ version = 1.0.0
 version.code = 1
 
 # (list) Buildozer 使用的依赖（Android 平台通过 python-for-android 打包）
-# numpy==2.3.0 为 p4a numpy recipe 当前固定并已验证的版本
-requirements = python3,kivy==2.3.0,numpy==2.3.0
+# numpy 固定为 v2.3.0：p4a numpy recipe 的 git 源使用带 v 前缀的 tag（version = "v2.3.0"），
+# 若写成 numpy==2.3.0 会导致 p4a 执行 git checkout 2.3.0 失败（pathspec 不匹配）
+requirements = python3,kivy==2.3.0,numpy==v2.3.0
 
 # (str) 屏幕方向：portrait / landscape
 orientation = portrait
