@@ -342,12 +342,15 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
             T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total)
         h_in = h_conv_in + h_rad_in
 
-        # 外侧：自然/强制对流 + 外壳辐射
+        # 外侧：自然对流 + 强制对流 采用 Churchill-Usagi 组合相关式（指数 3.5）
+        # 注意：不能在 v_amb≈0.5 处硬切换自然/强制对流——大直径窑筒体自然对流系数
+        # （约 4.5 W/m²K）远高于低速强制对流（0.5 m/s 时约 1.6 W/m²K），硬切换会在
+        # 临界点造成外壁温度约 13℃ 的非物理阶跃。组合相关式保证 h 随风速单调递增、
+        # 外壁温度随风速单调递减，符合物理规律。
         D_out = 2.0 * r_out
-        if params.v_amb > 0.5:
-            h_conv_out = outer_forced_h(params.v_amb, T_wN, T_a, D_out)
-        else:
-            h_conv_out = outer_natural_h(T_wN, T_a, D_out)
+        h_nat_out = outer_natural_h(T_wN, T_a, D_out)
+        h_for_out = outer_forced_h(params.v_amb, T_wN, T_a, D_out)
+        h_conv_out = (h_nat_out ** 3.5 + h_for_out ** 3.5) ** (1.0 / 3.5)
         h_rad_out = outer_radiation_h(T_wN, T_a, params.eps_shell)
         h_out = h_conv_out + h_rad_out
 
