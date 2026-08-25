@@ -35,12 +35,11 @@ jobs:
             gettext \
             libffi-dev libssl-dev zlib1g-dev \
             libsqlite3-dev libgdbm-dev \
-            libncurses5-dev libreadline-dev libtk8.6-dev \
+            libncurses-dev libreadline-dev tk8.6-dev \
             libbz2-dev liblzma-dev \
             libgl1-mesa-dev \
             zip unzip \
-            openjdk-17-jdk \
-            gdm3
+            openjdk-17-jdk
 
       - name: Install Buildozer
         run: |
