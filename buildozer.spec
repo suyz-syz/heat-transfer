@@ -31,7 +31,8 @@ version = 1.0.0
 version.code = 1
 
 # (list) Buildozer 使用的依赖（Android 平台通过 python-for-android 打包）
-requirements = python3,kivy==2.3.0,numpy
+# numpy==2.3.0 为 p4a numpy recipe 当前固定并已验证的版本
+requirements = python3,kivy==2.3.0,numpy==2.3.0
 
 # (str) 屏幕方向：portrait / landscape
 orientation = portrait
@@ -45,7 +46,8 @@ android.permissions = INTERNET
 
 # (int) 目标 API 级别与最低支持
 android.api = 34
-android.minapi = 21
+# numpy==2.3.0 的 p4a recipe 要求 min_ndk_api_support = 24
+android.minapi = 24
 
 # (list) 目标 CPU 架构
 android.archs = arm64-v8a, armeabi-v7a
