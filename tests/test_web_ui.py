@@ -102,3 +102,47 @@ def test_edit_layer_name(app):
     text_inputs[0].set_value("高铝砖").run()
     _click_calc(app)
     assert not app.exception
+
+
+def test_move_layer_affects_calculation(app):
+    """上下移动衬层后，计算结果（外壁面温度）应随之改变。"""
+    from kiln_ht import KilnParams, Layer, solve_wall
+
+    # 给第 0、1 层设置不同的厚度和导热系数，使交换后结果可区分
+    # 厚绝缘层在外壁 vs 在内壁，外壁温度不同
+    n0 = [t for t in app.text_input if (t.key or "").endswith("_name")]
+    n0[0].set_value("A").run()
+    n0[1].set_value("B").run()
+    # 设置不同厚度：A 厚 200mm k=0.1(绝缘), B 厚 10mm k=45(钢壳)
+    thick0 = [n for n in app.number_input if (n.key or "").endswith("_thick")]
+    k0 = [n for n in app.number_input if (n.key or "").endswith("_k")]
+    thick0[0].set_value(200.0).run()
+    k0[0].set_value(0.1).run()
+    thick0[1].set_value(10.0).run()
+    k0[1].set_value(45.0).run()
+
+    _click_calc(app)
+    before = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
+
+    # 下移第 0 层（与第 1 层交换顺序）
+    dn = [b for b in app.button if (b.key or "").endswith("_down") and not b.disabled]
+    assert dn, "未找到可用的 ⬇ 按钮"
+    dn[0].click().run()
+    _click_calc(app)
+
+    after = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
+    assert before != after, "层顺序调换后外壁面温度应发生变化"
+
+
+def test_first_layer_up_disabled(app):
+    """第一层的 ⬆ 按钮应禁用（避免越界）。"""
+    up0 = [b for b in app.button if (b.key or "").endswith("_up")]
+    assert up0, "未找到 ⬆ 按钮"
+    assert up0[0].disabled is True, "第一层 ⬆ 应禁用"
+
+
+def test_last_layer_down_disabled(app):
+    """最后一层的 ⬇ 按钮应禁用（避免越界）。"""
+    dns = [b for b in app.button if (b.key or "").endswith("_down")]
+    assert dns, "未找到 ⬇ 按钮"
+    assert dns[-1].disabled is True, "最后一层 ⬇ 应禁用"

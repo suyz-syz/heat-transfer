@@ -88,7 +88,16 @@ def _init_layer_state():
 
 
 def _add_layer(name="", thickness_mm=50.0, k=1.0):
+    """新增一层，分配稳定的 uid。
+
+    uid 随衬层 dict 一起移动：上下移动只交换 list 中 dict 的顺序，
+    而控件 key 使用 uid（layer_{uid}_name 等）而不是位置索引，
+    保证 Streamlit session_state 中的输入值始终跟着正确的衬层走，
+    避免移动后各层输入值错乱。
+    """
+    _ss.layer_count = _ss.get("layer_count", 0) + 1
     _ss.layers.append({
+        "uid": _ss.layer_count,
         "name": name,
         "thickness_mm": float(thickness_mm),
         "k": float(k),
@@ -101,7 +110,7 @@ def _remove_layer(idx: int):
 
 
 def _move_layer(idx: int, direction: int):
-    """direction: -1 上移, +1 下移。"""
+    """direction: -1 上移, +1 下移。交换相邻两层在 list 中的顺序（uid 随行移动）。"""
     j = idx + direction
     if 0 <= j < len(_ss.layers):
         _ss.layers[idx], _ss.layers[j] = _ss.layers[j], _ss.layers[idx]
@@ -118,7 +127,11 @@ def _load_preset(name: str):
 
 # ============ 计算 ============
 def _solve():
-    """从界面状态组装参数并调用计算核心，返回 (layers, sol, x_mm, T_c) 或抛出 ValueError。"""
+    """从界面状态组装参数并调用计算核心，返回 (layers, sol, x_mm, T_c) 或抛出 ValueError。
+
+    衬层顺序即 `_ss.layers` 的当前顺序（内壁 → 外壁，可被 ⬆/⬇ 调整），
+    顺序调整后此处始终按最新顺序构建 Layer 列表传给 calc.py。
+    """
     layers = [
         Layer(
             name=row["name"].strip() or f"层{i+1}",
@@ -144,6 +157,52 @@ def _solve():
     sol = solve_wall(layers, params)
     x_mm, T_c = compute_temperature_curve(layers, sol, n_points=params.N_total)
     return layers, sol, x_mm, T_c
+
+
+# ============ 自定义 CSS：输入框与背景的视觉分割 ============
+_CSS = """
+<style>
+/* 输入类控件容器边框与背景，与 #121212 主背景形成清晰分割 */
+div[data-testid="stTextInput"] > div,
+div[data-testid="stNumberInput"] > div > div > div > input,
+div[data-testid="stNumberInput"] > div > div > div[data-testid="stNumberInputStepButton"],
+div[data-testid="stSelectbox"] > div,
+div[data-testid="stSlider"] > div {
+    background-color: #1E2022 !important;
+    border: 1px solid #3d424a !important;
+    border-radius: 8px;
+}
+/* 输入框本身 */
+div[data-testid="stTextInput"] input,
+div[data-testid="stNumberInput"] input {
+    background-color: #1E2022 !important;
+    border: 1px solid #3d424a !important;
+    border-radius: 8px;
+    color: #ECEDEE !important;
+}
+/* 聚焦时高亮蓝色边框 */
+div[data-testid="stTextInput"] input:focus,
+div[data-testid="stNumberInput"] input:focus,
+div[data-testid="stTextInput"]:focus-within,
+div[data-testid="stNumberInput"]:focus-within {
+    border-color: #1E88E5 !important;
+    box-shadow: 0 0 0 1px #1E88E5 !important;
+}
+/* 侧边栏 number_input */
+[data-testid="stSidebar"] div[data-testid="stNumberInput"] input {
+    background-color: #1E2022 !important;
+    border: 1px solid #3d424a !important;
+}
+[data-testid="stSidebar"] div[data-testid="stNumberInput"] input:focus {
+    border-color: #1E88E5 !important;
+}
+/* 按钮操作栏给一点间距 */
+[data-testid="column"] > div > div > div[data-testid="stButton"] {
+    margin-bottom: 2px;
+}
+</style>
+"""
+st.markdown(_CSS, unsafe_allow_html=True)
 
 
 # ============ 界面 ============
@@ -210,29 +269,31 @@ col_hint[2].markdown("**导热系数 λ (W/(m·K))**")
 col_hint[3].markdown("**操作**")
 
 for idx, row in enumerate(_ss.layers):
+    uid = row.get("uid", idx + 1)          # 稳定 id，随行移动
     c1, c2, c3, c4 = st.columns([0.25, 0.3, 0.3, 0.15])
-    row["name"] = c1.text_input("层名称", value=row["name"], key=f"layer_{idx}_name",
+    row["name"] = c1.text_input("层名称", value=row["name"], key=f"layer_{uid}_name",
                                 label_visibility="collapsed")
     row["thickness_mm"] = c2.number_input(
         "厚度", value=float(row["thickness_mm"]), min_value=0.1, step=1.0,
-        key=f"layer_{idx}_thick", label_visibility="collapsed")
+        key=f"layer_{uid}_thick", label_visibility="collapsed")
     row["k"] = c3.number_input(
         "导热系数", value=float(row["k"]), min_value=0.001, step=0.05,
-        key=f"layer_{idx}_k", label_visibility="collapsed")
+        key=f"layer_{uid}_k", label_visibility="collapsed")
 
-    # 操作按钮列
+    # 操作按钮列（首层 ⬆ / 末层 ⬇ 自动禁用，避免越界）
     btn_container = c4.container()
     bcols = btn_container.columns(4)
     with bcols[0]:
-        if st.button("⬆", key=f"layer_{idx}_up", disabled=(idx == 0)):
+        if st.button("⬆", key=f"layer_{uid}_up", disabled=(idx == 0)):
             _move_layer(idx, -1)
             st.rerun()
     with bcols[1]:
-        if st.button("⬇", key=f"layer_{idx}_down", disabled=(idx == len(_ss.layers) - 1)):
+        if st.button("⬇", key=f"layer_{uid}_down",
+                     disabled=(idx == len(_ss.layers) - 1)):
             _move_layer(idx, +1)
             st.rerun()
     with bcols[2]:
-        if st.button("🗑", key=f"layer_{idx}_del", disabled=(len(_ss.layers) <= 1)):
+        if st.button("🗑", key=f"layer_{uid}_del", disabled=(len(_ss.layers) <= 1)):
             _remove_layer(idx)
             st.rerun()
     with bcols[3]:
