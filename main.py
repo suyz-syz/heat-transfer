@@ -2,14 +2,19 @@
 """
 Kivy 跨平台移动端界面入口（Android / Windows / macOS / Linux）。
 
-Material Design 风格重构：
+Material Design 风格：
 - 底部导航栏双 Tab：参数设置（Inputs）/ 计算结果（Results）
 - 深色主题：#121212 背景、#25272A 卡片、#1E88E5 主色、#FF9800 强调色
 - 输入页三张卡片分组（窑体几何 / 热工与烟气 / 环境条件），圆角聚焦高亮输入框
   （单位后缀内置于输入框右侧），底部固定高亮「开始计算」按钮，计算成功后平滑切换至结果页
 - 结果页：顶部大字号指标高亮卡（外壁面温度 / 内壁面温度 / 烟气发射率）、
-  各层界面温度表、详细工况结果、占主要空间的大图温度分布曲线
+  各层界面温度表、详细工况结果、填满剩余空间的大图温度曲线
   （深色主题网格 + 圆点节点标记，纯 Kivy Canvas 绘制，不依赖 matplotlib）
+
+布局要点（适配移动端高 DPI 与动态屏幕尺寸）：
+- 所有 width / height / padding / spacing 均使用 dp()，font_size 使用 sp()
+- 滚动容器内的卡片必须 size_hint_y=None 并绑定 minimum_height，
+  否则会被 Kivy 压扁成均分高度导致控件重叠
 
 本地运行（桌面调试）：
     python main.py
@@ -83,6 +88,21 @@ TEXT_DIM    = (0.612, 0.639, 0.686, 1.0)     # #9CA3AF  次要文字
 GRID        = (0.227, 0.239, 0.259, 1.0)     # #3A3D42  图表网格线
 AXIS        = (0.353, 0.373, 0.416, 1.0)     # 坐标轴
 DANGER      = (0.937, 0.325, 0.314, 1.0)     # #EF5350  错误提示
+
+
+# ============ 工具 ============
+def auto_height(widget):
+    """使控件在纵向滚动容器内按自身内容自适应高度。
+
+    Kivy 中若子控件保持默认 size_hint_y=1，ScrollView 的 content
+    （size_hint_y=None + minimum_height）会把所有卡片均分高度，
+    导致固定高度的内部控件溢出卡片边界而互相重叠。
+    此函数将子控件设为 size_hint_y=None 并把高度绑定到 minimum_height，
+    是 Kivy 滚动列表的标准做法。
+    """
+    widget.size_hint_y = None
+    widget.bind(minimum_height=widget.setter("height"))
+    return widget
 
 
 # ============ 基础控件 ============
@@ -354,6 +374,7 @@ class CurveWidget(Widget):
     """深色主题温度曲线：网格 + 坐标轴 + 圆点节点标记 + 刻度。
 
     颜色取自主题常量（可随浅/深主题切换），不依赖 matplotlib。
+    控件填满所在卡片剩余空间，尺寸变化时自动重绘，适配不同屏幕。
     """
 
     MAX_MARKERS = 26          # 节点圆点标记的最大数量（自动抽稀）
@@ -445,7 +466,7 @@ class MetricCard(MDCard):
     """大字号指标高亮卡：顶部强调条 + 标题 / 大数值 / 单位。"""
 
     def __init__(self, title, unit="", accent=ACCENT, **kwargs):
-        kwargs.setdefault("padding", [dp(10), dp(16), dp(10), dp(10)])
+        kwargs.setdefault("padding", [dp(10), dp(14), dp(10), dp(10)])
         kwargs.setdefault("radius", dp(12))
         kwargs.setdefault("spacing", dp(2))
         super().__init__(**kwargs)
@@ -455,11 +476,11 @@ class MetricCard(MDCard):
                                            radius=[(dp(1.5), dp(1.5))] * 4)
         self.bind(pos=self._place_strip, size=self._place_strip)
         self.title = MdLabel(text=title, color=TEXT_DIM, font_size=sp(12),
-                             halign="center", size_hint_y=None, height=dp(22))
-        self.value = MdLabel(text="--", color=TEXT, bold=True, font_size=sp(26),
+                             halign="center", size_hint_y=None, height=dp(20))
+        self.value = MdLabel(text="--", color=TEXT, bold=True, font_size=sp(24),
                              halign="center", size_hint_y=None, height=dp(40))
         self.unit_label = MdLabel(text=unit, color=TEXT_DIM, font_size=sp(11),
-                                  halign="center", size_hint_y=None, height=dp(18))
+                                  halign="center", size_hint_y=None, height=dp(16))
         self.add_widget(self.title)
         self.add_widget(self.value)
         self.add_widget(self.unit_label)
@@ -539,7 +560,7 @@ class BottomNavBar(BoxLayout):
 
 # ============ 参数设置页（Tab 1） ============
 class InputScreen(Screen):
-    """输入页：三张卡片分组 + 固定底部「开始计算」大按钮。"""
+    """输入页：三张卡片分组（ScrollView 滚动）+ 固定底部「开始计算」大按钮。"""
 
     def __init__(self, on_calc, **kwargs):
         super().__init__(**kwargs)
@@ -551,6 +572,8 @@ class InputScreen(Screen):
 
     def _build(self):
         root = BoxLayout(orientation="vertical")
+
+        # 外层 ScrollView：内部所有卡片均 auto_height（size_hint_y=None + minimum_height）
         scroll = ScrollView(bar_width=dp(4), bar_color=GRID,
                             bar_inactive_color=GRID)
         content = BoxLayout(orientation="vertical", spacing=dp(12),
@@ -561,7 +584,7 @@ class InputScreen(Screen):
         root.add_widget(scroll)
 
         # ---- 卡片 1：窑体几何 ----
-        geom = MDCard()
+        geom = auto_height(MDCard())
         geom.add_widget(make_title("窑体几何"))
         self._add_field(geom, "L_char", "窑内径", "m", "4")
         self._add_field(geom, "L_kiln", "窑长", "m", "60")
@@ -578,7 +601,7 @@ class InputScreen(Screen):
         self._rebuild_layers()
 
         # ---- 卡片 2：热工与烟气 ----
-        thermal = MDCard()
+        thermal = auto_height(MDCard())
         thermal.add_widget(make_title("热工与烟气"))
         self._add_field(thermal, "T_gas", "烟气温度", "°C", "1250")
         self._add_field(thermal, "v_gas", "烟气流速", "m/s", "3")
@@ -591,17 +614,17 @@ class InputScreen(Screen):
         content.add_widget(thermal)
 
         # ---- 卡片 3：环境条件 ----
-        env = MDCard()
+        env = auto_height(MDCard())
         env.add_widget(make_title("环境条件"))
         self._add_field(env, "T_env", "环境温度", "°C", "25")
         self._add_field(env, "v_amb", "环境风速", "m/s", "2")
         self._add_field(env, "eps_shell", "外壳发射率", "", "0.85")
         content.add_widget(env)
 
-        # ---- 底部操作区（固定在屏幕底部，不随卡片滚动） ----
+        # ---- 底部操作区（固定在页面底部，不随卡片滚动，避免遮挡输入框） ----
         bottom = BoxLayout(orientation="vertical", spacing=dp(6),
-                           size_hint_y=None, height=dp(104),
-                           padding=[dp(14), dp(6), dp(14), dp(14)])
+                           size_hint_y=None, height=dp(110),
+                           padding=[dp(14), dp(6), dp(14), dp(12)])
         self.error_label = MdLabel(text="", color=DANGER, font_size=sp(13),
                                    halign="center", size_hint_y=None, height=dp(26))
         bottom.add_widget(self.error_label)
@@ -689,17 +712,18 @@ class InputScreen(Screen):
 
 # ============ 计算结果页（Tab 2） ============
 class ResultScreen(Screen):
-    """结果页：顶部指标高亮卡 + 界面温度表 + 详细结果 + 大图温度曲线。"""
+    """结果页：顶部指标高亮卡（固定）+ 中部表格区（滚动）+ 图表区（填满剩余空间）。"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.name = "results"
-        root = BoxLayout(orientation="vertical")
+        root = BoxLayout(orientation="vertical", spacing=dp(10),
+                         padding=[dp(0), dp(10), dp(0), dp(0)])
 
-        # 顶部指标高亮区（固定）
+        # ---- 上半区：3 个指标高亮卡（横向排列，固定高度） ----
         metrics = BoxLayout(orientation="horizontal", spacing=dp(10),
-                            size_hint_y=None, height=dp(118),
-                            padding=[dp(14), dp(12), dp(14), 0])
+                            size_hint_y=None, height=dp(110),
+                            padding=[dp(14), 0, dp(14), 0])
         self.m_outer = MetricCard("外壁面温度", "°C")
         self.m_inner = MetricCard("内壁面温度", "°C")
         self.m_eg = MetricCard("烟气发射率", "—")
@@ -707,18 +731,17 @@ class ResultScreen(Screen):
             metrics.add_widget(m)
         root.add_widget(metrics)
 
-        # 可滚动结果区
-        scroll = ScrollView(bar_width=dp(4), bar_color=GRID,
-                            bar_inactive_color=GRID)
-        content = BoxLayout(orientation="vertical", spacing=dp(12),
-                            padding=[dp(14), dp(8), dp(14), dp(14)],
-                            size_hint_y=None)
-        content.bind(minimum_height=content.setter("height"))
-        scroll.add_widget(content)
-        root.add_widget(scroll)
+        # ---- 中部：各层界面温度 + 详细结果（固定高度，内部滚动） ----
+        tables = ScrollView(bar_width=dp(4), bar_color=GRID,
+                            bar_inactive_color=GRID,
+                            size_hint_y=None, height=dp(230))
+        tcontent = BoxLayout(orientation="vertical", spacing=dp(10),
+                             padding=[dp(14), 0, dp(14), 0],
+                             size_hint_y=None)
+        tcontent.bind(minimum_height=tcontent.setter("height"))
+        tables.add_widget(tcontent)
 
-        # 各层界面温度
-        iface = MDCard()
+        iface = auto_height(MDCard())
         iface.add_widget(make_title("各层界面温度"))
         self.iface_body = BoxLayout(orientation="vertical", spacing=dp(2),
                                     size_hint_y=None)
@@ -727,10 +750,9 @@ class ResultScreen(Screen):
                                          size_hint_y=None, height=dp(36))
         self.iface_body.add_widget(self.iface_placeholder)
         iface.add_widget(self.iface_body)
-        content.add_widget(iface)
+        tcontent.add_widget(iface)
 
-        # 详细工况结果
-        detail = MDCard()
+        detail = auto_height(MDCard())
         detail.add_widget(make_title("详细工况结果"))
         self.detail_body = BoxLayout(orientation="vertical", spacing=dp(2),
                                      size_hint_y=None)
@@ -739,12 +761,14 @@ class ResultScreen(Screen):
                                           size_hint_y=None, height=dp(36))
         self.detail_body.add_widget(self.detail_placeholder)
         detail.add_widget(self.detail_body)
-        content.add_widget(detail)
+        tcontent.add_widget(detail)
 
-        # 温度分布大图
-        curve_card = MDCard(spacing=dp(6))
+        root.add_widget(tables)
+
+        # ---- 下半区：温度分布大图（填满剩余垂直空间，size_hint_y=1） ----
+        curve_card = MDCard(spacing=dp(6), size_hint_y=1)
         curve_card.add_widget(make_title("温度分布（内壁 → 外壁）"))
-        self.curve = CurveWidget(size_hint=(1, None), height=dp(320))
+        self.curve = CurveWidget(size_hint=(1, 1))
         self.curve_hint = Label(text="等待计算…", color=TEXT_DIM, font_size=sp(14),
                                 size_hint=(None, None), size=(dp(200), dp(30)))
         self.curve.add_widget(self.curve_hint)
@@ -753,7 +777,7 @@ class ResultScreen(Screen):
         self.curve_foot = MdLabel(text="", color=TEXT_DIM, font_size=sp(12),
                                   size_hint_y=None, height=dp(20))
         curve_card.add_widget(self.curve_foot)
-        content.add_widget(curve_card)
+        root.add_widget(curve_card)
 
         self.add_widget(root)
 
