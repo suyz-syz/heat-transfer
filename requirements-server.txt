@@ -1,5 +1,8 @@
-# Docker 镜像专用精简依赖（不包含 Kivy，保证镜像轻量）
-# 计算核心 kiln_ht/calc.py 零第三方依赖，仅使用 Python 标准库
+# Docker 镜像精简依赖（计算核心 kiln_ht/calc.py 零第三方依赖，仅使用 Python 标准库）
+# 同时包含 FastAPI API 服务与 Streamlit Web GUI
 fastapi>=0.110,<1
 uvicorn>=0.29
 pydantic>=2.6
+streamlit>=1.32
+plotly>=5.20
+supervisor>=4.2

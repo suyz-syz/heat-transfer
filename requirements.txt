@@ -1,5 +1,5 @@
 # ============================================================
-# 完整依赖（计算核心 + API 服务 + Kivy 移动端）
+# 完整依赖（计算核心 + API 服务 + Streamlit Web GUI + Kivy 移动端）
 # 安装：pip install -r requirements.txt
 # 注：Docker 镜像不安装 Kivy，使用 requirements-server.txt 保持轻量。
 # 注：计算核心 kiln_ht/calc.py 零第三方依赖，仅使用 Python 标准库。
@@ -9,6 +9,13 @@
 fastapi>=0.110,<1
 uvicorn[standard]>=0.29
 pydantic>=2.6
+
+# ---- Streamlit Web GUI（桌面 / 平板浏览器宽屏界面）----
+streamlit>=1.32
+plotly>=5.20
+
+# ---- 容器内双服务编排（FastAPI + Streamlit）----
+supervisor>=4.2
 
 # ---- Kivy 跨平台移动端（桌面调试 / Android 打包需要）----
 # Android 打包时依赖以 buildozer.spec 的 requirements 为准

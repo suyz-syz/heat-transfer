@@ -13,12 +13,14 @@ WORKDIR /app
 COPY requirements-server.txt .
 RUN pip install -r requirements-server.txt
 
-# 复制计算核心与服务入口
+# 复制计算核心、服务入口与 Web GUI
 COPY kiln_ht ./kiln_ht
 COPY server.py .
+COPY app.py .
+COPY .streamlit ./.streamlit
 
-# 暴露 API 服务端口
-EXPOSE 8000
+# 暴露 API 服务端口 (8000) 与 Streamlit Web GUI 端口 (8501)
+EXPOSE 8000 8501
 
-# 启动 FastAPI 服务
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+# 通过 supervisord 同时启动 FastAPI 与 Streamlit 两个服务
+CMD ["supervisord", "-c", "/app/supervisord.conf"]

@@ -126,19 +126,34 @@ buildozer android release    # 生成签名发布包（需配置 keystore）
 
 ```bash
 docker pull ghcr.io/<你的用户名>/cement-kiln-heat-transfer:latest
-docker run --rm -p 8000:8000 ghcr.io/<你的用户名>/cement-kiln-heat-transfer:latest
+docker run --rm -p 8000:8000 -p 8501:8501 ghcr.io/<你的用户名>/cement-kiln-heat-transfer:latest
 ```
 
 ### 本地构建镜像
 
 ```bash
 docker build -t cement-kiln-heat-transfer .
-docker run --rm -p 8000:8000 cement-kiln-heat-transfer
+docker run --rm -p 8000:8000 -p 8501:8501 cement-kiln-heat-transfer
 ```
 
-部署后访问：
+### 容器内两个服务（supervisord 同时启动）
+
+| 端口 | 服务 | 说明 |
+|---|---|---|
+| `8501` | **Streamlit Web GUI** | 桌面/平板浏览器可视化界面（参数配置 + 衬层编辑 + 指标 Dashboard + 温度曲线） |
+| `8000` | FastAPI RESTful API | `POST /solve`、`POST /temperature-curve`、`GET /health` |
+
+启动后访问：
+- Web GUI：`http://localhost:8501`
 - 健康检查：`GET http://localhost:8000/health`
 - API 文档：`http://localhost:8000/docs`
+
+### 本地运行 Web GUI（不开 Docker）
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
 
 ## 物理模型依据
 
