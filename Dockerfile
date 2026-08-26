@@ -18,9 +18,11 @@ COPY kiln_ht ./kiln_ht
 COPY server.py .
 COPY app.py .
 COPY .streamlit ./.streamlit
+# 显式复制 supervisord 配置文件到固定位置（CMD 引用的路径）
+COPY supervisord.conf /etc/supervisord.conf
 
 # 暴露 API 服务端口 (8000) 与 Streamlit Web GUI 端口 (8501)
 EXPOSE 8000 8501
 
 # 通过 supervisord 同时启动 FastAPI 与 Streamlit 两个服务
-CMD ["supervisord", "-c", "/app/supervisord.conf"]
+CMD ["/usr/local/bin/supervisord", "-c", "/etc/supervisord.conf"]
