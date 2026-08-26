@@ -330,15 +330,11 @@ if _ss.get("calc_trigger"):
     rows.append(("外壁面", sol.T_iface[-1]))
 
     st.subheader("各分界面温度")
-    st.dataframe(
-        pd.DataFrame(
-            [{"分界面": name, "温度 (°C)": tk - 273.15, "温度 (K)": tk}
-             for name, tk in rows],
-            columns=["分界面", "温度 (°C)", "温度 (K)"],
-        ),
-        width="stretch",
-        hide_index=True,
-    )
+    # 用 Markdown 渲染，避免依赖 pyarrow（st.table/st.dataframe 需要它）
+    md_rows = ["| 分界面 | 温度 (°C) | 温度 (K) |", "|---|---|---|"]
+    for name, tk in rows:
+        md_rows.append(f"| {name} | {tk - 273.15:.1f} | {tk:.1f} |")
+    st.markdown("\n".join(md_rows))
 
     # ---- 交互式温度分布曲线 ----
     st.subheader("温度分布曲线（内壁 → 外壁）")
@@ -405,25 +401,22 @@ if _ss.get("calc_trigger"):
 
     # ---- 详细工况结果 ----
     with st.expander("查看详细工况结果"):
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {"指标": "单位长度热功率 Q'", "数值": f"{sol.Qprime:.1f} W/m"},
-                    {"指标": "内壁热流密度 q_in", "数值": f"{sol.q_in:.1f} W/m²"},
-                    {"指标": "外壁热流密度 q_out", "数值": f"{sol.q_out:.1f} W/m²"},
-                    {"指标": "内壁总换热系数 h_in", "数值": f"{sol.h_in:.1f} W/m²·K"},
-                    {"指标": "　内壁对流 h_conv", "数值": f"{sol.h_conv_in:.1f} W/m²·K"},
-                    {"指标": "　内壁辐射 h_rad", "数值": f"{sol.h_rad_in:.1f} W/m²·K"},
-                    {"指标": "外壁总换热系数 h_out", "数值": f"{sol.h_out:.1f} W/m²·K"},
-                    {"指标": "　外壁对流 h_conv", "数值": f"{sol.h_conv_out:.1f} W/m²·K"},
-                    {"指标": "　外壁辐射 h_rad", "数值": f"{sol.h_rad_out:.1f} W/m²·K"},
-                    {"指标": "耦合迭代步数", "数值": str(sol.iterations)},
-                ],
-                columns=["指标", "数值"],
-            ),
-            width="stretch",
-            hide_index=True,
-        )
+        # 用 Markdown 渲染，避免依赖 pyarrow（st.table/st.dataframe 需要它）
+        md_rows = ["| 指标 | 数值 |", "|---|---|"]
+        for label, value in [
+            ("单位长度热功率 Q'", f"{sol.Qprime:.1f} W/m"),
+            ("内壁热流密度 q_in", f"{sol.q_in:.1f} W/m²"),
+            ("外壁热流密度 q_out", f"{sol.q_out:.1f} W/m²"),
+            ("内壁总换热系数 h_in", f"{sol.h_in:.1f} W/m²·K"),
+            ("　内壁对流 h_conv", f"{sol.h_conv_in:.1f} W/m²·K"),
+            ("　内壁辐射 h_rad", f"{sol.h_rad_in:.1f} W/m²·K"),
+            ("外壁总换热系数 h_out", f"{sol.h_out:.1f} W/m²·K"),
+            ("　外壁对流 h_conv", f"{sol.h_conv_out:.1f} W/m²·K"),
+            ("　外壁辐射 h_rad", f"{sol.h_rad_out:.1f} W/m²·K"),
+            ("耦合迭代步数", str(sol.iterations)),
+        ]:
+            md_rows.append(f"| {label} | {value} |")
+        st.markdown("\n".join(md_rows))
 
     st.success("计算完成 ✅")
 else:
