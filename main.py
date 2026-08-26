@@ -2,15 +2,21 @@
 """
 Kivy 跨平台移动端界面入口（Android / Windows / macOS / Linux）。
 
+Material Design 风格重构：
+- 底部导航栏双 Tab：参数设置（Inputs）/ 计算结果（Results）
+- 深色主题：#121212 背景、#25272A 卡片、#1E88E5 主色、#FF9800 强调色
+- 输入页三张卡片分组（窑体几何 / 热工与烟气 / 环境条件），圆角聚焦高亮输入框
+  （单位后缀内置于输入框右侧），底部固定高亮「开始计算」按钮，计算成功后平滑切换至结果页
+- 结果页：顶部大字号指标高亮卡（外壁面温度 / 内壁面温度 / 烟气发射率）、
+  各层界面温度表、详细工况结果、占主要空间的大图温度分布曲线
+  （深色主题网格 + 圆点节点标记，纯 Kivy Canvas 绘制，不依赖 matplotlib）
+
 本地运行（桌面调试）：
     python main.py
 
 Android 打包（需先安装 buildozer，详见 buildozer.spec）：
     buildozer android debug            # 生成 bin/*.apk
     buildozer android release          # 签名发布包
-
-说明：温度曲线使用纯 Kivy Canvas 绘制（不依赖 matplotlib），
-保证在 Android 上构建与运行轻量稳定。
 """
 
 from kiln_ht import Layer, KilnParams, solve_wall, compute_temperature_curve
@@ -19,18 +25,19 @@ import os
 
 import kivy
 
-kivy.require("2.1.0")
+kivy.require("2.3.0")
 
 from kivy.app import App
+from kivy.clock import Clock
+from kivy.core.text import Label as CoreLabel
 from kivy.core.text import LabelBase
-from kivy.graphics import Color, Line
+from kivy.graphics import Color, Ellipse, Line, Rectangle, RoundedRectangle
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
-from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
+from kivy.uix.screenmanager import FadeTransition, Screen, ScreenManager
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 from kivy.utils import platform
@@ -63,7 +70,22 @@ def _setup_cjk_font():
 _setup_cjk_font()
 
 
-# ============ 输入控件 ============
+# ============ Material Design 深色主题 ============
+BG          = (0.071, 0.071, 0.071, 1.0)     # #121212  页面背景
+CARD        = (0.145, 0.153, 0.165, 1.0)     # #25272A  卡片背景
+CARD_ELEV   = (0.176, 0.192, 0.212, 1.0)     # 输入框 / 抬升控件底色
+CARD_BORDER = (0.271, 0.302, 0.353, 1.0)     # 卡片 / 控件描边
+PRIMARY     = (0.118, 0.533, 0.898, 1.0)     # #1E88E5  主色（深天蓝）
+PRIMARY_DK  = (0.082, 0.396, 0.753, 1.0)     # #1565C0  主色按压缩影
+ACCENT      = (1.0, 0.596, 0.0, 1.0)         # #FF9800  强调色（工业橙）
+TEXT        = (0.925, 0.929, 0.933, 1.0)     # #ECEDEE  主文字
+TEXT_DIM    = (0.612, 0.639, 0.686, 1.0)     # #9CA3AF  次要文字
+GRID        = (0.227, 0.239, 0.259, 1.0)     # #3A3D42  图表网格线
+AXIS        = (0.353, 0.373, 0.416, 1.0)     # 坐标轴
+DANGER      = (0.937, 0.325, 0.314, 1.0)     # #EF5350  错误提示
+
+
+# ============ 基础控件 ============
 class FloatInput(TextInput):
     """仅允许输入合法浮点数的文本框。
 
@@ -74,7 +96,6 @@ class FloatInput(TextInput):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("multiline", False)
-        kwargs.setdefault("halign", "center")
         super().__init__(**kwargs)
         self.input_filter = "float"
 
@@ -84,14 +105,258 @@ class IntInput(TextInput):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("multiline", False)
-        kwargs.setdefault("halign", "center")
         super().__init__(**kwargs)
         self.input_filter = "int"
 
 
+class MdLabel(Label):
+    """主题化文本标签：深色主题、左对齐、垂直居中、自动换行。"""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("color", TEXT)
+        kwargs.setdefault("font_size", sp(14))
+        kwargs.setdefault("halign", "left")
+        kwargs.setdefault("valign", "middle")
+        super().__init__(**kwargs)
+        self.bind(size=self._sync_text_size)
+
+    def _sync_text_size(self, *_args):
+        self.text_size = (self.width, self.height)
+
+
+def make_title(text, **kwargs):
+    """卡片标题标签。"""
+    kwargs.setdefault("bold", True)
+    kwargs.setdefault("font_size", sp(15))
+    kwargs.setdefault("size_hint_y", None)
+    kwargs.setdefault("height", dp(26))
+    return MdLabel(text=text, **kwargs)
+
+
+class MDCard(BoxLayout):
+    """Material 卡片：圆角 + 微描边（canvas.before 绘制）。"""
+
+    def __init__(self, radius=dp(14), bg=CARD, border=CARD_BORDER, **kwargs):
+        kwargs.setdefault("orientation", "vertical")
+        kwargs.setdefault("spacing", dp(10))
+        kwargs.setdefault("padding", [dp(16), dp(14), dp(16), dp(14)])
+        super().__init__(**kwargs)
+        self._radius = radius
+        with self.canvas.before:
+            self._bg_col = Color(*bg)
+            self._bg_rect = RoundedRectangle(
+                pos=self.pos, size=self.size,
+                radius=[(radius, radius)] * 4)
+            self._brd_col = Color(*border)
+            self._brd_line = Line(rounded_rectangle=self._rr(), width=dp(1))
+        self.bind(pos=self._sync_rect, size=self._sync_rect)
+
+    def _rr(self):
+        r = self._radius
+        return (self.x, self.y, self.width, self.height, r)
+
+    def _sync_rect(self, *_args):
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+        self._brd_line.rounded_rectangle = self._rr()
+
+
+class UnitInput(BoxLayout):
+    """圆角输入框：聚焦时主色高亮边框，单位后缀内置在输入框右侧。"""
+
+    def __init__(self, unit="", default="", input_cls=FloatInput,
+                 halign="right", height=dp(46), **kwargs):
+        super().__init__(orientation="horizontal", spacing=dp(2),
+                         size_hint_y=None, height=height, **kwargs)
+        self._radius = dp(10)
+        with self.canvas.before:
+            self._bg_col = Color(*CARD_ELEV)
+            self._bg_rect = RoundedRectangle(
+                pos=self.pos, size=self.size,
+                radius=[(self._radius, self._radius)] * 4)
+            self._brd_col = Color(*CARD_BORDER)
+            self._brd_line = Line(rounded_rectangle=self._rr(), width=dp(1))
+        self.bind(pos=self._sync_rect, size=self._sync_rect)
+
+        self.textinput = input_cls(
+            text=default, halign=halign,
+            font_size=sp(15), foreground_color=TEXT,
+            cursor_color=PRIMARY, cursor_width=dp(2),
+            background_normal="", background_active="",
+            background_color=(0, 0, 0, 0),
+            padding=[dp(12), dp(8), dp(8), dp(8)])
+        self.textinput.bind(focus=self._on_focus)
+        self.add_widget(self.textinput)
+
+        if unit:
+            w = dp(max(28, 10 + len(unit) * 8))
+            u = MdLabel(text=unit, color=TEXT_DIM, font_size=sp(12),
+                        size_hint=(None, 1), width=w, halign="left")
+            self.add_widget(u)
+
+    @property
+    def text(self):
+        return self.textinput.text
+
+    @text.setter
+    def text(self, value):
+        self.textinput.text = value
+
+    def _rr(self):
+        r = self._radius
+        return (self.x, self.y, self.width, self.height, r)
+
+    def _sync_rect(self, *_args):
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+        self._brd_line.rounded_rectangle = self._rr()
+
+    def _on_focus(self, _inp, focused):
+        if focused:
+            self._brd_col.rgba = (*PRIMARY[:3], 1.0)
+            self._bg_col.rgba = (*PRIMARY[:3], 0.10)
+        else:
+            self._brd_col.rgba = (*CARD_BORDER[:3], 1.0)
+            self._bg_col.rgba = CARD_ELEV
+
+
+class FieldRow(BoxLayout):
+    """输入页一行：左侧标签 + 右侧圆角单位输入框。"""
+
+    def __init__(self, label, unit="", default="", input_cls=FloatInput, **kwargs):
+        super().__init__(orientation="horizontal", spacing=dp(10),
+                         size_hint_y=None, height=dp(50), **kwargs)
+        self.label = MdLabel(text=label, font_size=sp(14),
+                             size_hint=(None, 1), width=dp(112))
+        self.field = UnitInput(unit=unit, default=default, input_cls=input_cls)
+        self.add_widget(self.label)
+        self.add_widget(self.field)
+
+    @property
+    def text(self):
+        return self.field.text
+
+    @text.setter
+    def text(self, value):
+        self.field.text = value
+
+
+class AccentButton(Button):
+    """主色实心大按钮（Material 圆角），按压时加深。"""
+
+    def __init__(self, text, bg=PRIMARY, radius=dp(14), **kwargs):
+        kwargs.setdefault("font_size", sp(17))
+        kwargs.setdefault("bold", True)
+        kwargs.setdefault("color", (1.0, 1.0, 1.0, 1.0))
+        super().__init__(text=text, background_normal="", background_down="",
+                         background_color=(0, 0, 0, 0), **kwargs)
+        self._radius = radius
+        with self.canvas.before:
+            self._bg_col = Color(*bg)
+            self._bg_rect = RoundedRectangle(
+                pos=self.pos, size=self.size,
+                radius=[(radius, radius)] * 4)
+        self.bind(pos=self._sync_rect, size=self._sync_rect)
+        self.bind(on_press=self._pressed, on_release=self._released)
+
+    def _sync_rect(self, *_args):
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+
+    def _pressed(self, *_args):
+        self._bg_col.rgba = (*PRIMARY_DK[:3], 1.0)
+
+    def _released(self, *_args):
+        self._bg_col.rgba = (*PRIMARY[:3], 1.0)
+
+
+class CircleButton(Button):
+    """圆形按钮（步进器用）。"""
+
+    def __init__(self, text, on_click, diameter=dp(40), **kwargs):
+        kwargs.setdefault("font_size", sp(22))
+        kwargs.setdefault("bold", True)
+        kwargs.setdefault("color", TEXT)
+        super().__init__(text=text, background_normal="", background_down="",
+                         background_color=(0, 0, 0, 0),
+                         size_hint=(None, None), size=(diameter, diameter), **kwargs)
+        self._d = diameter
+        self._on_click = on_click
+        with self.canvas.before:
+            self._fill = Color(*CARD_ELEV)
+            self._disc = Ellipse(pos=self.pos, size=self.size)
+            self._ring = Color(*CARD_BORDER)
+            self._ring_line = Line(circle=(0.0, 0.0, 1.0), width=dp(1.5))
+        self.bind(pos=self._sync, size=self._sync)
+        self.bind(on_press=self._pressed, on_release=self._released)
+
+    def _sync(self, *_args):
+        self._disc.pos = self.pos
+        self._disc.size = self.size
+        self._ring_line.circle = (self.center_x, self.center_y, self._d / 2 - dp(1))
+
+    def _pressed(self, *_args):
+        self._fill.rgba = (*PRIMARY[:3], 0.35)
+
+    def _released(self, *_args):
+        self._fill.rgba = CARD_ELEV
+        self._on_click()
+
+
+class Stepper(BoxLayout):
+    """「− / 值 / +」数字步进器（Material 风格，替代原生 Spinner）。"""
+
+    def __init__(self, value=4, vmin=1, vmax=10, on_change=None, **kwargs):
+        super().__init__(orientation="horizontal", spacing=dp(10),
+                         size_hint=(None, None), size=(dp(148), dp(46)), **kwargs)
+        self._vmin, self._vmax = vmin, vmax
+        self._value = value
+        self._on_change = on_change
+        self.label = MdLabel(text=str(value), bold=True, font_size=sp(17),
+                             halign="center")
+        self.add_widget(CircleButton("-", self._dec))
+        self.add_widget(self.label)
+        self.add_widget(CircleButton("+", self._inc))
+
+    @property
+    def value(self):
+        return self._value
+
+    def _dec(self):
+        self._set(self._value - 1)
+
+    def _inc(self):
+        self._set(self._value + 1)
+
+    def _set(self, v):
+        v = max(self._vmin, min(self._vmax, v))
+        if v != self._value:
+            self._value = v
+            self.label.text = str(v)
+            if self._on_change:
+                self._on_change(v)
+
+
+class StatRow(BoxLayout):
+    """一行「标签 / 数值」展示（界面温度表、详细结果）。"""
+
+    def __init__(self, label, value, **kwargs):
+        super().__init__(orientation="horizontal", spacing=dp(10),
+                         size_hint_y=None, height=dp(34), **kwargs)
+        self.add_widget(MdLabel(text=label, color=TEXT_DIM, font_size=sp(13),
+                                size_hint_x=0.62))
+        self.add_widget(MdLabel(text=value, color=TEXT, font_size=sp(13),
+                                bold=True, halign="right", size_hint_x=0.38))
+
+
 # ============ 温度曲线控件（纯 Canvas 绘制） ============
 class CurveWidget(Widget):
-    """轻量温度曲线绘制组件，无需 matplotlib。"""
+    """深色主题温度曲线：网格 + 坐标轴 + 圆点节点标记 + 刻度。
+
+    颜色取自主题常量（可随浅/深主题切换），不依赖 matplotlib。
+    """
+
+    MAX_MARKERS = 26          # 节点圆点标记的最大数量（自动抽稀）
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -106,203 +371,494 @@ class CurveWidget(Widget):
 
     def redraw(self, *_args):
         self.canvas.clear()
-        if len(self._x) < 2 or self.width <= dp(20) or self.height <= dp(20):
+        if len(self._x) < 2 or self.width <= dp(40) or self.height <= dp(40):
             return
+        pad_l, pad_r = dp(46), dp(14)      # 左侧留白给温度刻度
+        pad_b, pad_t = dp(30), dp(12)      # 下方留白给距离刻度
         x0, x1 = self._x[0], self._x[-1]
         t0, t1 = min(self._T), max(self._T)
         span_x = (x1 - x0) or 1.0
         span_t = (t1 - t0) or 1.0
-        pad = dp(12)
+        # 上下留 5% 余量，避免曲线贴边
+        t_lo = t0 - 0.05 * span_t
+        t_hi = t1 + 0.05 * span_t
+        span_t2 = (t_hi - t_lo) or 1.0
+        iw = self.width - pad_l - pad_r
+        ih = self.height - pad_b - pad_t
+
+        def px(xi):
+            return pad_l + (xi - x0) / span_x * iw
+
+        def py(ti):
+            return pad_b + (ti - t_lo) / span_t2 * ih
+
         with self.canvas:
+            # 网格线
+            Color(*GRID)
+            for k in range(1, 5):
+                gx = pad_l + iw * k / 5
+                Line(points=[gx, pad_b, gx, pad_b + ih], width=dp(1))
+                gy = pad_b + ih * k / 5
+                Line(points=[pad_l, gy, pad_l + iw, gy], width=dp(1))
             # 坐标轴
-            Color(0.55, 0.55, 0.62, 1.0)
-            Line(points=[pad, pad, self.width - pad, pad], width=dp(1))
-            Line(points=[pad, pad, pad, self.height - pad], width=dp(1))
+            Color(*AXIS)
+            Line(points=[pad_l, pad_b, pad_l + iw, pad_b], width=dp(1))
+            Line(points=[pad_l, pad_b, pad_l, pad_b + ih], width=dp(1))
             # 温度曲线
-            Color(0.83, 0.25, 0.23, 1.0)
+            Color(*PRIMARY)
             pts = []
             for xi, ti in zip(self._x, self._T):
-                px = pad + (xi - x0) / span_x * (self.width - 2 * pad)
-                py = pad + (ti - t0) / span_t * (self.height - 2 * pad)
-                pts.extend((px, py))
+                pts.extend((px(xi), py(ti)))
             Line(points=pts, width=dp(2))
+            # 节点圆点标记（抽稀）：主色外圈 + 白色内芯
+            stride = max(1, len(self._T) // self.MAX_MARKERS)
+            for i in range(0, len(self._T), stride):
+                cx, cy = px(self._x[i]), py(self._T[i])
+                Color(*PRIMARY)
+                Line(circle=(cx, cy, dp(3)), width=dp(1.6))
+                Color(1.0, 1.0, 1.0, 1.0)
+                Line(circle=(cx, cy, dp(1.2)), width=dp(1))
+            # 刻度文字（Y：温度上下限/中点；X：距内壁 0 与总厚度）
+            self._draw_text(f"{t_hi:.0f}", pad_l - dp(6), py(t_hi), TEXT_DIM, anchor_right=True)
+            self._draw_text(f"{(t_lo + t_hi) / 2:.0f}", pad_l - dp(6), py((t_lo + t_hi) / 2), TEXT_DIM, anchor_right=True)
+            self._draw_text(f"{t_lo:.0f}", pad_l - dp(6), py(t_lo), TEXT_DIM, anchor_right=True)
+            self._draw_text(f"{x0:.0f}", pad_l, pad_b - dp(18), TEXT_DIM)
+            self._draw_text(f"{x1:.0f}", pad_l + iw, pad_b - dp(18), TEXT_DIM, anchor_right=True)
+
+    def _draw_text(self, text, x, y, color, font_size=sp(10), anchor_right=False):
+        """将文字渲染为纹理后绘制到画布；字体渲染失败时静默跳过。"""
+        try:
+            cl = CoreLabel(text=text, font_size=font_size, color=color)
+            cl.refresh()
+        except Exception:  # noqa: BLE001 —— 字体缺失时不影响曲线绘制
+            return
+        tex = cl.texture
+        tx = x - tex.width if anchor_right else x
+        ty = y - tex.height / 2.0
+        with self.canvas:
+            Color(1.0, 1.0, 1.0, 1.0)
+            Rectangle(texture=tex, pos=(tx, ty), size=tex.size)
+
+
+# ============ 结果页指标高亮卡 ============
+class MetricCard(MDCard):
+    """大字号指标高亮卡：顶部强调条 + 标题 / 大数值 / 单位。"""
+
+    def __init__(self, title, unit="", accent=ACCENT, **kwargs):
+        kwargs.setdefault("padding", [dp(10), dp(16), dp(10), dp(10)])
+        kwargs.setdefault("radius", dp(12))
+        kwargs.setdefault("spacing", dp(2))
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(*accent)
+            self._strip = RoundedRectangle(pos=(0.0, 0.0), size=(0.0, dp(3)),
+                                           radius=[(dp(1.5), dp(1.5))] * 4)
+        self.bind(pos=self._place_strip, size=self._place_strip)
+        self.title = MdLabel(text=title, color=TEXT_DIM, font_size=sp(12),
+                             halign="center", size_hint_y=None, height=dp(22))
+        self.value = MdLabel(text="--", color=TEXT, bold=True, font_size=sp(26),
+                             halign="center", size_hint_y=None, height=dp(40))
+        self.unit_label = MdLabel(text=unit, color=TEXT_DIM, font_size=sp(11),
+                                  halign="center", size_hint_y=None, height=dp(18))
+        self.add_widget(self.title)
+        self.add_widget(self.value)
+        self.add_widget(self.unit_label)
+
+    def _place_strip(self, *_args):
+        w = min(self.width * 0.4, dp(60))
+        self._strip.pos = (self.x + (self.width - w) / 2, self.y + self.height - dp(3))
+        self._strip.size = (w, dp(3))
+
+    def set_value(self, text):
+        self.value.text = text
+
+
+# ============ 底部导航栏 ============
+class NavItem(Button):
+    """底部导航单项：顶部主色指示条 + 文字，点击回调 index。"""
+
+    def __init__(self, text, index, on_select, **kwargs):
+        kwargs.setdefault("font_size", sp(13))
+        super().__init__(text=text, color=TEXT_DIM, background_normal="",
+                         background_down="", background_color=(0, 0, 0, 0), **kwargs)
+        self.index = index
+        self._cb = on_select
+        self._active = False
+        with self.canvas.before:
+            self._ind_col = Color(0.0, 0.0, 0.0, 0.0)
+            self._ind = RoundedRectangle(pos=(0.0, 0.0), size=(0.0, dp(3)),
+                                         radius=[(dp(1.5), dp(1.5))] * 4)
+        self.bind(pos=self._place, size=self._place)
+        self.bind(on_press=self._pressed)
+
+    def _place(self, *_args):
+        self._ind.pos = (self.x, self.y + self.height - dp(3))
+        self._ind.size = (self.width, dp(3))
+
+    def _pressed(self, *_args):
+        self._cb(self.index)
+
+    def set_active(self, active):
+        self._active = active
+        self.color = TEXT if active else TEXT_DIM
+        self.bold = active
+        self._ind_col.rgba = PRIMARY if active else (0.0, 0.0, 0.0, 0.0)
+
+
+class BottomNavBar(BoxLayout):
+    """Material 底部导航栏（两个主页面：参数设置 / 计算结果）。"""
+
+    NAV = [("参数设置", "inputs"), ("计算结果", "results")]
+
+    def __init__(self, on_select, **kwargs):
+        super().__init__(orientation="horizontal", spacing=0,
+                         size_hint_y=None, height=dp(60), **kwargs)
+        with self.canvas.before:
+            Color(*CARD)
+            self._bg = Rectangle(pos=self.pos, size=self.size)
+            Color(*CARD_BORDER)
+            self._top_line = Line(points=[0.0, 0.0, 0.0, 0.0], width=dp(1))
+        self.bind(pos=self._sync, size=self._sync)
+        self._items = []
+        for i, (text, _name) in enumerate(self.NAV):
+            item = NavItem(text, i, on_select)
+            self._items.append(item)
+            self.add_widget(item)
+        self._items[0].set_active(True)
+
+    def _sync(self, *_args):
+        self._bg.pos = self.pos
+        self._bg.size = self.size
+        self._top_line.points = [self.x, self.y + self.height,
+                                 self.x + self.width, self.y + self.height]
+
+    def set_index(self, index):
+        for i, item in enumerate(self._items):
+            item.set_active(i == index)
+
+
+# ============ 参数设置页（Tab 1） ============
+class InputScreen(Screen):
+    """输入页：三张卡片分组 + 固定底部「开始计算」大按钮。"""
+
+    def __init__(self, on_calc, **kwargs):
+        super().__init__(**kwargs)
+        self.name = "inputs"
+        self.on_calc = on_calc
+        self._layer_rows = []      # 每项: (name, thick, k) —— UnitInput
+        self._fields = {}          # key -> FieldRow
+        self._build()
+
+    def _build(self):
+        root = BoxLayout(orientation="vertical")
+        scroll = ScrollView(bar_width=dp(4), bar_color=GRID,
+                            bar_inactive_color=GRID)
+        content = BoxLayout(orientation="vertical", spacing=dp(12),
+                            padding=[dp(14), dp(14), dp(14), dp(14)],
+                            size_hint_y=None)
+        content.bind(minimum_height=content.setter("height"))
+        scroll.add_widget(content)
+        root.add_widget(scroll)
+
+        # ---- 卡片 1：窑体几何 ----
+        geom = MDCard()
+        geom.add_widget(make_title("窑体几何"))
+        self._add_field(geom, "L_char", "窑内径", "m", "4")
+        self._add_field(geom, "L_kiln", "窑长", "m", "60")
+        row = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
+        row.add_widget(MdLabel(text="衬里层数", size_hint=(None, 1), width=dp(112)))
+        self.stepper = Stepper(value=4, on_change=lambda *_a: self._rebuild_layers())
+        row.add_widget(self.stepper)
+        geom.add_widget(row)
+        self.layer_grid = BoxLayout(orientation="vertical", spacing=dp(6),
+                                    size_hint_y=None)
+        self.layer_grid.bind(minimum_height=self.layer_grid.setter("height"))
+        geom.add_widget(self.layer_grid)
+        content.add_widget(geom)
+        self._rebuild_layers()
+
+        # ---- 卡片 2：热工与烟气 ----
+        thermal = MDCard()
+        thermal.add_widget(make_title("热工与烟气"))
+        self._add_field(thermal, "T_gas", "烟气温度", "°C", "1250")
+        self._add_field(thermal, "v_gas", "烟气流速", "m/s", "3")
+        self._add_field(thermal, "P_total", "窑内压力", "bar", "1.01325")
+        self._add_field(thermal, "CO2", "CO2 含量", "%", "20")
+        self._add_field(thermal, "H2O", "H2O 含量", "%", "8")
+        self._add_field(thermal, "eps_wall", "内壁发射率", "", "0.85")
+        self._add_field(thermal, "N_total", "温度曲线取点数", "点", "100",
+                        input_cls=IntInput)
+        content.add_widget(thermal)
+
+        # ---- 卡片 3：环境条件 ----
+        env = MDCard()
+        env.add_widget(make_title("环境条件"))
+        self._add_field(env, "T_env", "环境温度", "°C", "25")
+        self._add_field(env, "v_amb", "环境风速", "m/s", "2")
+        self._add_field(env, "eps_shell", "外壳发射率", "", "0.85")
+        content.add_widget(env)
+
+        # ---- 底部操作区（固定在屏幕底部，不随卡片滚动） ----
+        bottom = BoxLayout(orientation="vertical", spacing=dp(6),
+                           size_hint_y=None, height=dp(104),
+                           padding=[dp(14), dp(6), dp(14), dp(14)])
+        self.error_label = MdLabel(text="", color=DANGER, font_size=sp(13),
+                                   halign="center", size_hint_y=None, height=dp(26))
+        bottom.add_widget(self.error_label)
+        btn = AccentButton(text="开始计算", size_hint_y=None, height=dp(54))
+        btn.bind(on_press=lambda *_args: self._on_calc())
+        bottom.add_widget(btn)
+        root.add_widget(bottom)
+
+        self.add_widget(root)
+
+    def _add_field(self, card, key, label, unit, default, input_cls=FloatInput):
+        row = FieldRow(label, unit=unit, default=default, input_cls=input_cls)
+        self._fields[key] = row
+        card.add_widget(row)
+        return row
+
+    def _rebuild_layers(self):
+        """按层数重建层参数表格（名称 / 厚度 / 导热系数）。"""
+        self.layer_grid.clear_widgets()
+        self._layer_rows.clear()
+        n = self.stepper.value
+        # 表头
+        head = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(28))
+        head.add_widget(MdLabel(text="名称", color=TEXT_DIM, font_size=sp(12), size_hint_x=1))
+        h2 = MdLabel(text="厚度 mm", color=TEXT_DIM, font_size=sp(12), size_hint_x=0.32)
+        h3 = MdLabel(text="导热系数 λ", color=TEXT_DIM, font_size=sp(12), size_hint_x=0.32)
+        head.add_widget(h2)
+        head.add_widget(h3)
+        self.layer_grid.add_widget(head)
+        # 数据行
+        for i in range(n):
+            row = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
+            name = UnitInput(unit="", default=f"层{i+1}", halign="left")
+            name.size_hint_x = 1
+            thick = UnitInput(unit="mm", default="50")
+            thick.size_hint_x = 0.32
+            k = UnitInput(unit="λ", default="1.0")
+            k.size_hint_x = 0.32
+            row.add_widget(name)
+            row.add_widget(thick)
+            row.add_widget(k)
+            self._layer_rows.append((name, thick, k))
+            self.layer_grid.add_widget(row)
+        self.layer_grid.height = self.layer_grid.minimum_height
+
+    def collect_params(self):
+        """解析界面参数，非法输入抛 ValueError。"""
+        layers = []
+        for i, (name, thick, k) in enumerate(self._layer_rows):
+            layers.append(Layer(
+                name=name.text.strip() or f"层{i+1}",
+                thickness=float(thick.text) / 1000.0,
+                k=float(k.text),
+            ))
+        p = self._fields
+        params = KilnParams(
+            N_total=int(p["N_total"].text),
+            T_gas=float(p["T_gas"].text) + 273.15,
+            v_gas=float(p["v_gas"].text),
+            L_char=float(p["L_char"].text),
+            L_kiln=float(p["L_kiln"].text),
+            P_total=float(p["P_total"].text),
+            CO2=float(p["CO2"].text) / 100.0,
+            H2O=float(p["H2O"].text) / 100.0,
+            eps_wall=float(p["eps_wall"].text),
+            T_env=float(p["T_env"].text) + 273.15,
+            v_amb=float(p["v_amb"].text),
+            eps_shell=float(p["eps_shell"].text),
+        )
+        return layers, params
+
+    def _on_calc(self):
+        self.error_label.text = ""
+        try:
+            layers, params = self.collect_params()
+        except ValueError as exc:
+            self._flash_error(str(exc))
+            return
+        self.on_calc(layers, params)
+
+    def _flash_error(self, msg):
+        self.error_label.text = f"⚠ {msg}"
+        Clock.schedule_once(lambda *_args: self.error_label.__setattr__("text", ""), 3.0)
+
+
+# ============ 计算结果页（Tab 2） ============
+class ResultScreen(Screen):
+    """结果页：顶部指标高亮卡 + 界面温度表 + 详细结果 + 大图温度曲线。"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name = "results"
+        root = BoxLayout(orientation="vertical")
+
+        # 顶部指标高亮区（固定）
+        metrics = BoxLayout(orientation="horizontal", spacing=dp(10),
+                            size_hint_y=None, height=dp(118),
+                            padding=[dp(14), dp(12), dp(14), 0])
+        self.m_outer = MetricCard("外壁面温度", "°C")
+        self.m_inner = MetricCard("内壁面温度", "°C")
+        self.m_eg = MetricCard("烟气发射率", "—")
+        for m in (self.m_outer, self.m_inner, self.m_eg):
+            metrics.add_widget(m)
+        root.add_widget(metrics)
+
+        # 可滚动结果区
+        scroll = ScrollView(bar_width=dp(4), bar_color=GRID,
+                            bar_inactive_color=GRID)
+        content = BoxLayout(orientation="vertical", spacing=dp(12),
+                            padding=[dp(14), dp(8), dp(14), dp(14)],
+                            size_hint_y=None)
+        content.bind(minimum_height=content.setter("height"))
+        scroll.add_widget(content)
+        root.add_widget(scroll)
+
+        # 各层界面温度
+        iface = MDCard()
+        iface.add_widget(make_title("各层界面温度"))
+        self.iface_body = BoxLayout(orientation="vertical", spacing=dp(2),
+                                    size_hint_y=None)
+        self.iface_body.bind(minimum_height=self.iface_body.setter("height"))
+        self.iface_placeholder = MdLabel(text="点击「开始计算」后显示", color=TEXT_DIM,
+                                         size_hint_y=None, height=dp(36))
+        self.iface_body.add_widget(self.iface_placeholder)
+        iface.add_widget(self.iface_body)
+        content.add_widget(iface)
+
+        # 详细工况结果
+        detail = MDCard()
+        detail.add_widget(make_title("详细工况结果"))
+        self.detail_body = BoxLayout(orientation="vertical", spacing=dp(2),
+                                     size_hint_y=None)
+        self.detail_body.bind(minimum_height=self.detail_body.setter("height"))
+        self.detail_placeholder = MdLabel(text="点击「开始计算」后显示", color=TEXT_DIM,
+                                          size_hint_y=None, height=dp(36))
+        self.detail_body.add_widget(self.detail_placeholder)
+        detail.add_widget(self.detail_body)
+        content.add_widget(detail)
+
+        # 温度分布大图
+        curve_card = MDCard(spacing=dp(6))
+        curve_card.add_widget(make_title("温度分布（内壁 → 外壁）"))
+        self.curve = CurveWidget(size_hint=(1, None), height=dp(320))
+        self.curve_hint = Label(text="等待计算…", color=TEXT_DIM, font_size=sp(14),
+                                size_hint=(None, None), size=(dp(200), dp(30)))
+        self.curve.add_widget(self.curve_hint)
+        self.curve.bind(pos=self._center_hint, size=self._center_hint)
+        curve_card.add_widget(self.curve)
+        self.curve_foot = MdLabel(text="", color=TEXT_DIM, font_size=sp(12),
+                                  size_hint_y=None, height=dp(20))
+        curve_card.add_widget(self.curve_foot)
+        content.add_widget(curve_card)
+
+        self.add_widget(root)
+
+    def _center_hint(self, *_args):
+        self.curve_hint.center = self.curve.center
+
+    def set_result(self, layers, sol, x_mm, T_c):
+        """用最新计算结果刷新整个结果页。"""
+        self.m_outer.set_value(f"{sol.T_wN - 273.15:.1f}")
+        self.m_inner.set_value(f"{sol.T_w1 - 273.15:.1f}")
+        self.m_eg.set_value(f"{sol.eg:.3f}")
+
+        self.iface_body.clear_widgets()
+        rows = [("内壁面", sol.T_iface[0])]
+        for i in range(1, len(sol.T_iface) - 1):
+            rows.append((f"{layers[i-1].name} / {layers[i].name}", sol.T_iface[i]))
+        rows.append(("外壁面", sol.T_iface[-1]))
+        for name, tk in rows:
+            self.iface_body.add_widget(StatRow(name, f"{tk - 273.15:.1f} °C"))
+        self.iface_body.height = self.iface_body.minimum_height
+
+        self.detail_body.clear_widgets()
+        stats = [
+            ("单位长度热功率 Q'", f"{sol.Qprime:.1f} W/m"),
+            ("内壁热流密度 q_in", f"{sol.q_in:.1f} W/m²"),
+            ("外壁热流密度 q_out", f"{sol.q_out:.1f} W/m²"),
+            ("内壁总换热系数 h_in", f"{sol.h_in:.1f} W/m²·K"),
+            ("　内壁对流 h_conv", f"{sol.h_conv_in:.1f} W/m²·K"),
+            ("　内壁辐射 h_rad", f"{sol.h_rad_in:.1f} W/m²·K"),
+            ("外壁总换热系数 h_out", f"{sol.h_out:.1f} W/m²·K"),
+            ("　外壁对流 h_conv", f"{sol.h_conv_out:.1f} W/m²·K"),
+            ("　外壁辐射 h_rad", f"{sol.h_rad_out:.1f} W/m²·K"),
+            ("耦合迭代步数", f"{sol.iterations}"),
+        ]
+        for label, value in stats:
+            self.detail_body.add_widget(StatRow(label, value))
+        self.detail_body.height = self.detail_body.minimum_height
+
+        self.curve.set_data(x_mm, T_c)
+        self.curve_hint.opacity = 0
+        self.curve_foot.text = f"距内壁 0 mm  →  {x_mm[-1]:.0f} mm"
 
 
 # ============ 主界面 ============
 class KilnApp(BoxLayout):
-    """主界面：滚动输入区 + 温度曲线 + 结果展示。"""
+    """主界面：应用栏 + ScreenManager（输入 / 结果）+ 底部导航栏。"""
 
     def __init__(self, **kwargs):
-        super().__init__(orientation="vertical", spacing=dp(6), padding=dp(8), **kwargs)
-        self._layer_rows = []      # 每项: (name_entry, thick_entry, k_entry)
-        self._build_input_area()
-        self._build_curve()
-        self._build_result()
+        super().__init__(orientation="vertical", **kwargs)
+        self._build_appbar()
+        self.sm = ScreenManager(transition=FadeTransition(duration=0.18))
+        self.input_screen = InputScreen(on_calc=self._run_calc)
+        self.result_screen = ResultScreen()
+        self.sm.add_widget(self.input_screen)
+        self.sm.add_widget(self.result_screen)
+        self.add_widget(self.sm)
+        self.nav = BottomNavBar(on_select=self._on_nav)
+        self.add_widget(self.nav)
 
-    # ---------- 输入区 ----------
-    def _build_input_area(self):
-        scroll = ScrollView(size_hint=(1, 0.52))
-        panel = BoxLayout(orientation="vertical", spacing=dp(4), size_hint_y=None)
-        panel.bind(minimum_height=panel.setter("height"))
-        scroll.add_widget(panel)
+    # ---------- 顶部应用栏 ----------
+    def _build_appbar(self):
+        bar = BoxLayout(size_hint_y=None, height=dp(50),
+                        padding=[dp(16), 0, dp(16), 0])
+        with bar.canvas.before:
+            Color(*CARD)
+            self._bar_rect = Rectangle(pos=bar.pos, size=bar.size)
+            Color(*CARD_BORDER)
+            self._bar_line = Line(points=[0.0, 0.0, 0.0, 0.0], width=dp(1))
+        bar.bind(pos=lambda *_a: self._sync_appbar(bar),
+                 size=lambda *_a: self._sync_appbar(bar))
+        title = Label(text="水泥窑窑衬传热计算", color=TEXT, bold=True,
+                      font_size=sp(17), halign="left", valign="middle")
+        title.bind(size=lambda *_args: setattr(title, "text_size", title.size))
+        bar.add_widget(title)
+        self.add_widget(bar)
 
-        # 层数选择
-        row = BoxLayout(size_hint_y=None, height=dp(42))
-        row.add_widget(Label(text="衬里层数", bold=True))
-        self.layer_spinner = Spinner(
-            text="4",
-            values=[str(i) for i in range(1, 11)],
-            size_hint=(0.5, 1),
-        )
-        self.layer_spinner.bind(text=lambda *_args: self._rebuild_layers())
-        row.add_widget(self.layer_spinner)
-        panel.add_widget(row)
+    def _sync_appbar(self, bar):
+        self._bar_rect.pos = bar.pos
+        self._bar_rect.size = bar.size
+        self._bar_line.points = [bar.x, bar.y, bar.x + bar.width, bar.y]
 
-        # 层参数表格（名称 / 厚度 / 导热系数）
-        self.layer_grid = GridLayout(cols=4, spacing=dp(4), size_hint_y=None)
-        self.layer_grid.bind(minimum_height=self.layer_grid.setter("height"))
-        panel.add_widget(self.layer_grid)
-
-        # 工况参数
-        self.param_fields = {}
-        param_specs = [
-            ("N_total",    "温度曲线取点数", "100",     IntInput),
-            ("T_gas",      "烟气温度(℃)",   "1250",    FloatInput),
-            ("v_gas",      "烟气流速(m/s)", "3",       FloatInput),
-            ("L_char",     "窑内径(m)",     "4",       FloatInput),
-            ("L_kiln",     "窑长(m)",       "60",      FloatInput),
-            ("P_total",    "窑内压力(bar)", "1.01325", FloatInput),
-            ("CO2",        "CO2含量(%)",    "20",      FloatInput),
-            ("H2O",        "H2O含量(%)",    "8",       FloatInput),
-            ("eps_wall",   "内壁发射率",    "0.85",    FloatInput),
-            ("T_env",      "环境温度(℃)",   "25",      FloatInput),
-            ("v_amb",      "环境风速(m/s)", "2",       FloatInput),
-            ("eps_shell",  "外壳发射率",    "0.85",    FloatInput),
-        ]
-        for key, label, default, cls in param_specs:
-            r = BoxLayout(size_hint_y=None, height=dp(40))
-            r.add_widget(Label(text=label, size_hint=(0.5, 1)))
-            inp = cls(text=default, size_hint=(0.5, 1))
-            self.param_fields[key] = inp
-            r.add_widget(inp)
-            panel.add_widget(r)
-
-        # 计算按钮
-        btn = Button(
-            text="计 算",
-            size_hint_y=None,
-            height=dp(52),
-            font_size=sp(18),
-            background_color=(0.17, 0.52, 0.87, 1),
-        )
-        btn.bind(on_press=lambda *_args: self._on_calc())
-        panel.add_widget(btn)
-
-        self._rebuild_layers()
-        self.add_widget(scroll)
-
-    def _rebuild_layers(self):
-        self.layer_grid.clear_widgets()
-        self._layer_rows.clear()
-        n = int(self.layer_spinner.text)
-        for t in ("层", "名称", "厚度mm", "λ W/m·K"):
-            self.layer_grid.add_widget(
-                Label(text=t, bold=True, size_hint_y=None, height=dp(28)))
-        for i in range(n):
-            idx = Label(text=str(i + 1), size_hint_y=None, height=dp(36))
-            name = TextInput(text=f"层{i+1}", size_hint_y=None, height=dp(36))
-            thick = FloatInput(text="50", size_hint_y=None, height=dp(36))
-            k = FloatInput(text="1.0", size_hint_y=None, height=dp(36))
-            self._layer_rows.append((name, thick, k))
-            self.layer_grid.add_widget(idx)
-            self.layer_grid.add_widget(name)
-            self.layer_grid.add_widget(thick)
-            self.layer_grid.add_widget(k)
-        self.layer_grid.height = dp(28) + n * dp(40)
-
-    # ---------- 温度曲线 ----------
-    def _build_curve(self):
-        box = BoxLayout(orientation="vertical", size_hint=(1, 0.28))
-        box.add_widget(Label(
-            text="温度分布（内壁 → 外壁）",
-            size_hint_y=None, height=dp(22), font_size=sp(13)))
-        self.curve = CurveWidget()
-        box.add_widget(self.curve)
-        self.add_widget(box)
-
-    # ---------- 结果 ----------
-    def _build_result(self):
-        self.result = Label(
-            text="输入参数后点击「计 算」",
-            size_hint=(1, 0.2),
-            halign="left", valign="top",
-            font_size=sp(14),
-            padding=(dp(10), dp(6)),
-        )
-        self.result.bind(
-            size=lambda *_args: setattr(self.result, "text_size", self.result.size))
-        self.add_widget(self.result)
+    # ---------- 导航 ----------
+    def _on_nav(self, index):
+        self.sm.current = BottomNavBar.NAV[index][1]
+        self.nav.set_index(index)
 
     # ---------- 计算 ----------
-    def _on_calc(self):
+    def _run_calc(self, layers, params):
         try:
-            layers = []
-            for i, (name, thick, k) in enumerate(self._layer_rows):
-                layers.append(Layer(
-                    name=name.text.strip() or f"层{i+1}",
-                    thickness=float(thick.text) / 1000.0,
-                    k=float(k.text),
-                ))
-            p = self.param_fields
-            params = KilnParams(
-                N_total=int(p["N_total"].text),
-                T_gas=float(p["T_gas"].text) + 273.15,
-                v_gas=float(p["v_gas"].text),
-                L_char=float(p["L_char"].text),
-                L_kiln=float(p["L_kiln"].text),
-                P_total=float(p["P_total"].text),
-                CO2=float(p["CO2"].text) / 100.0,
-                H2O=float(p["H2O"].text) / 100.0,
-                eps_wall=float(p["eps_wall"].text),
-                T_env=float(p["T_env"].text) + 273.15,
-                v_amb=float(p["v_amb"].text),
-                eps_shell=float(p["eps_shell"].text),
-            )
             sol = solve_wall(layers, params)
             x_mm, T_c = compute_temperature_curve(layers, sol, n_points=params.N_total)
-            self.curve.set_data(x_mm, T_c)
-            self.result.text = self._format_result(layers, sol)
         except Exception as exc:  # noqa: BLE001 —— UI 层统一捕获并展示错误
-            self.result.text = f"[错误] {exc}"
-
-    @staticmethod
-    def _format_result(layers, sol):
-        lines = [
-            f"烟气发射率: {sol.eg:.3f}",
-            f"内壁面温度: {sol.T_w1 - 273.15:.1f} ℃",
-            f"外壁面温度: {sol.T_wN - 273.15:.1f} ℃",
-            "",
-            "各层分界面温度(℃):",
-        ]
-        for i in range(1, len(layers) + 1):
-            lines.append(f"  {layers[i-1].name}: {sol.T_iface[i] - 273.15:.1f}")
-        lines += [
-            "",
-            f"单位长度热功率 Q': {sol.Qprime:.1f} W/m",
-            f"内壁热流密度 q_in: {sol.q_in:.1f} W/m²",
-            f"外壁热流密度 q_out: {sol.q_out:.1f} W/m²",
-            "",
-            f"内壁换热: 对流{sol.h_conv_in:.1f} + 辐射{sol.h_rad_in:.1f} = {sol.h_in:.1f} W/m²·K",
-            f"外壁换热: 对流{sol.h_conv_out:.1f} + 辐射{sol.h_rad_out:.1f} = {sol.h_out:.1f} W/m²·K",
-            f"迭代收敛于第 {sol.iterations} 步",
-        ]
-        return "\n".join(lines)
+            self.input_screen._flash_error(str(exc))
+            return False
+        self.result_screen.set_result(layers, sol, x_mm, T_c)
+        self._on_nav(1)
+        return True
 
 
 class HeatTransferApp(App):
     """应用入口。"""
 
     def build(self):
+        from kivy.core.window import Window
+        Window.clearcolor = BG
         self.title = "水泥窑窑衬传热计算"
         return KilnApp()
 
