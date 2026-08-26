@@ -65,6 +65,22 @@ class TestUIBuild:
         assert layers[0].thickness == 0.05
         assert layers[0].k == 1.0
 
+    def test_layer_name_accepts_custom_text(self, app):
+        """层名输入框必须允许输入任意文本（如中文层名），不被浮点过滤器拦截。"""
+        _, root = app
+        ins = root.input_screen
+        name, thick, k = ins._layer_rows[0]
+        # 名称输入框应是普通 TextInput（无 float 过滤）
+        assert name.textinput.input_filter is None, "层名输入框不应有输入过滤器"
+        # 清空后输入中文层名，应能被 collect_params 正确解析
+        name.text = "耐火砖"
+        layers, _ = ins.collect_params()
+        assert layers[0].name == "耐火砖"
+        # 重新输入英文/数字混合名称同样正常
+        name.text = "Steel shell 1"
+        layers, _ = ins.collect_params()
+        assert layers[0].name == "Steel shell 1"
+
     def test_stepper(self, app):
         _, root = app
         ins = root.input_screen

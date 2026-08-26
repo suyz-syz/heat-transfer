@@ -642,27 +642,36 @@ class InputScreen(Screen):
         return row
 
     def _rebuild_layers(self):
-        """按层数重建层参数表格（名称 / 厚度 / 导热系数）。"""
+        """按层数重建层参数表格（名称 / 厚度 / 导热系数）。
+
+        名称列使用普通 TextInput（不设浮点过滤器），允许清空后自由输入中文层名；
+        名称列固定窄宽度，厚度 / 导热系数两列弹性均分剩余空间；
+        单位已在表头标注，输入框内不再冗余显示 mm / λ 后缀。
+        """
         self.layer_grid.clear_widgets()
         self._layer_rows.clear()
         n = self.stepper.value
-        # 表头
+        # 表头（列名已带单位）
         head = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(28))
-        head.add_widget(MdLabel(text="名称", color=TEXT_DIM, font_size=sp(12), size_hint_x=1))
-        h2 = MdLabel(text="厚度 mm", color=TEXT_DIM, font_size=sp(12), size_hint_x=0.32)
-        h3 = MdLabel(text="导热系数 λ", color=TEXT_DIM, font_size=sp(12), size_hint_x=0.32)
-        head.add_widget(h2)
-        head.add_widget(h3)
+        head.add_widget(MdLabel(text="名称", color=TEXT_DIM, font_size=sp(12),
+                                size_hint_x=None, width=dp(84)))
+        head.add_widget(MdLabel(text="厚度(mm)", color=TEXT_DIM, font_size=sp(12),
+                                size_hint_x=1))
+        head.add_widget(MdLabel(text="导热系数λ", color=TEXT_DIM, font_size=sp(12),
+                                size_hint_x=1))
         self.layer_grid.add_widget(head)
         # 数据行
         for i in range(n):
             row = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
-            name = UnitInput(unit="", default=f"层{i+1}", halign="left")
-            name.size_hint_x = 1
-            thick = UnitInput(unit="mm", default="50")
-            thick.size_hint_x = 0.32
-            k = UnitInput(unit="λ", default="1.0")
-            k.size_hint_x = 0.32
+            name = UnitInput(input_cls=TextInput, unit="", default=f"层{i+1}",
+                             halign="left")
+            name.textinput.multiline = False    # 普通文本输入，支持中文层名
+            name.size_hint_x = None
+            name.width = dp(84)
+            thick = UnitInput(unit="", default="50")
+            thick.size_hint_x = 1
+            k = UnitInput(unit="", default="1.0")
+            k.size_hint_x = 1
             row.add_widget(name)
             row.add_widget(thick)
             row.add_widget(k)
