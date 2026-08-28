@@ -153,6 +153,22 @@ def air_properties(T_k: float) -> Tuple[float, float, float]:
     return lam, 0.71, nu
 
 
+def integral_mean_k(k_coef: Tuple[float, float, float], T_h_c: float, T_c_c: float) -> float:
+    """温度相关导热系数的层内积分平均（T 单位 ℃）。
+
+    k(T) = a + b·T + c·T²；热面 T_h_c、冷面 T_c_c（℃）。
+    积分平均：k_avg = ∫_{Tc}^{Th} k(T) dT / (Th - Tc)
+    = a + b·(Th+Tc)/2 + c·(Th²+Th·Tc+Tc²)/3
+    当 Th≈Tc 时退化为 k(T)。
+    """
+    a, b, c = k_coef
+    dT = T_h_c - T_c_c
+    if abs(dT) < 1e-9:
+        Tm = (T_h_c + T_c_c) / 2.0
+        return a + b * Tm + c * Tm * Tm
+    return a + b * (T_h_c + T_c_c) / 2.0 + c * (T_h_c ** 2 + T_h_c * T_c_c + T_c_c ** 2) / 3.0
+
+
 # ============ 内侧换热 ============
 def inner_convection_h(v: float, D: float, L: float, T_f: float) -> float:
     """管内强制对流换热系数 (W/m²·K)（Gnielinski + 入口效应修正）。
