@@ -575,7 +575,7 @@ class InputScreen(Screen):
         super().__init__(**kwargs)
         self.name = "inputs"
         self.on_calc = on_calc
-        self._layer_rows = []      # 每项: (name, thick, k) —— UnitInput
+        self._layer_rows = []      # 每项: (name, thick, mat, k, rc) —— UnitInput/Spinner
         self._fields = {}          # key -> FieldRow
         self._build()
 
