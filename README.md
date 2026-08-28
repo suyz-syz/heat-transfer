@@ -8,6 +8,8 @@ Kivy 跨平台移动端（Android APK）、FastAPI RESTful API（Docker 部署�
 ## 功能特性
 
 - **多层圆筒壁稳态传热**：以单位长度热功率 Q'（W/m）为守恒量，圆筒壁对数分布精确解。
+- **k(T) 温度相关导热系数**：每层导热系数 k(T)=a+bT+cT²（T 单位 ℃），层内积分平均；内置耐火材料库（硅酸铝纤维/轻质砖/高铝砖/重质高铝浇注料/钢壳，系数来自手册/国标）。
+- **层间接触热阻 Rc**：层与层界面（砖缝/浇注料与钢壳间隙）可选热阻 (m²·K/W)。
 - **内侧换热**：管内强制对流（Gnielinski + 入口效应修正）+ 烟气辐射（Hottel/Leckner 灰气体，分压 P·L 计）。
 - **外侧换热**：水平圆柱自然对流（Churchill-Chu）或外掠强制对流（Zhukauskas）+ 外壳辐射。
 - **物性温度相关**：Sutherland 拟合；内/外壁温双侧耦合迭代求解（自适应松弛，稳定收敛）。
@@ -51,13 +53,23 @@ cement-kiln-heat-transfer/
 ```bash
 python -c "
 from kiln_ht import Layer, KilnParams, solve_wall
-layers = [Layer('硅酸铝纤维', 0.150, 0.10),
-          Layer('轻质砖',     0.100, 0.30),
-          Layer('高铝砖',     0.080, 1.50),
-          Layer('钢壳',       0.012, 45.0)]
+# k_coef = (a, b, c)，k(T)=a+bT+cT²（T 单位 ℃）；常数 k 用 k_coef=(k,0,0)
+layers = [Layer('硅酸铝纤维', 0.150, k_coef=(0.08, 1.2e-4, 0.0)),
+          Layer('轻质砖',     0.100, k_coef=(0.32, 1.8e-4, 0.0)),
+          Layer('高铝砖',     0.080, k_coef=(1.05, 1.5e-4, 0.0)),
+          Layer('钢壳',       0.012, k_coef=(45.0, 0.0, 0.0))]
 sol = solve_wall(layers, KilnParams())
-print(sol.as_dict())
+print(sol.as_dict())   # 含各层平均导热系数 k_avg
 "
+```
+
+或从内置材料库直接选材料（系数来自耐火材料手册/国标工程数据）：
+
+```python
+from kiln_ht import Layer, KilnParams, solve_wall, get_material, material_names
+print(material_names())                       # ['硅酸铝纤维', '轻质砖', '高铝砖', ...]
+fib = get_material('硅酸铝纤维')['k_coef']    # (0.08, 1.2e-4, 0.0)
+layers = [Layer('硅酸铝纤维', 0.150, k_coef=fib, Rc=0.005)]  # Rc 为层间接触热阻 (m²·K/W)
 ```
 
 ### 2. Kivy 桌面端（调试 UI）
