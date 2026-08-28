@@ -24,7 +24,15 @@ Android 打包（需先安装 buildozer，详见 buildozer.spec）：
     buildozer android release          # 签名发布包
 """
 
-from kiln_ht import Layer, KilnParams, solve_wall, compute_temperature_curve
+from kiln_ht import (
+    Layer,
+    KilnParams,
+    MATERIALS,
+    get_material,
+    material_names,
+    solve_wall,
+    compute_temperature_curve,
+)
 
 import os
 
@@ -43,6 +51,7 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import FadeTransition, Screen, ScreenManager
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 from kivy.utils import platform
@@ -642,11 +651,11 @@ class InputScreen(Screen):
         return row
 
     def _rebuild_layers(self):
-        """按层数重建层参数表格（名称 / 厚度 / 导热系数）。
+        """按层数重建层参数表格（名称 / 厚度 / 材料 / 接触热阻）。
 
         名称列使用普通 TextInput（不设浮点过滤器），允许清空后自由输入中文层名；
-        名称列固定窄宽度，厚度 / 导热系数两列弹性均分剩余空间；
-        单位已在表头标注，输入框内不再冗余显示 mm / λ 后缀。
+        材料列为下拉 Spinner（自定义或从材料库选，选中即用材料 k_coef）；
+        接触热阻列输入 Rc (m²·K/W)。
         """
         self.layer_grid.clear_widgets()
         self._layer_rows.clear()
@@ -656,9 +665,11 @@ class InputScreen(Screen):
         head.add_widget(MdLabel(text="名称", color=TEXT_DIM, font_size=sp(12),
                                 size_hint_x=None, width=dp(84)))
         head.add_widget(MdLabel(text="厚度(mm)", color=TEXT_DIM, font_size=sp(12),
+                                size_hint_x=0.7))
+        head.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(12),
                                 size_hint_x=1))
-        head.add_widget(MdLabel(text="导热系数λ", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=1))
+        head.add_widget(MdLabel(text="Rc(m²K/W)", color=TEXT_DIM, font_size=sp(12),
+                                size_hint_x=None, width=dp(70)))
         self.layer_grid.add_widget(head)
         # 数据行
         for i in range(n):
@@ -669,24 +680,34 @@ class InputScreen(Screen):
             name.size_hint_x = None
             name.width = dp(84)
             thick = UnitInput(unit="", default="50")
-            thick.size_hint_x = 1
-            k = UnitInput(unit="", default="1.0")
-            k.size_hint_x = 1
+            thick.size_hint_x = 0.7
+            mat = Spinner(text="自定义", values=["自定义"] + material_names(),
+                          size_hint_x=1, font_size=sp(12),
+                          background_color=CARD)
+            rc = UnitInput(unit="", default="0.0")
+            rc.size_hint_x = None
+            rc.width = dp(70)
             row.add_widget(name)
             row.add_widget(thick)
-            row.add_widget(k)
-            self._layer_rows.append((name, thick, k))
+            row.add_widget(mat)
+            row.add_widget(rc)
+            self._layer_rows.append((name, thick, mat, rc))
             self.layer_grid.add_widget(row)
         self.layer_grid.height = self.layer_grid.minimum_height
 
     def collect_params(self):
         """解析界面参数，非法输入抛 ValueError。"""
         layers = []
-        for i, (name, thick, k) in enumerate(self._layer_rows):
+        for i, (name, thick, mat, rc) in enumerate(self._layer_rows):
+            if mat.text == "自定义":
+                k_coef = (1.0, 0.0, 0.0)   # 自定义默认常数 k=1
+            else:
+                k_coef = get_material(mat.text)["k_coef"]
             layers.append(Layer(
                 name=name.text.strip() or f"层{i+1}",
                 thickness=float(thick.text) / 1000.0,
-                k=float(k.text),
+                k_coef=k_coef,
+                Rc=float(rc.text),
             ))
         p = self._fields
         params = KilnParams(
