@@ -218,7 +218,7 @@ def test_web_ui_rc_input(app):
 
 def test_web_ui_material_selection_fills_k_coef(app):
     """选择材料后，计算应使用该材料的 k_coef（而非默认 k=1）。"""
-    from kiln_ht import get_material
+    from kiln_ht import KilnParams, Layer, get_material, solve_wall
 
     # 选择第 0 层为硅酸铝纤维
     mat_sb = [s for s in app.selectbox if (s.key or "").endswith("_material")]
@@ -231,6 +231,14 @@ def test_web_ui_material_selection_fills_k_coef(app):
     assert not app.exception
     assert not app.error, [e.value for e in app.error]
 
-    # 验证 k_coef 已按材料填充（硅酸铝纤维 k_coef 非默认 k=1）
+    # 关键断言：app 实际计算的外壁温度应等于用硅酸铝纤维 k_coef 的参考值
+    # （若 bug 存在，app 会用默认 k=1 计算，外壁温度显著不同）
+    outer_val = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
+
     fib = get_material("硅酸铝纤维")["k_coef"]
-    assert fib[0] != 1.0
+    ref_layers = [Layer(name=f"层{i+1}", thickness=0.050,
+                        k_coef=(fib if i == 0 else (1.0, 0.0, 0.0))) for i in range(4)]
+    ref_sol = solve_wall(ref_layers, KilnParams())
+    ref_outer = ref_sol.T_wN - 273.15
+    assert abs(outer_val - ref_outer) < 0.5, \
+        f"材料选择未生效：app={outer_val:.1f} vs 参考={ref_outer:.1f}"
