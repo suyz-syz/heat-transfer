@@ -22,6 +22,12 @@ from .calc import (
     solve_wall,
     validate_params,
 )
-from .materials import MATERIALS, get_material, material_names
+from .materials import (
+    get_material,
+    load_user_materials,
+    material_names,
+    materials_path,
+    save_user_material,
+)
 
 __version__ = "1.0.0"

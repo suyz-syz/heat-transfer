@@ -162,13 +162,20 @@ def integral_mean_k(k_coef: Tuple[float, float, float], T_h_c: float, T_c_c: flo
     积分平均：k_avg = ∫_{Tc}^{Th} k(T) dT / (Th - Tc)
     = a + b·(Th+Tc)/2 + c·(Th²+Th·Tc+Tc²)/3
     当 Th≈Tc 时退化为 k(T)。
+
+    安全防护：如果 k_avg 计算为负（因 b/c 系数过大导致 k(T) 为负），
+    则返回一个很小的正数（1e-6），避免 R_wall 为负导致温度反常升高。
     """
     a, b, c = k_coef
     dT = T_h_c - T_c_c
     if abs(dT) < 1e-9:
         Tm = (T_h_c + T_c_c) / 2.0
-        return a + b * Tm + c * Tm * Tm
-    return a + b * (T_h_c + T_c_c) / 2.0 + c * (T_h_c ** 2 + T_h_c * T_c_c + T_c_c ** 2) / 3.0
+        result = a + b * Tm + c * Tm * Tm
+    else:
+        result = a + b * (T_h_c + T_c_c) / 2.0 + c * (T_h_c ** 2 + T_h_c * T_c_c + T_c_c ** 2) / 3.0
+    if result <= 0:
+        return 1e-6
+    return result
 
 
 # ============ 内侧换热 ============
@@ -334,6 +341,28 @@ def validate_params(params: KilnParams) -> None:
         raise ValueError("外壳发射率需在 0~1 之间")
 
 
+def validate_layer_conductivity(layers: List[Layer], params: KilnParams) -> None:
+    """校验各层 k(T)=a+b·T+c·T² 在运行温度范围内为正。
+
+    温度相关导热系数若在高温段降到 ≤0，会导致该层圆筒壁热阻为负，
+    进而使热流反向、出现"从内到外温度升高"的非物理结果。
+    这里在烟气温度到环境温度的全范围内抽样校验，保证 k(T)>0。
+    """
+    t_lo = params.T_env - 273.15     # ℃
+    t_hi = params.T_gas - 273.15     # ℃
+    if t_lo > t_hi:
+        t_lo, t_hi = t_hi, t_lo
+    for i, layer in enumerate(layers):
+        for T_c in (t_lo, (t_lo + t_hi) / 2.0, t_hi):
+            k = layer.k_at(T_c)
+            if not math.isfinite(k) or k <= 0:
+                raise ValueError(
+                    f"第 {i + 1} 层「{layer.name}」的导热系数在 {T_c:.0f}℃ 时为 "
+                    f"{k:.4g} W/(m·K)，不大于 0。\n"
+                    f"请检查 a/b/c 系数（k(T)=a+b·T+c·T²）——b 或 c 过大会导致高温段 "
+                    f"导热系数降为负值，造成温度反常升高。")
+
+
 # ============ 主求解 ============
 def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     """圆筒壁多层传热求解：以单位长度热功率 Q'(W/m) 为守恒量。
@@ -351,6 +380,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
             raise ValueError(f"第 {i + 1} 层厚度需为正值")
         if layer.k_const <= 0:
             raise ValueError(f"第 {i + 1} 层导热系数需为正值")
+    validate_layer_conductivity(layers, params)
 
     r_in = params.L_char / 2.0
     r_out = r_in + sum(l.thickness for l in layers)
@@ -386,6 +416,8 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
             integral_mean_k(l.k_coef, T_iface_est[i] - 273.15, T_iface_est[i + 1] - 273.15)
             for i, l in enumerate(layers)
         ]
+        # 安全防护：k_avg 必须为正，否则 R_wall<0 → 热流反向 → 温度反常升高
+        k_avg = [max(1e-6, v) for v in k_avg]
 
         # 内侧：对流 + 烟气辐射
         T_f = (T_g + T_w1) / 2

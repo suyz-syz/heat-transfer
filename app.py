@@ -26,9 +26,9 @@ import pandas as pd
 from kiln_ht import (
     KilnParams,
     Layer,
-    MATERIALS,
-    get_material,
+    load_user_materials,
     material_names,
+    save_user_material,
     compute_temperature_curve,
     solve_wall,
 )
@@ -44,38 +44,8 @@ st.set_page_config(
 # 保留输入状态（Streamlit 每次脚本重跑，靠 session_state 保存）
 _ss = st.session_state
 
-# 预设工况：名称 -> (衬层列表, 工况参数覆盖)
-PRESETS = {
-    "典型4层水泥窑烧成带衬体": {
-        "layers": [
-            {"name": "硅酸铝纤维", "thickness_mm": 150.0, "k": 0.10},
-            {"name": "轻质砖", "thickness_mm": 100.0, "k": 0.30},
-            {"name": "高铝砖", "thickness_mm": 80.0, "k": 1.50},
-            {"name": "钢壳", "thickness_mm": 12.0, "k": 45.0},
-        ],
-        "overrides": {"T_gas_C": 1250.0, "L_char": 4.0, "L_kiln": 60.0,
-                      "CO2": 20.0, "H2O": 8.0},
-    },
-    "典型2层轻质保温衬体": {
-        "layers": [
-            {"name": "硅酸铝纤维", "thickness_mm": 150.0, "k": 0.10},
-            {"name": "钢壳", "thickness_mm": 12.0, "k": 45.0},
-        ],
-        "overrides": {"T_gas_C": 1100.0, "L_char": 3.2, "L_kiln": 48.0,
-                      "CO2": 18.0, "H2O": 6.0},
-    },
-    "典型5层特种窑衬": {
-        "layers": [
-            {"name": "浇注料", "thickness_mm": 120.0, "k": 0.60},
-            {"name": "硅酸铝纤维", "thickness_mm": 80.0, "k": 0.10},
-            {"name": "轻质砖", "thickness_mm": 100.0, "k": 0.30},
-            {"name": "高铝砖", "thickness_mm": 80.0, "k": 1.50},
-            {"name": "钢壳", "thickness_mm": 12.0, "k": 45.0},
-        ],
-        "overrides": {"T_gas_C": 1350.0, "L_char": 4.4, "L_kiln": 70.0,
-                      "CO2": 22.0, "H2O": 9.0},
-    },
-}
+# 注意：不再内置任何材料/工况预设数据（内置材料数据不准确，见需求）。
+# 材料由用户通过 a/b/c 系数自定义，并可保存到用户材料库复用。
 
 # ============ 工具函数 ============
 def _init_layer_state():
@@ -122,12 +92,8 @@ def _move_layer(idx: int, direction: int):
 
 
 def _load_preset(name: str):
-    preset = PRESETS[name]
-    _ss.layers = []
-    for layer in preset["layers"]:
-        _add_layer(layer["name"], layer["thickness_mm"], layer["k"])
-    for key, val in preset["overrides"].items():
-        _ss[f"preset_{key}"] = val
+    """加载预设工况（已删除内置材料，此函数保留空壳）。"""
+    pass
 
 
 # ============ 计算 ============
@@ -221,17 +187,6 @@ with st.sidebar:
     st.header("🔥 工况参数")
     st.caption("温度以 ℃ 输入，后台自动换算为 K")
 
-    # 常用预设一键加载
-    preset_choice = st.selectbox("预设工况（一键加载）", ["（手动配置）"] + list(PRESETS),
-                                 key="preset_choice")
-    if preset_choice != "（手动配置）" and not _ss.get("_preset_loaded", False):
-        _load_preset(preset_choice)
-        _ss._preset_loaded = True
-        st.success(f"已加载预设：{preset_choice}")
-        st.rerun()
-    if preset_choice == "（手动配置）":
-        _ss._preset_loaded = False
-
     st.subheader("窑体与热工参数")
     T_gas_C = st.number_input("烟气温度 (°C)", value=1250.0, step=10.0, key="T_gas_C")
     v_gas = st.number_input("烟气流速 (m/s)", value=3.0, min_value=0.01, step=0.1,
@@ -268,25 +223,25 @@ st.title("水泥窑窑衬传热计算")
 st.caption("多层圆筒壁一维稳态传热 · 计算核心与 APK / FastAPI 完全一致")
 
 st.subheader("🧱 衬层配置")
-st.caption("可添加、删除、上下移动耐火衬层；厚度单位为 mm，支持 k(T) 温度相关导热系数，可选手动填系数(a/b/c)或从材料库选择")
+st.caption("可添加、删除、上下移动耐火衬层；厚度单位为 mm，支持 k(T) 温度相关导热系数（a/b/c），自定义材料可保存到材料库")
 
-col_hint = st.columns([0.22, 0.22, 0.24, 0.12, 0.2])
+col_hint = st.columns([0.2, 0.2, 0.28, 0.12, 0.2])
 col_hint[0].markdown("**层名称**")
 col_hint[1].markdown("**厚度 (mm)**")
-col_hint[2].markdown("**材料**")
+col_hint[2].markdown("**导热系数 k=a+b·T+c·T²**")
 col_hint[3].markdown("**操作**")
-col_hint[4].markdown("**接触热阻 Rc (m²·K/W)**")
+col_hint[4].markdown("**接触热阻 Rc**")
 
 for idx, row in enumerate(_ss.layers):
     uid = row.get("uid", idx + 1)          # 稳定 id，随行移动
-    c1, c2, c3, c4, c5 = st.columns([0.22, 0.22, 0.24, 0.12, 0.2])
+    c1, c2, c3, c4, c5 = st.columns([0.2, 0.2, 0.28, 0.12, 0.2])
     row["name"] = c1.text_input("层名称", value=row["name"], key=f"layer_{uid}_name",
                                 label_visibility="collapsed")
     row["thickness_mm"] = c2.number_input(
         "厚度", value=float(row["thickness_mm"]), min_value=0.1, step=1.0,
         key=f"layer_{uid}_thick", label_visibility="collapsed")
 
-    # 材料下拉：默认「自定义」，选择后自动填充 k_coef 并 rerun
+    # 材料下拉：默认「自定义」，选择用户材料后自动填充 k_coef 并 rerun
     cur_material = row.get("material_name", "自定义")
     sel = c3.selectbox(
         "材料", ["自定义"] + material_names(), index=0,
@@ -294,26 +249,38 @@ for idx, row in enumerate(_ss.layers):
     if sel != cur_material:
         row["material_name"] = sel
         if sel != "自定义":
-            m = get_material(sel)
+            m = load_user_materials()[sel]
             row["k_coef"] = list(m["k_coef"])
             # 离开自定义时清掉 a/b/c 陈旧 session key，避免切回自定义时被旧值覆盖
             for kk in (f"layer_{uid}_a", f"layer_{uid}_b", f"layer_{uid}_c"):
                 _ss.pop(kk, None)
         st.rerun()
 
-    # 系数显示/编辑：自定义材料显示 a/b/c 编辑框，材料库选择只读显示
+    # 系数显示/编辑：自定义材料显示 a/b/c 编辑框 + 保存按钮，材料库选择只读显示
     if row.get("k_coef") is None:
         row["k_coef"] = [float(row["k"]), 0.0, 0.0]
     if sel == "自定义":
         with c3.expander("系数 a/b/c", expanded=True):
             row["k_coef"] = [
-                c3.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a"),
-                c3.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b"),
-                c3.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c"),
+                c3.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a",
+                                format="%.6g"),
+                c3.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b",
+                                format="%.6g"),
+                c3.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c",
+                                format="%.6g"),
             ]
+            # 保存当前层为材料库条目（材料名 = 层名，可覆盖已有）
+            save_name = row["name"].strip() or f"层{idx + 1}"
+            if c3.button(f"💾 保存『{save_name}』到材料库",
+                         key=f"layer_{uid}_save"):
+                try:
+                    save_user_material(save_name, row["k_coef"])
+                    st.success(f"已保存到材料库：{save_name}")
+                except ValueError as exc:
+                    st.error(f"保存失败：{exc}")
     else:
         a, b, c = row["k_coef"]
-        c3.markdown(f"λ={a}+{b}T+{c}T²")
+        c3.markdown(f"λ={a:g}+{b:g}T+{c:g}T²")
 
     row["Rc"] = c5.number_input(
         "Rc", value=float(row.get("Rc", 0.0)), min_value=0.0, step=0.001,
