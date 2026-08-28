@@ -107,3 +107,129 @@ def test_layer_k_and_k_coef_precedence():
     """同时提供 k 与 k_coef 时以 k_coef 为准。"""
     l = Layer(name="x", thickness=0.05, k=2.0, k_coef=(0.08, 1.2e-4, 0.0))
     assert l.k_coef == (0.08, 1.2e-4, 0.0)
+
+
+# ============ integral_mean_k ============
+def test_integral_mean_k_constant():
+    """常数 k 时积分平均 = k。"""
+    from kiln_ht.calc import integral_mean_k
+    assert integral_mean_k((1.0, 0.0, 0.0), 100.0, 900.0) == pytest.approx(1.0)
+
+
+def test_integral_mean_k_linear_matches_analytic():
+    """k=a+bT 时积分平均 = a + b*(Th+Tc)/2。"""
+    from kiln_ht.calc import integral_mean_k
+    a, b = 1.2, 4.5e-4
+    Th, Tc = 900.0, 500.0
+    k_avg = integral_mean_k((a, b, 0.0), Th, Tc)
+    assert k_avg == pytest.approx(a + b * (Th + Tc) / 2.0, rel=1e-9)
+
+
+def test_integral_mean_k_quadratic():
+    """k=a+bT+cT² 积分平均 = a + b*Tmid + c*(Th²+Th*Tc+Tc²)/3。"""
+    from kiln_ht.calc import integral_mean_k
+    a, b, c = 1.2, 4.5e-4, -1.2e-7
+    Th, Tc = 900.0, 500.0
+    k_avg = integral_mean_k((a, b, c), Th, Tc)
+    expect = a + b * (Th + Tc) / 2 + c * (Th**2 + Th * Tc + Tc**2) / 3.0
+    assert k_avg == pytest.approx(expect, rel=1e-9)
+
+
+def test_integral_mean_k_equal_temps():
+    """Th≈Tc 时退化为 k(T)。"""
+    from kiln_ht.calc import integral_mean_k
+    k_avg = integral_mean_k((1.2, 4.5e-4, -1.2e-7), 700.0, 700.0)
+    assert k_avg == pytest.approx(1.2 + 4.5e-4 * 700 - 1.2e-7 * 700**2, rel=1e-9)
+
+
+# ============ solve_wall k(T) / Rc 升级 ============
+def test_solve_wall_k_coef_constant_equals_k():
+    """k_coef=(k,0,0) 与旧 k 行为等价（能量守恒、温度界内）。"""
+    layers_old = [Layer(name="硅酸铝纤维", thickness=0.150, k=0.10),
+                  Layer(name="轻质砖", thickness=0.100, k=0.30),
+                  Layer(name="高铝砖", thickness=0.080, k=1.50),
+                  Layer(name="钢壳", thickness=0.012, k=45.0)]
+    layers_new = [Layer(name="硅酸铝纤维", thickness=0.150, k_coef=(0.10, 0.0, 0.0)),
+                  Layer(name="轻质砖", thickness=0.100, k_coef=(0.30, 0.0, 0.0)),
+                  Layer(name="高铝砖", thickness=0.080, k_coef=(1.50, 0.0, 0.0)),
+                  Layer(name="钢壳", thickness=0.012, k_coef=(45.0, 0.0, 0.0))]
+    p = default_params()
+    sol_old = solve_wall(layers_old, p)
+    sol_new = solve_wall(layers_new, p)
+    assert sol_old.Qprime == pytest.approx(sol_new.Qprime, rel=1e-9)
+    assert sol_old.T_w1 == pytest.approx(sol_new.T_w1, rel=1e-9)
+    assert sol_old.T_wN == pytest.approx(sol_new.T_wN, rel=1e-9)
+
+
+def test_solve_wall_k_coef_changes_result():
+    """k(T) 与常数 k（取常温值）应产生不同结果（温度相关更接近物理）。"""
+    # 单层纤维：k=0.08 vs k(T)=0.08+1.2e-4T，高温下 k 更大 -> 热阻更小 -> Q' 更大
+    layers_const = [Layer(name="纤维", thickness=0.15, k=0.08)]
+    layers_temp = [Layer(name="纤维", thickness=0.15, k_coef=(0.08, 1.2e-4, 0.0))]
+    p = default_params()
+    sol_c = solve_wall(layers_const, p)
+    sol_t = solve_wall(layers_temp, p)
+    assert sol_t.Qprime != pytest.approx(sol_c.Qprime, rel=1e-9)
+    # 高温段 k(T)>k_const，热阻更小，热流更大（或至少物理上有限且内壁更贴近烟气）
+    assert math.isfinite(sol_t.Qprime) and sol_t.Qprime > 0
+    assert p.T_env <= sol_t.T_wN <= sol_t.T_w1 <= p.T_gas
+
+
+def test_solve_wall_rc_reduces_heat():
+    """接触热阻 Rc>0 增大总热阻，Q' 减小，界面温差增大。"""
+    layers_plain = [Layer(name="纤维", thickness=0.150, k=0.10),
+                    Layer(name="钢壳", thickness=0.012, k=45.0)]
+    layers_rc = [Layer(name="纤维", thickness=0.150, k=0.10, Rc=0.01),
+                 Layer(name="钢壳", thickness=0.012, k=45.0)]
+    p = default_params()
+    sol_plain = solve_wall(layers_plain, p)
+    sol_rc = solve_wall(layers_rc, p)
+    assert sol_rc.Qprime < sol_plain.Qprime
+    assert sol_rc.R_tot > sol_plain.R_tot
+
+
+def test_solve_wall_rc_default_no_change():
+    """Rc=0（默认）结果与无 Rc 字段完全一致。"""
+    l1 = [Layer(name="纤维", thickness=0.150, k=0.10),
+          Layer(name="钢壳", thickness=0.012, k=45.0)]
+    l2 = [Layer(name="纤维", thickness=0.150, k=0.10, Rc=0.0),
+          Layer(name="钢壳", thickness=0.012, k=45.0)]
+    p = default_params()
+    assert solve_wall(l1, p).Qprime == pytest.approx(solve_wall(l2, p).Qprime, rel=1e-9)
+
+
+def test_solve_wall_k_avg_reported():
+    """结果含各层平均导热系数 k_avg。"""
+    layers = [Layer(name="硅酸铝纤维", thickness=0.150, k_coef=(0.08, 1.2e-4, 0.0)),
+              Layer(name="钢壳", thickness=0.012, k_coef=(45.0, 0.0, 0.0))]
+    p = default_params()
+    sol = solve_wall(layers, p)
+    assert len(sol.k_avg) == 2
+    assert all(math.isfinite(v) and v > 0 for v in sol.k_avg)
+
+
+def test_solve_wall_thick_fiber_converges_with_kt():
+    """k(T) 下厚纤维单层仍收敛且内壁贴近烟气。"""
+    layers = [Layer(name="厚硅酸铝纤维", thickness=0.50, k_coef=(0.08, 1.2e-4, 0.0))]
+    p = default_params()
+    sol = solve_wall(layers, p)
+    assert math.isfinite(sol.Qprime) and sol.Qprime > 0
+    assert abs(sol.T_w1 - p.T_gas) < 60
+
+
+# ============ compute_temperature_curve k_avg 一致性 ============
+def test_temperature_curve_uses_k_avg():
+    """温度曲线应使用 k_avg（k(T) 积分平均），与 solve_wall 一致。"""
+    from kiln_ht import compute_temperature_curve
+    layers = [Layer(name="纤维", thickness=0.150, k_coef=(0.08, 1.2e-4, 0.0)),
+              Layer(name="钢壳", thickness=0.012, k_coef=(45.0, 0.0, 0.0))]
+    p = default_params(N_total=200)
+    sol = solve_wall(layers, p)
+    x_mm, T_c = compute_temperature_curve(layers, sol, n_points=p.N_total)
+    assert len(x_mm) == len(T_c) == p.N_total
+    # 首点=内壁、末点=外壁
+    assert abs(T_c[0] - (sol.T_w1 - 273.15)) < 1.0
+    assert abs(T_c[-1] - (sol.T_wN - 273.15)) < 1.0
+    # 单调下降
+    for i in range(1, len(T_c)):
+        assert T_c[i] <= T_c[i - 1] + 1e-9
