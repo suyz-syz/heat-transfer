@@ -146,3 +146,52 @@ def test_last_layer_down_disabled(app):
     dns = [b for b in app.button if (b.key or "").endswith("_down")]
     assert dns, "未找到 ⬇ 按钮"
     assert dns[-1].disabled is True, "最后一层 ⬇ 应禁用"
+
+
+# ============ FastAPI API 测试 ============
+@pytest.fixture(scope="module")
+def api_client():
+    from fastapi.testclient import TestClient
+    import server
+    return TestClient(server.app)
+
+
+def test_api_layer_k_compat(api_client):
+    """API 只传 k 时经 _to_domain 兼容为 k_coef=(k,0,0)。"""
+    from server import LayerIn, SolveRequest, _to_domain
+    req = SolveRequest(layers=[LayerIn(name="砖", thickness=0.05, k=0.10)])
+    layers, _ = _to_domain(req)
+    assert layers[0].k_coef == (0.10, 0.0, 0.0)
+    assert layers[0].Rc == 0.0
+
+
+def test_api_layer_k_coef_direct(api_client):
+    """API LayerIn 支持直接传 k_coef 与 Rc，经 _to_domain 转换。"""
+    from server import LayerIn, SolveRequest, _to_domain
+    req = SolveRequest(layers=[LayerIn(
+        name="纤维", thickness=0.05, k_coef=[0.08, 1.2e-4, 0.0], Rc=0.005)])
+    layers, _ = _to_domain(req)
+    assert layers[0].k_coef == (0.08, 1.2e-4, 0.0)
+    assert layers[0].Rc == 0.005
+
+
+def test_api_solve_with_k_coef(api_client):
+    """/solve 端点接受 k_coef，返回 k_avg。"""
+    resp = api_client.post("/solve", json={
+        "layers": [{"name": "纤维", "thickness": 0.15, "k_coef": [0.08, 1.2e-4, 0.0]}],
+        "params": {},
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "k_avg" in data
+    assert len(data["k_avg"]) == 1
+
+
+def test_api_solve_with_k_compat(api_client):
+    """/solve 端点接受旧 k 字段（兼容）。"""
+    resp = api_client.post("/solve", json={
+        "layers": [{"name": "砖", "thickness": 0.05, "k": 0.10}],
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["Qprime"] > 0

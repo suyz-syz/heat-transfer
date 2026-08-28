@@ -16,7 +16,7 @@ Docker 运行：见 Dockerfile 与 README。
               "params": {"T_gas": 1523.15}}'
 """
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -39,7 +39,10 @@ app = FastAPI(
 class LayerIn(BaseModel):
     name: str = Field("层", description="层名称")
     thickness: float = Field(..., gt=0, description="厚度 (m)")
-    k: float = Field(..., gt=0, description="导热系数 (W/m·K)")
+    k: Optional[float] = Field(None, gt=0, description="导热系数 (W/m·K)，兼容旧客户端")
+    k_coef: Optional[List[float]] = Field(
+        None, min_length=3, max_length=3, description="k(T)=a+bT+cT² 系数 (T 单位 ℃)")
+    Rc: float = Field(0.0, ge=0, description="层间接触热阻 (m²·K/W)")
 
 
 class KilnParamsIn(BaseModel):
@@ -64,7 +67,16 @@ class SolveRequest(BaseModel):
 
 def _to_domain(req: SolveRequest):
     """将 API 请求模型转换为核心计算的数据类。"""
-    layers = [Layer(name=l.name, thickness=l.thickness, k=l.k) for l in req.layers]
+    layers = []
+    for l in req.layers:
+        if l.k_coef is None:
+            # 兼容旧客户端：用 k（若提供）或默认 1.0
+            k = l.k if l.k is not None else 1.0
+            k_coef = (k, 0.0, 0.0)
+        else:
+            k_coef = (l.k_coef[0], l.k_coef[1], l.k_coef[2])
+        layers.append(Layer(name=l.name, thickness=l.thickness,
+                            k_coef=k_coef, Rc=l.Rc))
     params = KilnParams(**req.params.model_dump()) if req.params else KilnParams()
     return layers, params
 
