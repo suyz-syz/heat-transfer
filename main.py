@@ -48,6 +48,7 @@ from kivy.graphics import Color, Ellipse, Line, Rectangle, RoundedRectangle
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.checkbox import CheckBox
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import FadeTransition, Screen, ScreenManager
 from kivy.uix.scrollview import ScrollView
@@ -651,11 +652,12 @@ class InputScreen(Screen):
         return row
 
     def _rebuild_layers(self):
-        """按层数重建层参数表格（名称 / 厚度 / 材料 / 接触热阻）。
+        """按层数重建层参数表格（名称 / 厚度 / 材料 / λ / 温度相关 b,c / 接触热阻）。
 
         名称列使用普通 TextInput（不设浮点过滤器），允许清空后自由输入中文层名；
         材料列为下拉 Spinner（自定义或从材料库选，选中即用材料 k_coef）；
         λ 列为自定义时的常数导热系数输入（材料库选中时忽略）；
+        「温度相关」勾选框：勾选后展开 b、c 二项式系数输入（支持科学计数法）；
         接触热阻列输入 Rc (m²·K/W)。
         """
         self.layer_grid.clear_widgets()
@@ -668,11 +670,13 @@ class InputScreen(Screen):
         head.add_widget(MdLabel(text="厚度(mm)", color=TEXT_DIM, font_size=sp(12),
                                 size_hint_x=0.6))
         head.add_widget(MdLabel(text="λ(W/mK)", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=0.6))
+                                size_hint_x=0.5))
         head.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=1))
+                                size_hint_x=0.9))
+        head.add_widget(MdLabel(text="温度相关", color=TEXT_DIM, font_size=sp(12),
+                                size_hint_x=None, width=dp(56)))
         head.add_widget(MdLabel(text="Rc(m²K/W)", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=None, width=dp(70)))
+                                size_hint_x=None, width=dp(66)))
         self.layer_grid.add_widget(head)
         # 数据行
         for i in range(n):
@@ -685,28 +689,55 @@ class InputScreen(Screen):
             thick = UnitInput(unit="", default="50")
             thick.size_hint_x = 0.6
             k = UnitInput(unit="", default="1.0")
-            k.size_hint_x = 0.6
+            k.size_hint_x = 0.5
             mat = Spinner(text="自定义", values=["自定义"] + material_names(),
-                          size_hint_x=1, font_size=sp(12),
+                          size_hint_x=0.9, font_size=sp(12),
                           background_color=CARD)
+            temp_enabled = CheckBox(size_hint_x=None, width=dp(44),
+                                    color=PRIMARY)
+            b = UnitInput(unit="b", default="0.0")
+            b.size_hint_x = None
+            b.width = dp(88)
+            c = UnitInput(unit="c", default="0.0")
+            c.size_hint_x = None
+            c.width = dp(88)
             rc = UnitInput(unit="", default="0.0")
             rc.size_hint_x = None
-            rc.width = dp(70)
+            rc.width = dp(66)
             row.add_widget(name)
             row.add_widget(thick)
             row.add_widget(k)
             row.add_widget(mat)
+            row.add_widget(temp_enabled)
             row.add_widget(rc)
-            self._layer_rows.append((name, thick, mat, k, rc))
+            # b/c 输入位于下一行（温度相关时展开）
+            sub = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
+            sub.add_widget(Widget(size_hint_x=None, width=dp(84 + 8 + 10)))  # 对齐名称+厚度
+            sub.add_widget(b)
+            sub.add_widget(c)
+            self._layer_rows.append((name, thick, mat, k, rc, b, c, temp_enabled))
+            # 勾选温度相关时显示 b/c 行
+            def _toggle(*_a, b_=b, c_=c, sub_=sub, cb_=temp_enabled):
+                b_.disabled = not cb_.active
+                c_.disabled = not cb_.active
+                sub_.opacity = 1.0 if cb_.active else 0.0
+                sub_.disabled = not cb_.active
+            temp_enabled.bind(active=_toggle)
+            _toggle()
             self.layer_grid.add_widget(row)
+            self.layer_grid.add_widget(sub)
         self.layer_grid.height = self.layer_grid.minimum_height
 
     def collect_params(self):
         """解析界面参数，非法输入抛 ValueError。"""
         layers = []
-        for i, (name, thick, mat, k, rc) in enumerate(self._layer_rows):
+        for i, (name, thick, mat, k, rc, b, c, temp_enabled) in enumerate(self._layer_rows):
             if mat.text == "自定义":
-                k_coef = (float(k.text), 0.0, 0.0)   # 自定义常数导热系数
+                a = float(k.text)
+                if temp_enabled.active:
+                    k_coef = (a, float(b.text), float(c.text))
+                else:
+                    k_coef = (a, 0.0, 0.0)   # 未勾选温度相关 -> 常数 k
             else:
                 k_coef = get_material(mat.text)["k_coef"]
             layers.append(Layer(
