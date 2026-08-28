@@ -75,3 +75,35 @@ def test_validate_params():
         solve_wall([], default_params())
     with pytest.raises(ValueError):
         solve_wall([Layer(name="x", thickness=-0.1, k=1.0)], default_params())
+
+
+def test_layer_k_compat_auto_convert():
+    """只提供 k 时自动转 k_coef=(k,0,0)。"""
+    l = Layer(name="砖", thickness=0.05, k=0.10)
+    assert l.k_coef == (0.10, 0.0, 0.0)
+    assert l.k_const == 0.10
+
+
+def test_layer_k_coef_direct():
+    """显式提供 k_coef 时直接使用。"""
+    l = Layer(name="纤维", thickness=0.05, k_coef=(0.08, 1.2e-4, 0.0))
+    assert l.k_coef == (0.08, 1.2e-4, 0.0)
+    assert l.k_const == 0.08
+
+
+def test_layer_k_at():
+    """k_at 计算 k(T)=a+bT+cT²。"""
+    l = Layer(name="浇注料", thickness=0.1, k_coef=(1.2, 4.5e-4, -1.2e-7))
+    assert abs(l.k_at(500.0) - (1.2 + 4.5e-4 * 500 - 1.2e-7 * 500 ** 2)) < 1e-9
+
+
+def test_layer_rc_default():
+    """Rc 默认 0，可指定。"""
+    assert Layer().Rc == 0.0
+    assert Layer(name="x", thickness=0.05, Rc=0.005).Rc == 0.005
+
+
+def test_layer_k_and_k_coef_precedence():
+    """同时提供 k 与 k_coef 时以 k_coef 为准。"""
+    l = Layer(name="x", thickness=0.05, k=2.0, k_coef=(0.08, 1.2e-4, 0.0))
+    assert l.k_coef == (0.08, 1.2e-4, 0.0)

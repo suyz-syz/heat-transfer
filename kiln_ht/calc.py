@@ -37,16 +37,34 @@ DEFAULT_P_TOTAL = 1.01325   # 系统默认总压 (bar，1 atm)
 class Layer:
     """单层衬里结构参数。
 
-    thickness 单位为米 (m)，k 为导热系数 (W/m·K)。
+    thickness 单位为米 (m)；k 为导热系数 (W/m·K)，兼容旧字段；
+    k_coef 为 (a, b, c) 三元组，k(T)=a+b·T+c·T²（T 单位 ℃）；
+    Rc 为层间接触热阻 (m²·K/W)，0 表示无。
     """
 
     name: str = "层"
     thickness: float = 0.05
-    k: float = 1.0
+    k: float = 1.0          # 兼容字段：仅提供 k 时自动转 k_coef=(k,0,0)
+    k_coef: Optional[Tuple[float, float, float]] = None
+    Rc: float = 0.0         # 层间接触热阻 m²·K/W
+
+    def __post_init__(self) -> None:
+        if self.k_coef is None:
+            object.__setattr__(self, "k_coef", (self.k, 0.0, 0.0))
 
     @property
     def thickness_mm(self) -> float:
         return self.thickness * 1000.0
+
+    @property
+    def k_const(self) -> float:
+        """常数 k 兼容：返回 k_coef 的常数项 a。"""
+        return self.k_coef[0]
+
+    def k_at(self, T_c: float) -> float:
+        """温度 T(℃) 下的导热系数 W/(m·K)。"""
+        a, b, c = self.k_coef
+        return a + b * T_c + c * T_c * T_c
 
 
 @dataclass
