@@ -26,6 +26,9 @@ import pandas as pd
 from kiln_ht import (
     KilnParams,
     Layer,
+    MATERIALS,
+    get_material,
+    material_names,
     compute_temperature_curve,
     solve_wall,
 )
@@ -87,7 +90,7 @@ def _init_layer_state():
         _add_layer()
 
 
-def _add_layer(name="", thickness_mm=50.0, k=1.0):
+def _add_layer(name="", thickness_mm=50.0, k=1.0, k_coef=None, Rc=0.0):
     """新增一层，分配稳定的 uid。
 
     uid 随衬层 dict 一起移动：上下移动只交换 list 中 dict 的顺序，
@@ -101,6 +104,8 @@ def _add_layer(name="", thickness_mm=50.0, k=1.0):
         "name": name,
         "thickness_mm": float(thickness_mm),
         "k": float(k),
+        "k_coef": list(k_coef) if k_coef else None,
+        "Rc": float(Rc),
     })
 
 
@@ -132,14 +137,17 @@ def _solve():
     衬层顺序即 `_ss.layers` 的当前顺序（内壁 → 外壁，可被 ⬆/⬇ 调整），
     顺序调整后此处始终按最新顺序构建 Layer 列表传给 calc.py。
     """
-    layers = [
-        Layer(
+    layers = []
+    for i, row in enumerate(_ss.layers):
+        k_coef = row.get("k_coef")
+        if k_coef is None:
+            k_coef = (float(row["k"]), 0.0, 0.0)
+        layers.append(Layer(
             name=row["name"].strip() or f"层{i+1}",
             thickness=float(row["thickness_mm"]) / 1000.0,
-            k=float(row["k"]),
-        )
-        for i, row in enumerate(_ss.layers)
-    ]
+            k_coef=tuple(k_coef),
+            Rc=float(row.get("Rc", 0.0)),
+        ))
     params = KilnParams(
         N_total=_ss.N_total,
         T_gas=float(_ss.T_gas_C) + 273.15,          # ℃ -> K
@@ -260,25 +268,49 @@ st.title("水泥窑窑衬传热计算")
 st.caption("多层圆筒壁一维稳态传热 · 计算核心与 APK / FastAPI 完全一致")
 
 st.subheader("🧱 衬层配置")
-st.caption("可添加、删除、上下移动耐火衬层；厚度单位为 mm，导热系数单位为 W/(m·K)")
+st.caption("可添加、删除、上下移动耐火衬层；厚度单位为 mm，支持 k(T) 温度相关导热系数，可选手动填系数(a/b/c)或从材料库选择")
 
-col_hint = st.columns([0.25, 0.3, 0.3, 0.15])
+col_hint = st.columns([0.22, 0.22, 0.24, 0.12, 0.2])
 col_hint[0].markdown("**层名称**")
 col_hint[1].markdown("**厚度 (mm)**")
-col_hint[2].markdown("**导热系数 λ (W/(m·K))**")
+col_hint[2].markdown("**材料**")
 col_hint[3].markdown("**操作**")
+col_hint[4].markdown("**接触热阻 Rc (m²·K/W)**")
 
 for idx, row in enumerate(_ss.layers):
     uid = row.get("uid", idx + 1)          # 稳定 id，随行移动
-    c1, c2, c3, c4 = st.columns([0.25, 0.3, 0.3, 0.15])
+    c1, c2, c3, c4, c5 = st.columns([0.22, 0.22, 0.24, 0.12, 0.2])
     row["name"] = c1.text_input("层名称", value=row["name"], key=f"layer_{uid}_name",
                                 label_visibility="collapsed")
     row["thickness_mm"] = c2.number_input(
         "厚度", value=float(row["thickness_mm"]), min_value=0.1, step=1.0,
         key=f"layer_{uid}_thick", label_visibility="collapsed")
-    row["k"] = c3.number_input(
-        "导热系数", value=float(row["k"]), min_value=0.001, step=0.05,
-        key=f"layer_{uid}_k", label_visibility="collapsed")
+
+    # 材料下拉：默认「自定义」，选择后自动填充 k_coef 并 rerun
+    cur_material = row.get("material_name", "自定义")
+    sel = c3.selectbox(
+        "材料", ["自定义"] + material_names(), index=0,
+        key=f"layer_{uid}_material", label_visibility="collapsed")
+    if sel != cur_material:
+        row["material_name"] = sel
+        if sel != "自定义":
+            m = get_material(sel)
+            row["k_coef"] = list(m["k_coef"])
+        st.rerun()
+
+    # 若为自定义材料，显示 a/b/c 编辑；否则只读显示当前系数（可展开编辑）
+    with c3.expander("系数 a/b/c", expanded=(row.get("k_coef") is None or sel == "自定义")):
+        if row.get("k_coef") is None:
+            row["k_coef"] = [float(row["k"]), 0.0, 0.0]
+        row["k_coef"] = [
+            c3.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a"),
+            c3.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b"),
+            c3.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c"),
+        ]
+
+    row["Rc"] = c5.number_input(
+        "Rc", value=float(row.get("Rc", 0.0)), min_value=0.0, step=0.001,
+        key=f"layer_{uid}_rc", label_visibility="collapsed")
 
     # 操作按钮列（首层 ⬆ / 末层 ⬇ 自动禁用，避免越界）
     btn_container = c4.container()

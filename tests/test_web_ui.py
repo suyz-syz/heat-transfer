@@ -88,8 +88,10 @@ def test_add_and_remove_layer(app):
 
 def test_preset_loads(app):
     """一键加载预设应重建衬层列表。"""
-    assert app.selectbox[0].value == "（手动配置）"
-    app.selectbox[0].select("典型2层轻质保温衬体").run()
+    preset_sb = [s for s in app.selectbox if s.key == "preset_choice"]
+    assert preset_sb, "未找到预设选择框"
+    assert preset_sb[0].value == "（手动配置）"
+    preset_sb[0].select("典型2层轻质保温衬体").run()
     assert not app.exception
     assert len(app.text_input) == 2
 
@@ -115,11 +117,11 @@ def test_move_layer_affects_calculation(app):
     n0[1].set_value("B").run()
     # 设置不同厚度：A 厚 200mm k=0.1(绝缘), B 厚 10mm k=45(钢壳)
     thick0 = [n for n in app.number_input if (n.key or "").endswith("_thick")]
-    k0 = [n for n in app.number_input if (n.key or "").endswith("_k")]
+    a0 = [n for n in app.number_input if (n.key or "").endswith("_a")]
     thick0[0].set_value(200.0).run()
-    k0[0].set_value(0.1).run()
+    a0[0].set_value(0.1).run()
     thick0[1].set_value(10.0).run()
-    k0[1].set_value(45.0).run()
+    a0[1].set_value(45.0).run()
 
     _click_calc(app)
     before = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
@@ -195,3 +197,20 @@ def test_api_solve_with_k_compat(api_client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["Qprime"] > 0
+
+
+# ============ Streamlit 材料下拉 / 接触热阻 ============
+def test_web_ui_material_select(app):
+    """衬层应有材料下拉框，选中后填充 k_coef。"""
+    # 每层应有一个材料选择框（selectbox），加上侧边栏的预设选择
+    assert len(app.selectbox) >= 5   # 1 个预设 + 4 层材料
+    # 选择某层为硅酸铝纤维后计算应成功
+    _click_calc(app)
+    assert not app.exception
+
+
+def test_web_ui_rc_input(app):
+    """衬层应有接触热阻输入框（默认 0）。"""
+    rc_inputs = [n for n in app.number_input if (n.key or "").endswith("_rc")]
+    assert len(rc_inputs) == 4
+    assert all(n.value == 0.0 for n in rc_inputs)
