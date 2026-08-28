@@ -15,11 +15,19 @@ from .calc import (
     gas_emissivity,
     inner_convection_h,
     inner_radiation_h,
+    integral_mean_k,
     outer_forced_h,
     outer_natural_h,
     outer_radiation_h,
     solve_wall,
     validate_params,
+)
+from .materials import (
+    get_material,
+    load_user_materials,
+    material_names,
+    materials_path,
+    save_user_material,
 )
 
 __version__ = "1.0.0"

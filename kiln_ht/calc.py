@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 # ============ 物理常数 ============
@@ -37,16 +37,34 @@ DEFAULT_P_TOTAL = 1.01325   # 系统默认总压 (bar，1 atm)
 class Layer:
     """单层衬里结构参数。
 
-    thickness 单位为米 (m)，k 为导热系数 (W/m·K)。
+    thickness 单位为米 (m)；k 为导热系数 (W/m·K)，兼容旧字段；
+    k_coef 为 (a, b, c) 三元组，k(T)=a+b·T+c·T²（T 单位 ℃）；
+    Rc 为层间接触热阻 (m²·K/W)，0 表示无。
     """
 
     name: str = "层"
     thickness: float = 0.05
-    k: float = 1.0
+    k: float = 1.0          # 兼容字段：仅提供 k 时自动转 k_coef=(k,0,0)
+    k_coef: Optional[Tuple[float, float, float]] = None
+    Rc: float = 0.0         # 层间接触热阻 m²·K/W
+
+    def __post_init__(self) -> None:
+        if self.k_coef is None:
+            object.__setattr__(self, "k_coef", (self.k, 0.0, 0.0))
 
     @property
     def thickness_mm(self) -> float:
         return self.thickness * 1000.0
+
+    @property
+    def k_const(self) -> float:
+        """常数 k 兼容：返回 k_coef 的常数项 a。"""
+        return self.k_coef[0]
+
+    def k_at(self, T_c: float) -> float:
+        """温度 T(℃) 下的导热系数 W/(m·K)。"""
+        a, b, c = self.k_coef
+        return a + b * T_c + c * T_c * T_c
 
 
 @dataclass
@@ -95,6 +113,7 @@ class WallSolution:
     R_out: float             # 外壁对流热阻 (m·K/W)
     R_tot: float             # 总热阻 (m·K/W)
     iterations: int = 0      # 实际迭代步数
+    k_avg: List[float] = field(default_factory=list)   # 各层积分平均导热系数 (W/m·K)
 
     def as_dict(self) -> Dict:
         """转为纯 dict，便于 JSON 序列化。"""
@@ -119,6 +138,7 @@ class WallSolution:
             "R_out": self.R_out,
             "R_tot": self.R_tot,
             "iterations": self.iterations,
+            "k_avg": list(self.k_avg),
         }
 
 
@@ -133,6 +153,29 @@ def air_properties(T_k: float) -> Tuple[float, float, float]:
     nu = mu / rho
     lam = 2.495e-3 * T_k ** 1.5 / (T_k + 194)    # 导热系数 (W/m·K)
     return lam, 0.71, nu
+
+
+def integral_mean_k(k_coef: Tuple[float, float, float], T_h_c: float, T_c_c: float) -> float:
+    """温度相关导热系数的层内积分平均（T 单位 ℃）。
+
+    k(T) = a + b·T + c·T²；热面 T_h_c、冷面 T_c_c（℃）。
+    积分平均：k_avg = ∫_{Tc}^{Th} k(T) dT / (Th - Tc)
+    = a + b·(Th+Tc)/2 + c·(Th²+Th·Tc+Tc²)/3
+    当 Th≈Tc 时退化为 k(T)。
+
+    安全防护：如果 k_avg 计算为负（因 b/c 系数过大导致 k(T) 为负），
+    则返回一个很小的正数（1e-6），避免 R_wall 为负导致温度反常升高。
+    """
+    a, b, c = k_coef
+    dT = T_h_c - T_c_c
+    if abs(dT) < 1e-9:
+        Tm = (T_h_c + T_c_c) / 2.0
+        result = a + b * Tm + c * Tm * Tm
+    else:
+        result = a + b * (T_h_c + T_c_c) / 2.0 + c * (T_h_c ** 2 + T_h_c * T_c_c + T_c_c ** 2) / 3.0
+    if result <= 0:
+        return 1e-6
+    return result
 
 
 # ============ 内侧换热 ============
@@ -298,6 +341,28 @@ def validate_params(params: KilnParams) -> None:
         raise ValueError("外壳发射率需在 0~1 之间")
 
 
+def validate_layer_conductivity(layers: List[Layer], params: KilnParams) -> None:
+    """校验各层 k(T)=a+b·T+c·T² 在运行温度范围内为正。
+
+    温度相关导热系数若在高温段降到 ≤0，会导致该层圆筒壁热阻为负，
+    进而使热流反向、出现"从内到外温度升高"的非物理结果。
+    这里在烟气温度到环境温度的全范围内抽样校验，保证 k(T)>0。
+    """
+    t_lo = params.T_env - 273.15     # ℃
+    t_hi = params.T_gas - 273.15     # ℃
+    if t_lo > t_hi:
+        t_lo, t_hi = t_hi, t_lo
+    for i, layer in enumerate(layers):
+        for T_c in (t_lo, (t_lo + t_hi) / 2.0, t_hi):
+            k = layer.k_at(T_c)
+            if not math.isfinite(k) or k <= 0:
+                raise ValueError(
+                    f"第 {i + 1} 层「{layer.name}」的导热系数在 {T_c:.0f}℃ 时为 "
+                    f"{k:.4g} W/(m·K)，不大于 0。\n"
+                    f"请检查 a/b/c 系数（k(T)=a+b·T+c·T²）——b 或 c 过大会导致高温段 "
+                    f"导热系数降为负值，造成温度反常升高。")
+
+
 # ============ 主求解 ============
 def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     """圆筒壁多层传热求解：以单位长度热功率 Q'(W/m) 为守恒量。
@@ -313,8 +378,9 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     for i, layer in enumerate(layers):
         if layer.thickness <= 0:
             raise ValueError(f"第 {i + 1} 层厚度需为正值")
-        if layer.k <= 0:
+        if layer.k_const <= 0:
             raise ValueError(f"第 {i + 1} 层导热系数需为正值")
+    validate_layer_conductivity(layers, params)
 
     r_in = params.L_char / 2.0
     r_out = r_in + sum(l.thickness for l in layers)
@@ -334,7 +400,25 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     Qprime = 0.0
     h_conv_in = h_rad_in = h_conv_out = h_rad_out = 0.0
     eg = 0.3
+    k_avg = [l.k_const for l in layers]      # 初始估计：取常数项
+    R_wall = [0.0] * len(layers)
+    R_contact = [0.0] * len(layers)
     for it in range(MAX_WALL_ITER):
+        # 用当前 k_avg 估计各层界面温度（圆筒壁递推），用于更新 k(T)
+        # 界面温度 [T0=内壁, T1, ..., Tn=外壁]
+        T_iface_est = [T_w1]
+        for i, R in enumerate(R_wall):
+            T_iface_est.append(T_iface_est[-1] - Qprime * R)
+        T_iface_est[-1] = T_wN
+
+        # 更新各层积分平均导热系数（层内 T 取 ℃）
+        k_avg = [
+            integral_mean_k(l.k_coef, T_iface_est[i] - 273.15, T_iface_est[i + 1] - 273.15)
+            for i, l in enumerate(layers)
+        ]
+        # 安全防护：k_avg 必须为正，否则 R_wall<0 → 热流反向 → 温度反常升高
+        k_avg = [max(1e-6, v) for v in k_avg]
+
         # 内侧：对流 + 烟气辐射
         T_f = (T_g + T_w1) / 2
         h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f)
@@ -354,12 +438,13 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         h_rad_out = outer_radiation_h(T_wN, T_a, params.eps_shell)
         h_out = h_conv_out + h_rad_out
 
-        # 单位长度热阻网络
+        # 单位长度热阻网络（含 k(T) 导热热阻 + 层间接触热阻）
         R_in = 1.0 / (h_in * 2.0 * math.pi * r_in)
-        R_wall = [math.log(radii[i + 1] / radii[i]) / (2.0 * math.pi * l.k)
-                  for i, l in enumerate(layers)]
+        for i, l in enumerate(layers):
+            R_wall[i] = math.log(radii[i + 1] / radii[i]) / (2.0 * math.pi * k_avg[i])
+            R_contact[i] = l.Rc / (2.0 * math.pi * radii[i + 1])   # 界面在 radii[i+1]
         R_out = 1.0 / (h_out * 2.0 * math.pi * r_out)
-        R_tot = R_in + sum(R_wall) + R_out
+        R_tot = R_in + sum(R_wall) + sum(R_contact) + R_out
 
         Qprime = (T_g - T_a) / R_tot
         T_w1_new = T_g - Qprime * R_in
@@ -395,6 +480,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         r_in=r_in, r_out=r_out, T_iface=T_iface,
         R_wall=R_wall, R_in=R_in, R_out=R_out, R_tot=R_tot,
         iterations=it + 1,
+        k_avg=k_avg,
     )
 
 
@@ -408,7 +494,8 @@ def compute_temperature_curve(
     返回 (x_mm, T_c)：
         x_mm — 距内壁距离 (mm)
         T_c  — 温度 (℃)
-    各层内采用圆筒壁对数分布精确解。纯标准库实现，不依赖 numpy。
+    各层内采用圆筒壁对数分布精确解，导热系数使用 solve_wall 的积分平均 k_avg。
+    纯标准库实现，不依赖 numpy。
     """
     n_points = max(n_points or 500, 2)
     # 各层界面位置 (m)
@@ -422,7 +509,8 @@ def compute_temperature_curve(
         for i, l in enumerate(layers):
             if positions[i] <= x <= positions[i + 1]:
                 r_i = sol.r_in + positions[i]
-                T_all[j] = sol.T_iface[i] - (sol.Qprime / (2.0 * math.pi * l.k)) * math.log(
+                k_avg = sol.k_avg[i] if i < len(sol.k_avg) else l.k_const
+                T_all[j] = sol.T_iface[i] - (sol.Qprime / (2.0 * math.pi * k_avg)) * math.log(
                     (sol.r_in + x) / r_i)
                 break
     return [x * 1000.0 for x in x_all], [t - 273.15 for t in T_all]

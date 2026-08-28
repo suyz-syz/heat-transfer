@@ -63,13 +63,14 @@ class TestUIBuild:
         assert len(layers) == 4
         assert layers[0].name == "层1"
         assert layers[0].thickness == 0.05
-        assert layers[0].k == 1.0
+        assert layers[0].k_coef == (1.0, 0.0, 0.0)
+        assert layers[0].Rc == 0.0
 
     def test_layer_name_accepts_custom_text(self, app):
         """层名输入框必须允许输入任意文本（如中文层名），不被浮点过滤器拦截。"""
         _, root = app
         ins = root.input_screen
-        name, thick, k = ins._layer_rows[0]
+        name, thick, mat, k, rc, *_ = ins._layer_rows[0]
         # 名称输入框应是普通 TextInput（无 float 过滤）
         assert name.textinput.input_filter is None, "层名输入框不应有输入过滤器"
         # 清空后输入中文层名，应能被 collect_params 正确解析
@@ -80,6 +81,128 @@ class TestUIBuild:
         name.text = "Steel shell 1"
         layers, _ = ins.collect_params()
         assert layers[0].name == "Steel shell 1"
+
+    def test_layer_rows_have_kt_fields(self, app):
+        """每层模块应包含 材料 Spinner / a,b,c 输入 / 温度相关勾选 / 接触热阻输入。"""
+        _, root = app
+        ins = root.input_screen
+        # 每行 9 个元素：name, thick, mat, a, b, c, rc, temp_enabled, save_btn
+        assert len(ins._layer_rows[0]) == 9
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        from kivy.uix.spinner import Spinner
+        from kivy.uix.checkbox import CheckBox
+        assert isinstance(mat, Spinner)
+        assert mat.text == "自定义"
+        assert "硅酸铝纤维" not in mat.values, "不应内置任何材料"
+        assert a_in.text == "1.0"
+        assert rc.text == "0.0"
+        assert isinstance(temp_enabled, CheckBox)
+        assert temp_enabled.active is False
+        assert b.disabled is True
+        assert c.disabled is True
+
+    def test_collect_params_from_user_material(self, app, monkeypatch, tmp_path):
+        """选择用户材料后 collect_params 应使用材料 k_coef。"""
+        import kiln_ht.materials as mat_mod
+        path = str(tmp_path / "user_materials.json")
+        monkeypatch.setattr(mat_mod, "materials_path", lambda: path)
+        from kiln_ht import save_user_material
+        save_user_material("测试浇注料", (1.2, 4.5e-4, -1.2e-7))
+        # 重建界面使材料下拉包含刚保存的材料
+        _, root = app
+        ins = root.input_screen
+        ins._rebuild_layers()
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        assert "测试浇注料" in mat.values
+        mat.text = "测试浇注料"
+        # 选择材料后应自动填充 a/b/c 并勾选温度相关
+        ins._apply_material(0)
+        assert a_in.text == "1.2"
+        assert b.text == "0.00045"
+        assert temp_enabled.active is True
+        layers, _ = ins.collect_params()
+        assert layers[0].k_coef == (1.2, 4.5e-4, -1.2e-7)
+        assert layers[0].Rc == 0.0
+
+    def test_collect_params_custom_k(self, app):
+        """自定义层使用输入的 λ 常数 k（a）。"""
+        _, root = app
+        ins = root.input_screen
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        mat.text = "自定义"      # 重置为自定义（fixture 为 module-scoped，可能被前一测试改过）
+        temp_enabled.active = False   # 重置温度相关勾选，忽略 b/c
+        a_in.text = "0.6"
+        layers, _ = ins.collect_params()
+        assert layers[0].k_coef == (0.6, 0.0, 0.0)
+
+    def test_temp_enabled_default_off(self, app):
+        """默认温度相关未勾选，b/c 输入不可用。"""
+        _, root = app
+        ins = root.input_screen
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        temp_enabled.active = False   # 重置（module-scoped fixture 共享状态）
+        assert temp_enabled.active is False
+        assert b.disabled is True
+        assert c.disabled is True
+
+    def test_temp_enabled_uses_bc(self, app):
+        """勾选温度相关后，b/c 参与 k_coef。"""
+        _, root = app
+        ins = root.input_screen
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        mat.text = "自定义"
+        temp_enabled.active = True
+        a_in.text = "1.2"
+        b.text = "4.5e-4"
+        c.text = "-1.2e-7"
+        layers, _ = ins.collect_params()
+        assert layers[0].k_coef == (1.2, 4.5e-4, -1.2e-7)
+
+    def test_temp_enabled_sci_notation(self, app):
+        """b/c 输入框支持科学计数法（如 1.2e-7）。"""
+        _, root = app
+        ins = root.input_screen
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        mat.text = "自定义"
+        temp_enabled.active = True
+        a_in.text = "0.08"
+        b.text = "1.2e-4"
+        c.text = "1.5e-8"
+        layers, _ = ins.collect_params()
+        assert layers[0].k_coef == (0.08, 1.2e-4, 1.5e-8)
+
+    def test_temp_enabled_off_ignores_bc(self, app):
+        """未勾选温度相关时，即使 b/c 有值也忽略。"""
+        _, root = app
+        ins = root.input_screen
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        mat.text = "自定义"
+        temp_enabled.active = False
+        a_in.text = "1.5"
+        b.text = "9.9e-4"
+        c.text = "9.9e-9"
+        layers, _ = ins.collect_params()
+        assert layers[0].k_coef == (1.5, 0.0, 0.0)
+
+    def test_save_material(self, app, monkeypatch, tmp_path):
+        """「保存到材料库」应将当前层 a/b/c 写入 JSON。"""
+        import kiln_ht.materials as mat_mod
+        path = str(tmp_path / "user_materials.json")
+        monkeypatch.setattr(mat_mod, "materials_path", lambda: path)
+        from kiln_ht.materials import load_user_materials
+        _, root = app
+        ins = root.input_screen
+        ins._rebuild_layers()
+        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name.text = "我的砖"
+        a_in.text = "2.5"
+        b.text = "1e-4"
+        c.text = "0"
+        temp_enabled.active = True
+        ins._save_material(0)
+        store = load_user_materials(path)
+        assert "我的砖" in store
+        assert store["我的砖"]["k_coef"] == [2.5, 1e-4, 0.0]
 
     def test_stepper(self, app):
         _, root = app

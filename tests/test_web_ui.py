@@ -87,11 +87,9 @@ def test_add_and_remove_layer(app):
 
 
 def test_preset_loads(app):
-    """一键加载预设应重建衬层列表。"""
-    assert app.selectbox[0].value == "（手动配置）"
-    app.selectbox[0].select("典型2层轻质保温衬体").run()
-    assert not app.exception
-    assert len(app.text_input) == 2
+    """已删除内置预设（材料数据不准确），侧边栏不应再出现预设下拉。"""
+    preset_sb = [s for s in app.selectbox if s.key == "preset_choice"]
+    assert not preset_sb, "内置预设已删除，不应出现预设选择框"
 
 
 def test_edit_layer_name(app):
@@ -115,11 +113,11 @@ def test_move_layer_affects_calculation(app):
     n0[1].set_value("B").run()
     # 设置不同厚度：A 厚 200mm k=0.1(绝缘), B 厚 10mm k=45(钢壳)
     thick0 = [n for n in app.number_input if (n.key or "").endswith("_thick")]
-    k0 = [n for n in app.number_input if (n.key or "").endswith("_k")]
+    a0 = [n for n in app.number_input if (n.key or "").endswith("_a")]
     thick0[0].set_value(200.0).run()
-    k0[0].set_value(0.1).run()
+    a0[0].set_value(0.1).run()
     thick0[1].set_value(10.0).run()
-    k0[1].set_value(45.0).run()
+    a0[1].set_value(45.0).run()
 
     _click_calc(app)
     before = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
@@ -146,3 +144,103 @@ def test_last_layer_down_disabled(app):
     dns = [b for b in app.button if (b.key or "").endswith("_down")]
     assert dns, "未找到 ⬇ 按钮"
     assert dns[-1].disabled is True, "最后一层 ⬇ 应禁用"
+
+
+# ============ FastAPI API 测试 ============
+@pytest.fixture(scope="module")
+def api_client():
+    from fastapi.testclient import TestClient
+    import server
+    return TestClient(server.app)
+
+
+def test_api_layer_k_compat(api_client):
+    """API 只传 k 时经 _to_domain 兼容为 k_coef=(k,0,0)。"""
+    from server import LayerIn, SolveRequest, _to_domain
+    req = SolveRequest(layers=[LayerIn(name="砖", thickness=0.05, k=0.10)])
+    layers, _ = _to_domain(req)
+    assert layers[0].k_coef == (0.10, 0.0, 0.0)
+    assert layers[0].Rc == 0.0
+
+
+def test_api_layer_k_coef_direct(api_client):
+    """API LayerIn 支持直接传 k_coef 与 Rc，经 _to_domain 转换。"""
+    from server import LayerIn, SolveRequest, _to_domain
+    req = SolveRequest(layers=[LayerIn(
+        name="纤维", thickness=0.05, k_coef=[0.08, 1.2e-4, 0.0], Rc=0.005)])
+    layers, _ = _to_domain(req)
+    assert layers[0].k_coef == (0.08, 1.2e-4, 0.0)
+    assert layers[0].Rc == 0.005
+
+
+def test_api_solve_with_k_coef(api_client):
+    """/solve 端点接受 k_coef，返回 k_avg。"""
+    resp = api_client.post("/solve", json={
+        "layers": [{"name": "纤维", "thickness": 0.15, "k_coef": [0.08, 1.2e-4, 0.0]}],
+        "params": {},
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "k_avg" in data
+    assert len(data["k_avg"]) == 1
+
+
+def test_api_solve_with_k_compat(api_client):
+    """/solve 端点接受旧 k 字段（兼容）。"""
+    resp = api_client.post("/solve", json={
+        "layers": [{"name": "砖", "thickness": 0.05, "k": 0.10}],
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["Qprime"] > 0
+
+
+# ============ Streamlit 材料下拉 / 接触热阻 ============
+def test_web_ui_material_select(app):
+    """衬层应有材料下拉框（用户材料库，无内置材料）。"""
+    # 每层应有一个材料选择框（selectbox）；预设已删除，无额外预设框
+    assert len(app.selectbox) == 4   # 4 层材料
+    # 默认应为「自定义」（无任何内置材料）
+    mat_sb = [s for s in app.selectbox if (s.key or "").endswith("_material")]
+    assert mat_sb
+    assert all(s.value == "自定义" for s in mat_sb)
+    # 材料下拉仅含「自定义」（用户库为空时）
+    for s in mat_sb:
+        assert s.options == ["自定义"], f"不应内置材料：{s.options}"
+    # 选择某层后计算应成功
+    _click_calc(app)
+    assert not app.exception
+
+
+def test_web_ui_rc_input(app):
+    """衬层应有接触热阻输入框（默认 0）。"""
+    rc_inputs = [n for n in app.number_input if (n.key or "").endswith("_rc")]
+    assert len(rc_inputs) == 4
+    assert all(n.value == 0.0 for n in rc_inputs)
+
+
+def test_web_ui_custom_k_coef_fills(app):
+    """自定义层 a/b/c 输入应参与计算（而非默认 k=1）。"""
+    from kiln_ht import KilnParams, Layer, solve_wall
+
+    # 将第 0 层 a 改为 0.1（硅酸铝纤维的常数项），其余默认 1.0
+    a_inputs = [n for n in app.number_input if (n.key or "").endswith("_a")]
+    assert a_inputs, "未找到系数 a 输入框"
+    a_inputs[0].set_value(0.1).run()
+    assert not app.exception
+
+    # 计算成功
+    _click_calc(app)
+    assert not app.exception
+    assert not app.error, [e.value for e in app.error]
+
+    # 关键断言：app 实际计算的外壁温度应等于用 a=0.1 的参考值
+    # （若 bug 存在，app 会用默认 k=1 计算，外壁温度显著不同）
+    outer_val = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
+
+    ref_layers = [Layer(name=f"层{i+1}", thickness=0.050,
+                        k_coef=(0.1 if i == 0 else 1.0, 0.0, 0.0)) for i in range(4)]
+    ref_sol = solve_wall(ref_layers, KilnParams())
+    ref_outer = ref_sol.T_wN - 273.15
+    assert abs(outer_val - ref_outer) < 0.5, \
+        f"自定义 a 未生效：app={outer_val:.1f} vs 参考={ref_outer:.1f}"

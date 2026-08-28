@@ -24,7 +24,16 @@ Android 打包（需先安装 buildozer，详见 buildozer.spec）：
     buildozer android release          # 签名发布包
 """
 
-from kiln_ht import Layer, KilnParams, solve_wall, compute_temperature_curve
+from kiln_ht import (
+    Layer,
+    KilnParams,
+    load_user_materials,
+    material_names,
+    save_user_material,
+    solve_wall,
+    compute_temperature_curve,
+)
+from kiln_ht.export import build_report, export_result
 
 import os
 
@@ -40,9 +49,11 @@ from kivy.graphics import Color, Ellipse, Line, Rectangle, RoundedRectangle
 from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.checkbox import CheckBox
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import FadeTransition, Screen, ScreenManager
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 from kivy.utils import platform
@@ -107,17 +118,30 @@ def auto_height(widget):
 
 # ============ 基础控件 ============
 class FloatInput(TextInput):
-    """仅允许输入合法浮点数的文本框。
+    """支持科学计数法的浮点输入框。
 
-    使用 Kivy 内置 input_filter='float'：它允许 '.' / '-' / 'e' 等部分输入
-    （例如先敲小数点 '.' 再补数字），避免自定义过滤器收到单字符 '.' 时
-    因 float('.') 抛 ValueError 而把小数点丢弃的问题。
+    使用自定义输入过滤器，允许输入数字、小数点、负号、以及 'e'/'E'
+    科学计数法标记（含其后可选的 +/- 号），例如 1.2e-6、4.5E-4。
+    最终数值合法性在 collect_params 中由 float() 校验。
     """
 
     def __init__(self, **kwargs):
         kwargs.setdefault("multiline", False)
         super().__init__(**kwargs)
-        self.input_filter = "float"
+        self.input_filter = _sci_float_filter
+
+
+def _sci_float_filter(substring, from_undo=False):
+    """自定义浮点输入过滤器：支持科学计数法。
+
+    Kivy 内置的 input_filter='float' 使用正则 ``^-?[0-9]*\\.?[0-9]*$``，
+    不允许输入 'e' 字符，导致 1.2e-6 这样的科学计数法无法输入。
+    此过滤器放行数字、小数点、负号与 e/E 等字符，拦截其余非法字符。
+
+    返回过滤后的字符串；返回空字符串表示拒绝本次输入。
+    """
+    allowed = set("0123456789.-eE+")
+    return "".join(ch for ch in substring if ch in allowed)
 
 
 class IntInput(TextInput):
@@ -566,7 +590,7 @@ class InputScreen(Screen):
         super().__init__(**kwargs)
         self.name = "inputs"
         self.on_calc = on_calc
-        self._layer_rows = []      # 每项: (name, thick, k) —— UnitInput
+        self._layer_rows = []      # 每项: (name, thick, mat, k, rc) —— UnitInput/Spinner
         self._fields = {}          # key -> FieldRow
         self._build()
 
@@ -642,51 +666,148 @@ class InputScreen(Screen):
         return row
 
     def _rebuild_layers(self):
-        """按层数重建层参数表格（名称 / 厚度 / 导热系数）。
+        """按层数重建层参数模块（每个材料层一个独立卡片模块）。
 
-        名称列使用普通 TextInput（不设浮点过滤器），允许清空后自由输入中文层名；
-        名称列固定窄宽度，厚度 / 导热系数两列弹性均分剩余空间；
-        单位已在表头标注，输入框内不再冗余显示 mm / λ 后缀。
+        每个模块内分两行（适配手机竖屏）：
+          第一行：层名称 / 厚度(mm) / 材料 / 温度相关(勾选)
+          第二行：导热系数 a / b / c / 接触热阻 Rc
+        勾选「温度相关」后启用 b/c 输入（支持科学计数法）；
+        材料下拉「自定义」+ 用户材料库，选中材料即用其 k_coef；
+        「保存」按钮将当前 a/b/c 保存到用户材料库。
+        模块之间用独立卡片分隔。
         """
         self.layer_grid.clear_widgets()
         self._layer_rows.clear()
         n = self.stepper.value
-        # 表头（列名已带单位）
-        head = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(28))
-        head.add_widget(MdLabel(text="名称", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=None, width=dp(84)))
-        head.add_widget(MdLabel(text="厚度(mm)", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=1))
-        head.add_widget(MdLabel(text="导热系数λ", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=1))
-        self.layer_grid.add_widget(head)
-        # 数据行
+        user_mats = material_names()
         for i in range(n):
-            row = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
+            # ---- 每个材料层一个独立卡片模块 ----
+            card = MDCard(spacing=dp(8), padding=[dp(12), dp(10), dp(12), dp(10)],
+                          radius=dp(12))
+
+            # 第一行：层名称 / 厚度 / 材料 / 温度相关
+            row1 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
             name = UnitInput(input_cls=TextInput, unit="", default=f"层{i+1}",
-                             halign="left")
+                             halign="left", height=dp(44))
             name.textinput.multiline = False    # 普通文本输入，支持中文层名
             name.size_hint_x = None
-            name.width = dp(84)
-            thick = UnitInput(unit="", default="50")
-            thick.size_hint_x = 1
-            k = UnitInput(unit="", default="1.0")
-            k.size_hint_x = 1
-            row.add_widget(name)
-            row.add_widget(thick)
-            row.add_widget(k)
-            self._layer_rows.append((name, thick, k))
-            self.layer_grid.add_widget(row)
+            name.width = dp(96)
+            thick = UnitInput(unit="mm", default="50", height=dp(44))
+            thick.size_hint_x = None
+            thick.width = dp(92)
+            mat = Spinner(text="自定义", values=["自定义"] + user_mats,
+                          size_hint_x=1, font_size=sp(12),
+                          background_color=CARD_ELEV)
+            temp_cb = CheckBox(size_hint_x=None, width=dp(40), color=PRIMARY)
+            row1.add_widget(name)
+            row1.add_widget(thick)
+            row1.add_widget(mat)
+            row1.add_widget(temp_cb)
+            card.add_widget(row1)
+
+            # 第一行下方小注：材料 / 温度相关（勾选后启用 b、c）
+            hint1 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(20))
+            hint1.add_widget(Widget(size_hint_x=None, width=dp(96)))
+            hint1.add_widget(Widget(size_hint_x=None, width=dp(92)))
+            hint1.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(11)))
+            hint1.add_widget(MdLabel(text="温度相关", color=TEXT_DIM, font_size=sp(11),
+                                     size_hint_x=None, width=dp(44)))
+            card.add_widget(hint1)
+
+            # 第二行：导热系数 a / b / c / Rc + 保存按钮
+            row2 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
+            a_in = UnitInput(unit="a", default="1.0", height=dp(44))
+            a_in.size_hint_x = 1
+            b = UnitInput(unit="b", default="0.0", height=dp(44))
+            b.size_hint_x = 1
+            c = UnitInput(unit="c", default="0.0", height=dp(44))
+            c.size_hint_x = 1
+            rc = UnitInput(unit="Rc", default="0.0", height=dp(44))
+            rc.size_hint_x = None
+            rc.width = dp(78)
+            row2.add_widget(a_in)
+            row2.add_widget(b)
+            row2.add_widget(c)
+            row2.add_widget(rc)
+            card.add_widget(row2)
+
+            # 第二行下方小注：a / b / c / Rc 含义
+            hint2 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(20))
+            for t in ("k=a+bT+cT²", "(W/m·K)", "", "Rc"):
+                hint2.add_widget(MdLabel(text=t, color=TEXT_DIM, font_size=sp(10),
+                                         size_hint_x=1))
+            card.add_widget(hint2)
+
+            # 保存到材料库按钮（仅自定义时可用）
+            save_btn = Button(text="保存到材料库", font_size=sp(13), bold=True,
+                              color=TEXT, size_hint_y=None, height=dp(36),
+                              background_normal="", background_down="",
+                              background_color=CARD_ELEV)
+            save_btn.bind(on_release=lambda *_a, row_=i: self._save_material(row_))
+            card.add_widget(save_btn)
+
+            self.layer_grid.add_widget(card)
+            self._layer_rows.append((name, thick, mat, a_in, b, c, rc, temp_cb,
+                                     save_btn))
+
+            # 勾选温度相关时启用 b/c
+            def _toggle(*_a, b_=b, c_=c, cb_=temp_cb):
+                b_.disabled = not cb_.active
+                c_.disabled = not cb_.active
+                # 未勾选温度相关时 b/c 显示为置灰但仍保留输入值
+                b_.opacity = 1.0
+                c_.opacity = 1.0
+            temp_cb.bind(active=_toggle)
+            _toggle()
+
+            # 选择材料时自动填充 a/b/c（并勾选温度相关）
+            def _on_mat(*_a, idx_=i, a_=a_in, b_=b, c_=c, cb_=temp_cb):
+                self._apply_material(idx_)
+            mat.bind(text=_on_mat)
+
         self.layer_grid.height = self.layer_grid.minimum_height
+
+    def _apply_material(self, idx: int):
+        """选中材料库材料时，将其 k_coef 填充到当前层 a/b/c。"""
+        name, thick, mat, a_in, b, c, rc, temp_cb, save_btn = self._layer_rows[idx]
+        if mat.text == "自定义":
+            return
+        try:
+            from kiln_ht import get_material
+            k_coef = get_material(mat.text)["k_coef"]
+        except KeyError:
+            return
+        a_in.text = f"{k_coef[0]:g}"
+        b.text = f"{k_coef[1]:g}"
+        c.text = f"{k_coef[2]:g}"
+        temp_cb.active = True
+
+    def _save_material(self, idx: int):
+        """将当前层 a/b/c 保存到用户材料库。"""
+        name, thick, mat, a_in, b, c, rc, temp_cb, save_btn = self._layer_rows[idx]
+        try:
+            k_coef = (float(a_in.text), float(b.text), float(c.text))
+            save_user_material(name.text.strip() or f"层{idx + 1}", k_coef)
+            # 刷新材料下拉
+            mat.values = ["自定义"] + material_names()
+            self._flash_error("已保存到材料库 ✓")
+        except ValueError as exc:
+            self._flash_error(f"保存失败：{exc}")
 
     def collect_params(self):
         """解析界面参数，非法输入抛 ValueError。"""
         layers = []
-        for i, (name, thick, k) in enumerate(self._layer_rows):
+        for i, (name, thick, mat, a_in, b, c, rc, temp_cb, save_btn) in enumerate(self._layer_rows):
+            a = float(a_in.text)
+            if temp_cb.active:
+                k_coef = (a, float(b.text), float(c.text))
+            else:
+                k_coef = (a, 0.0, 0.0)   # 未勾选温度相关 -> 常数 k
             layers.append(Layer(
                 name=name.text.strip() or f"层{i+1}",
                 thickness=float(thick.text) / 1000.0,
-                k=float(k.text),
+                k_coef=k_coef,
+                Rc=float(rc.text),
             ))
         p = self._fields
         params = KilnParams(
@@ -726,6 +847,7 @@ class ResultScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.name = "results"
+        self._last = None          # 最近一次结果 (layers, params, sol, x_mm, T_c)
         root = BoxLayout(orientation="vertical", spacing=dp(10),
                          padding=[dp(0), dp(10), dp(0), dp(0)])
 
@@ -739,6 +861,20 @@ class ResultScreen(Screen):
         for m in (self.m_outer, self.m_inner, self.m_eg):
             metrics.add_widget(m)
         root.add_widget(metrics)
+
+        # ---- 导出按钮（结果页顶部） ----
+        export_bar = BoxLayout(orientation="horizontal", spacing=dp(10),
+                               size_hint_y=None, height=dp(48),
+                               padding=[dp(14), 0, dp(14), 0])
+        self.export_btn = AccentButton(text="导出结果", bg=CARD_ELEV,
+                                       radius=dp(10), font_size=sp(14))
+        self.export_btn.bind(on_press=lambda *_a: self._export())
+        self.export_status = MdLabel(text="", color=TEXT_DIM, font_size=sp(12),
+                                     size_hint_y=None, height=dp(20),
+                                     halign="center")
+        export_bar.add_widget(self.export_btn)
+        root.add_widget(export_bar)
+        root.add_widget(self.export_status)
 
         # ---- 中部：各层界面温度 + 详细结果（固定高度，内部滚动） ----
         tables = ScrollView(bar_width=dp(4), bar_color=GRID,
@@ -795,6 +931,8 @@ class ResultScreen(Screen):
 
     def set_result(self, layers, sol, x_mm, T_c):
         """用最新计算结果刷新整个结果页。"""
+        self._last = (layers, sol, x_mm, T_c)
+        self.export_status.text = ""
         self.m_outer.set_value(f"{sol.T_wN - 273.15:.1f}")
         self.m_inner.set_value(f"{sol.T_w1 - 273.15:.1f}")
         self.m_eg.set_value(f"{sol.eg:.3f}")
@@ -828,6 +966,25 @@ class ResultScreen(Screen):
         self.curve.set_data(x_mm, T_c)
         self.curve_hint.opacity = 0
         self.curve_foot.text = f"距内壁 0 mm  →  {x_mm[-1]:.0f} mm"
+
+    def _export(self):
+        """导出/分享计算结果。"""
+        if self._last is None:
+            self.export_status.text = "⚠ 先计算再导出"
+            return
+        layers, sol, x_mm, T_c = self._last
+        params = self._get_params()
+        ok, msg = export_result(layers, params, sol, x_mm, T_c)
+        self.export_status.text = f"✓ {msg}" if ok else f"⚠ {msg}"
+
+    def _get_params(self):
+        """从输入页读取当前工况参数（用于导出报告）。"""
+        try:
+            _layers, params = self.parent.parent.input_screen.collect_params()
+            return params
+        except Exception:  # noqa: BLE001
+            from kiln_ht import KilnParams
+            return KilnParams()
 
 
 # ============ 主界面 ============
