@@ -298,15 +298,19 @@ for idx, row in enumerate(_ss.layers):
             row["k_coef"] = list(m["k_coef"])
         st.rerun()
 
-    # 若为自定义材料，显示 a/b/c 编辑；否则只读显示当前系数（可展开编辑）
-    with c3.expander("系数 a/b/c", expanded=(row.get("k_coef") is None or sel == "自定义")):
-        if row.get("k_coef") is None:
-            row["k_coef"] = [float(row["k"]), 0.0, 0.0]
-        row["k_coef"] = [
-            c3.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a"),
-            c3.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b"),
-            c3.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c"),
-        ]
+    # 系数显示/编辑：自定义材料显示 a/b/c 编辑框，材料库选择只读显示
+    if row.get("k_coef") is None:
+        row["k_coef"] = [float(row["k"]), 0.0, 0.0]
+    if sel == "自定义":
+        with c3.expander("系数 a/b/c", expanded=True):
+            row["k_coef"] = [
+                c3.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a"),
+                c3.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b"),
+                c3.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c"),
+            ]
+    else:
+        a, b, c = row["k_coef"]
+        c3.markdown(f"λ={a}+{b}T+{c}T²")
 
     row["Rc"] = c5.number_input(
         "Rc", value=float(row.get("Rc", 0.0)), min_value=0.0, step=0.001,

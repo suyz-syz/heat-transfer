@@ -214,3 +214,23 @@ def test_web_ui_rc_input(app):
     rc_inputs = [n for n in app.number_input if (n.key or "").endswith("_rc")]
     assert len(rc_inputs) == 4
     assert all(n.value == 0.0 for n in rc_inputs)
+
+
+def test_web_ui_material_selection_fills_k_coef(app):
+    """选择材料后，计算应使用该材料的 k_coef（而非默认 k=1）。"""
+    from kiln_ht import get_material
+
+    # 选择第 0 层为硅酸铝纤维
+    mat_sb = [s for s in app.selectbox if (s.key or "").endswith("_material")]
+    assert mat_sb, "未找到材料下拉"
+    mat_sb[0].select("硅酸铝纤维").run()
+    assert not app.exception
+
+    # 计算成功
+    _click_calc(app)
+    assert not app.exception
+    assert not app.error, [e.value for e in app.error]
+
+    # 验证 k_coef 已按材料填充（硅酸铝纤维 k_coef 非默认 k=1）
+    fib = get_material("硅酸铝纤维")["k_coef"]
+    assert fib[0] != 1.0
