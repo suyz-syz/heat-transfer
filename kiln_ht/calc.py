@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 # ============ 物理常数 ============
@@ -113,6 +113,7 @@ class WallSolution:
     R_out: float             # 外壁对流热阻 (m·K/W)
     R_tot: float             # 总热阻 (m·K/W)
     iterations: int = 0      # 实际迭代步数
+    k_avg: List[float] = field(default_factory=list)   # 各层积分平均导热系数 (W/m·K)
 
     def as_dict(self) -> Dict:
         """转为纯 dict，便于 JSON 序列化。"""
@@ -137,6 +138,7 @@ class WallSolution:
             "R_out": self.R_out,
             "R_tot": self.R_tot,
             "iterations": self.iterations,
+            "k_avg": list(self.k_avg),
         }
 
 
@@ -347,7 +349,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     for i, layer in enumerate(layers):
         if layer.thickness <= 0:
             raise ValueError(f"第 {i + 1} 层厚度需为正值")
-        if layer.k <= 0:
+        if layer.k_const <= 0:
             raise ValueError(f"第 {i + 1} 层导热系数需为正值")
 
     r_in = params.L_char / 2.0
@@ -368,7 +370,23 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     Qprime = 0.0
     h_conv_in = h_rad_in = h_conv_out = h_rad_out = 0.0
     eg = 0.3
+    k_avg = [l.k_const for l in layers]      # 初始估计：取常数项
+    R_wall = [0.0] * len(layers)
+    R_contact = [0.0] * len(layers)
     for it in range(MAX_WALL_ITER):
+        # 用当前 k_avg 估计各层界面温度（圆筒壁递推），用于更新 k(T)
+        # 界面温度 [T0=内壁, T1, ..., Tn=外壁]
+        T_iface_est = [T_w1]
+        for i, R in enumerate(R_wall):
+            T_iface_est.append(T_iface_est[-1] - Qprime * R)
+        T_iface_est[-1] = T_wN
+
+        # 更新各层积分平均导热系数（层内 T 取 ℃）
+        k_avg = [
+            integral_mean_k(l.k_coef, T_iface_est[i] - 273.15, T_iface_est[i + 1] - 273.15)
+            for i, l in enumerate(layers)
+        ]
+
         # 内侧：对流 + 烟气辐射
         T_f = (T_g + T_w1) / 2
         h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f)
@@ -388,12 +406,13 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         h_rad_out = outer_radiation_h(T_wN, T_a, params.eps_shell)
         h_out = h_conv_out + h_rad_out
 
-        # 单位长度热阻网络
+        # 单位长度热阻网络（含 k(T) 导热热阻 + 层间接触热阻）
         R_in = 1.0 / (h_in * 2.0 * math.pi * r_in)
-        R_wall = [math.log(radii[i + 1] / radii[i]) / (2.0 * math.pi * l.k)
-                  for i, l in enumerate(layers)]
+        for i, l in enumerate(layers):
+            R_wall[i] = math.log(radii[i + 1] / radii[i]) / (2.0 * math.pi * k_avg[i])
+            R_contact[i] = l.Rc / (2.0 * math.pi * radii[i + 1])   # 界面在 radii[i+1]
         R_out = 1.0 / (h_out * 2.0 * math.pi * r_out)
-        R_tot = R_in + sum(R_wall) + R_out
+        R_tot = R_in + sum(R_wall) + sum(R_contact) + R_out
 
         Qprime = (T_g - T_a) / R_tot
         T_w1_new = T_g - Qprime * R_in
@@ -429,6 +448,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         r_in=r_in, r_out=r_out, T_iface=T_iface,
         R_wall=R_wall, R_in=R_in, R_out=R_out, R_tot=R_tot,
         iterations=it + 1,
+        k_avg=k_avg,
     )
 
 
@@ -442,7 +462,8 @@ def compute_temperature_curve(
     返回 (x_mm, T_c)：
         x_mm — 距内壁距离 (mm)
         T_c  — 温度 (℃)
-    各层内采用圆筒壁对数分布精确解。纯标准库实现，不依赖 numpy。
+    各层内采用圆筒壁对数分布精确解，导热系数使用 solve_wall 的积分平均 k_avg。
+    纯标准库实现，不依赖 numpy。
     """
     n_points = max(n_points or 500, 2)
     # 各层界面位置 (m)
@@ -456,7 +477,8 @@ def compute_temperature_curve(
         for i, l in enumerate(layers):
             if positions[i] <= x <= positions[i + 1]:
                 r_i = sol.r_in + positions[i]
-                T_all[j] = sol.T_iface[i] - (sol.Qprime / (2.0 * math.pi * l.k)) * math.log(
+                k_avg = sol.k_avg[i] if i < len(sol.k_avg) else l.k_const
+                T_all[j] = sol.T_iface[i] - (sol.Qprime / (2.0 * math.pi * k_avg)) * math.log(
                     (sol.r_in + x) / r_i)
                 break
     return [x * 1000.0 for x in x_all], [t - 273.15 for t in T_all]

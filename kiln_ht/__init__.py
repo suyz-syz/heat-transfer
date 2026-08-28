@@ -15,6 +15,7 @@ from .calc import (
     gas_emissivity,
     inner_convection_h,
     inner_radiation_h,
+    integral_mean_k,
     outer_forced_h,
     outer_natural_h,
     outer_radiation_h,
