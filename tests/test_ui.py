@@ -70,7 +70,7 @@ class TestUIBuild:
         """层名输入框必须允许输入任意文本（如中文层名），不被浮点过滤器拦截。"""
         _, root = app
         ins = root.input_screen
-        name, thick, mat, rc = ins._layer_rows[0]
+        name, thick, mat, k, rc = ins._layer_rows[0]
         # 名称输入框应是普通 TextInput（无 float 过滤）
         assert name.textinput.input_filter is None, "层名输入框不应有输入过滤器"
         # 清空后输入中文层名，应能被 collect_params 正确解析
@@ -83,27 +83,38 @@ class TestUIBuild:
         assert layers[0].name == "Steel shell 1"
 
     def test_layer_rows_have_kt_fields(self, app):
-        """每层行应包含材料 Spinner 与接触热阻输入。"""
+        """每层行应包含材料 Spinner / λ 输入 / 接触热阻输入。"""
         _, root = app
         ins = root.input_screen
-        assert len(ins._layer_rows[0]) == 4
-        name, thick, mat, rc = ins._layer_rows[0]
+        assert len(ins._layer_rows[0]) == 5
+        name, thick, mat, k, rc = ins._layer_rows[0]
         from kivy.uix.spinner import Spinner
         assert isinstance(mat, Spinner)
         assert mat.text == "自定义"
         assert "硅酸铝纤维" in mat.values
+        assert k.text == "1.0"
         assert rc.text == "0.0"
 
     def test_collect_params_from_material(self, app):
         """选择材料后 collect_params 应使用材料 k_coef。"""
         _, root = app
         ins = root.input_screen
-        name, thick, mat, rc = ins._layer_rows[0]
+        name, thick, mat, k, rc = ins._layer_rows[0]
         mat.text = "硅酸铝纤维"
         layers, _ = ins.collect_params()
         from kiln_ht import get_material
         assert layers[0].k_coef == get_material("硅酸铝纤维")["k_coef"]
         assert layers[0].Rc == 0.0
+
+    def test_collect_params_custom_k(self, app):
+        """自定义层使用输入的 λ 常数 k。"""
+        _, root = app
+        ins = root.input_screen
+        name, thick, mat, k, rc = ins._layer_rows[0]
+        mat.text = "自定义"      # 重置为自定义（fixture 为 module-scoped，可能被前一测试改过）
+        k.text = "0.6"
+        layers, _ = ins.collect_params()
+        assert layers[0].k_coef == (0.6, 0.0, 0.0)
 
     def test_stepper(self, app):
         _, root = app

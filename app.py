@@ -296,6 +296,9 @@ for idx, row in enumerate(_ss.layers):
         if sel != "自定义":
             m = get_material(sel)
             row["k_coef"] = list(m["k_coef"])
+            # 离开自定义时清掉 a/b/c 陈旧 session key，避免切回自定义时被旧值覆盖
+            for kk in (f"layer_{uid}_a", f"layer_{uid}_b", f"layer_{uid}_c"):
+                _ss.pop(kk, None)
         st.rerun()
 
     # 系数显示/编辑：自定义材料显示 a/b/c 编辑框，材料库选择只读显示

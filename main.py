@@ -655,6 +655,7 @@ class InputScreen(Screen):
 
         名称列使用普通 TextInput（不设浮点过滤器），允许清空后自由输入中文层名；
         材料列为下拉 Spinner（自定义或从材料库选，选中即用材料 k_coef）；
+        λ 列为自定义时的常数导热系数输入（材料库选中时忽略）；
         接触热阻列输入 Rc (m²·K/W)。
         """
         self.layer_grid.clear_widgets()
@@ -665,7 +666,9 @@ class InputScreen(Screen):
         head.add_widget(MdLabel(text="名称", color=TEXT_DIM, font_size=sp(12),
                                 size_hint_x=None, width=dp(84)))
         head.add_widget(MdLabel(text="厚度(mm)", color=TEXT_DIM, font_size=sp(12),
-                                size_hint_x=0.7))
+                                size_hint_x=0.6))
+        head.add_widget(MdLabel(text="λ(W/mK)", color=TEXT_DIM, font_size=sp(12),
+                                size_hint_x=0.6))
         head.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(12),
                                 size_hint_x=1))
         head.add_widget(MdLabel(text="Rc(m²K/W)", color=TEXT_DIM, font_size=sp(12),
@@ -680,7 +683,9 @@ class InputScreen(Screen):
             name.size_hint_x = None
             name.width = dp(84)
             thick = UnitInput(unit="", default="50")
-            thick.size_hint_x = 0.7
+            thick.size_hint_x = 0.6
+            k = UnitInput(unit="", default="1.0")
+            k.size_hint_x = 0.6
             mat = Spinner(text="自定义", values=["自定义"] + material_names(),
                           size_hint_x=1, font_size=sp(12),
                           background_color=CARD)
@@ -689,18 +694,19 @@ class InputScreen(Screen):
             rc.width = dp(70)
             row.add_widget(name)
             row.add_widget(thick)
+            row.add_widget(k)
             row.add_widget(mat)
             row.add_widget(rc)
-            self._layer_rows.append((name, thick, mat, rc))
+            self._layer_rows.append((name, thick, mat, k, rc))
             self.layer_grid.add_widget(row)
         self.layer_grid.height = self.layer_grid.minimum_height
 
     def collect_params(self):
         """解析界面参数，非法输入抛 ValueError。"""
         layers = []
-        for i, (name, thick, mat, rc) in enumerate(self._layer_rows):
+        for i, (name, thick, mat, k, rc) in enumerate(self._layer_rows):
             if mat.text == "自定义":
-                k_coef = (1.0, 0.0, 0.0)   # 自定义默认常数 k=1
+                k_coef = (float(k.text), 0.0, 0.0)   # 自定义常数导热系数
             else:
                 k_coef = get_material(mat.text)["k_coef"]
             layers.append(Layer(
