@@ -682,8 +682,12 @@ class InputScreen(Screen):
         user_mats = material_names()
         for i in range(n):
             # ---- 每个材料层一个独立卡片模块 ----
-            card = MDCard(spacing=dp(8), padding=[dp(12), dp(10), dp(12), dp(10)],
-                          radius=dp(12))
+            # 关键：必须 auto_height（size_hint_y=None + 绑定 minimum_height→height）。
+            # 否则卡片默认 size_hint_y=1，而 layer_grid（size_hint_y=None）的
+            # minimum_height 只统计 size_hint_y=None 的子节点，导致卡片高度塌缩为 0，
+            # 内部固定高度的行（row1/row2 等）全部溢出互相重叠（导热系数输入区重叠即由此引起）。
+            card = auto_height(MDCard(spacing=dp(8), padding=[dp(12), dp(10), dp(12), dp(10)],
+                                      radius=dp(12)))
 
             # 第一行：层名称 / 厚度 / 材料 / 温度相关
             row1 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
