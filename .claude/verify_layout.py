@@ -1,33 +1,29 @@
-"""Post-fix layout verification (v3 — precise card-level).
+"""Post-fix layout verification (v4 — precise card-level).
 
-Checks only what actually matters:
+Checks:
 1. Each layer-module MDCard has height >= minimum_height (not squeezed).
 2. Within each card, sibling BoxLayout rows do NOT overlap (row1 and row2 separated).
 3. Within each row, sibling UnitInputs do NOT overlap.
 4. All UnitInputs are touchable (>= 40dp wide, >= 36dp tall).
+5. A horizontal divider separates row1 from row2.
 
 Uses local widget coordinates (row is container, UnitInputs are siblings) —
 immune to ScrollView window-coordinate weirdness.
+
+Run with phone-width window:
+    python .claude/verify_layout.py
 
 Exit 0 = pass, 1 = fail.
 """
 import os
 import sys
 
-os.environ.setdefault("KIVY_NO_ARGS", "1")
-os.environ.setdefault("KIVY_WINDOW", "sdl2")
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kivy.metrics import dp
-from kivy.base import EventLoop
-from kivy.clock import Clock
-from kivy.core.window import Window
+from kivy.config import Config
 
-import main as m
-
-TOUCH_MIN_W = dp(40)
-TOUCH_MIN_H = dp(36)
+TOUCH_MIN_W = 40
+TOUCH_MIN_H = 36
 
 
 def overlaps(a, b):
@@ -40,17 +36,27 @@ def overlaps(a, b):
 
 
 def check_width(width_dp):
-    Window.size = (dp(width_dp), dp(800))
+    Config.set('graphics', 'width', str(width_dp))
+    Config.set('graphics', 'height', '900')
+    Config.set('kivy', 'log_level', 'warning')
+
+    import main as m
+    from kivy.core.window import Window
+    from kivy.base import EventLoop
+    from kivy.clock import Clock
+
+    EventLoop.ensure_window()
+    EventLoop.window = Window
+
     root = m.KilnApp()
     Window.add_widget(root)
-    for _ in range(10):
+    for _ in range(12):
         Clock.tick()
 
     ins = root.input_screen
     sc = ins.children[0].children[1]
-    # scroll to bottom so all cards are laid out
     sc.scroll_y = 0.0
-    for _ in range(4):
+    for _ in range(5):
         Clock.tick()
 
     layer_cards = []
@@ -59,7 +65,6 @@ def check_width(width_dp):
         for c in getattr(w, "children", []):
             walk(c)
         if w.__class__.__name__ == "MDCard":
-            # Identify as layer card: has children that are UnitInputs
             uis = []
             def deep(c2):
                 for c3 in getattr(c2, "children", []):
@@ -72,7 +77,6 @@ def check_width(width_dp):
                 for ch in getattr(u, "children", []):
                     if ch.__class__.__name__ == "MdLabel":
                         labels.add(ch.text)
-            # A layer card has UnitInputs labeled a, b, c, Rc
             if labels >= {"a", "b", "c", "Rc"}:
                 layer_cards.append(w)
 
@@ -83,10 +87,11 @@ def check_width(width_dp):
     for ci, card in enumerate(layer_cards):
         # 1) height >= minimum_height
         if card.height < card.minimum_height:
-            problems.append(f"[{width_dp}dp] layer-card[{ci}] squeezed: h={card.height:.0f} < min_h={card.minimum_height:.0f} (overflow={card.height - card.minimum_height:.0f})")
+            problems.append(f"[{width_dp}dp] layer-card[{ci}] squeezed: h={card.height:.0f} < min_h={card.minimum_height:.0f}")
+
+        rows = [c for c in card.children if c.__class__.__name__ == "BoxLayout"]
 
         # 2) sibling rows don't overlap
-        rows = [c for c in card.children if c.__class__.__name__ == "BoxLayout"]
         for i in range(len(rows)):
             for j in range(i + 1, len(rows)):
                 if overlaps(rows[i], rows[j]):

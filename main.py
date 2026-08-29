@@ -668,7 +668,7 @@ class InputScreen(Screen):
     def _rebuild_layers(self):
         """按层数重建层参数模块（每个材料层一个独立卡片模块）。
 
-        每个模块内分两行（适配手机竖屏）：
+        每个模块内分两行（适配手机竖屏，行间用分隔线隔开）：
           第一行：层名称 / 厚度(mm) / 材料 / 温度相关(勾选)
           第二行：导热系数 a / b / c / 接触热阻 Rc
         勾选「温度相关」后启用 b/c 输入（支持科学计数法）；
@@ -690,19 +690,20 @@ class InputScreen(Screen):
                                       radius=dp(12)))
 
             # 第一行：层名称 / 厚度 / 材料 / 温度相关
-            row1 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
+            # 固定宽仅给 层名称/厚度/勾选框，其余全部留给「材料」下拉，避免被挤成细条
+            row1 = BoxLayout(spacing=dp(6), size_hint_y=None, height=dp(44))
             name = UnitInput(input_cls=TextInput, unit="", default=f"层{i+1}",
-                             halign="left", height=dp(44))
+                             halign="left", height=dp(42))
             name.textinput.multiline = False    # 普通文本输入，支持中文层名
             name.size_hint_x = None
-            name.width = dp(96)
-            thick = UnitInput(unit="mm", default="50", height=dp(44))
+            name.width = dp(72)
+            thick = UnitInput(unit="mm", default="50", height=dp(42))
             thick.size_hint_x = None
-            thick.width = dp(92)
+            thick.width = dp(70)
             mat = Spinner(text="自定义", values=["自定义"] + user_mats,
                           size_hint_x=1, font_size=sp(12),
                           background_color=CARD_ELEV)
-            temp_cb = CheckBox(size_hint_x=None, width=dp(40), color=PRIMARY)
+            temp_cb = CheckBox(size_hint_x=None, width=dp(36), color=PRIMARY)
             row1.add_widget(name)
             row1.add_widget(thick)
             row1.add_widget(mat)
@@ -710,34 +711,43 @@ class InputScreen(Screen):
             card.add_widget(row1)
 
             # 第一行下方小注：材料 / 温度相关（勾选后启用 b、c）
-            hint1 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(20))
-            hint1.add_widget(Widget(size_hint_x=None, width=dp(96)))
-            hint1.add_widget(Widget(size_hint_x=None, width=dp(92)))
-            hint1.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(11)))
-            hint1.add_widget(MdLabel(text="温度相关", color=TEXT_DIM, font_size=sp(11),
-                                     size_hint_x=None, width=dp(44)))
+            hint1 = BoxLayout(spacing=dp(6), size_hint_y=None, height=dp(18))
+            hint1.add_widget(Widget(size_hint_x=None, width=dp(72)))
+            hint1.add_widget(Widget(size_hint_x=None, width=dp(70)))
+            hint1.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(10)))
+            hint1.add_widget(MdLabel(text="温度相关", color=TEXT_DIM, font_size=sp(10),
+                                     size_hint_x=None, width=dp(40)))
             card.add_widget(hint1)
 
-            # 第二行：导热系数 a / b / c / Rc + 保存按钮
-            row2 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(46))
-            a_in = UnitInput(unit="a", default="1.0", height=dp(44))
+            # 行间分隔线：清晰区分「第一行 / 第二行」
+            divider = BoxLayout(size_hint_y=None, height=dp(1))
+            with divider.canvas.before:
+                Color(*CARD_BORDER)
+                divider._line_rect = Rectangle(pos=divider.pos, size=divider.size)
+            divider.bind(pos=lambda *_a, d=divider: setattr(d._line_rect, "pos", d.pos),
+                         size=lambda *_a, d=divider: setattr(d._line_rect, "size", d.size))
+            card.add_widget(divider)
+
+            # 第二行：导热系数 a / b / c + 接触热阻 Rc
+            row2 = BoxLayout(spacing=dp(6), size_hint_y=None, height=dp(44))
+            a_in = UnitInput(unit="a", default="1.0", height=dp(42))
             a_in.size_hint_x = 1
-            b = UnitInput(unit="b", default="0.0", height=dp(44))
+            b = UnitInput(unit="b", default="0.0", height=dp(42))
             b.size_hint_x = 1
-            c = UnitInput(unit="c", default="0.0", height=dp(44))
+            c = UnitInput(unit="c", default="0.0", height=dp(42))
             c.size_hint_x = 1
-            rc = UnitInput(unit="Rc", default="0.0", height=dp(44))
+            rc = UnitInput(unit="Rc", default="0.0", height=dp(42))
             rc.size_hint_x = None
-            rc.width = dp(78)
+            rc.width = dp(64)
             row2.add_widget(a_in)
             row2.add_widget(b)
             row2.add_widget(c)
             row2.add_widget(rc)
             card.add_widget(row2)
 
-            # 第二行下方小注：a / b / c / Rc 含义
-            hint2 = BoxLayout(spacing=dp(8), size_hint_y=None, height=dp(20))
-            for t in ("k=a+bT+cT²", "(W/m·K)", "", "Rc"):
+            # 第二行下方小注：a/b/c 组标注「导热系数」、Rc 组标注「接触热阻」
+            hint2 = BoxLayout(spacing=dp(6), size_hint_y=None, height=dp(18))
+            for t in ("导热系数 k=a+bT+cT²", "", "", "接触热阻"):
                 hint2.add_widget(MdLabel(text=t, color=TEXT_DIM, font_size=sp(10),
                                          size_hint_x=1))
             card.add_widget(hint2)
