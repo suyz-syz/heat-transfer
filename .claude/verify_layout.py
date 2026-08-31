@@ -72,12 +72,22 @@ def check_width(width_dp):
                     if c3.__class__.__name__ == "UnitInput":
                         uis.append(c3)
             deep(w)
-            labels = set()
+            # 层卡片识别：Rc 输入框已不含内嵌单位后缀（unit=""），
+            # 改由 a/b/c 内嵌单位标签 + 卡片内「接触热阻 Rc」提示文本双重判别。
+            unit_labels = set()
             for u in uis:
                 for ch in getattr(u, "children", []):
                     if ch.__class__.__name__ == "MdLabel":
-                        labels.add(ch.text)
-            if labels >= {"a", "b", "c", "Rc"}:
+                        unit_labels.add(ch.text)
+            hint_texts = set()
+            def collect_hints(w2):
+                for c in getattr(w2, "children", []):
+                    collect_hints(c)
+                    if c.__class__.__name__ == "MdLabel":
+                        hint_texts.add(c.text)
+            collect_hints(w)
+            if (unit_labels >= {"a", "b", "c"}
+                    and "接触热阻 Rc" in hint_texts):
                 layer_cards.append(w)
 
     walk(ins)

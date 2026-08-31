@@ -736,7 +736,7 @@ class InputScreen(Screen):
             b.size_hint_x = 1
             c = UnitInput(unit="c", default="0.0", height=dp(42))
             c.size_hint_x = 1
-            rc = UnitInput(unit="Rc", default="0.0", height=dp(42))
+            rc = UnitInput(unit="", default="0.0", height=dp(42))
             rc.size_hint_x = None
             rc.width = dp(64)
             row2.add_widget(a_in)
@@ -745,11 +745,16 @@ class InputScreen(Screen):
             row2.add_widget(rc)
             card.add_widget(row2)
 
-            # 第二行下方小注：a/b/c 组标注「导热系数」、Rc 组标注「接触热阻」
+            # 第二行下方小注：a/b/c 组上方为弹性「导热系数」公式说明；
+            # Rc 输入框内不显示单位后缀，其说明「接触热阻 Rc」作为固定宽度
+            # （与 rc 输入框等宽 dp(64)）标签，右端与输入框精确对齐。
             hint2 = BoxLayout(spacing=dp(6), size_hint_y=None, height=dp(18))
-            for t in ("导热系数 k=a+bT+cT²", "", "", "接触热阻"):
-                hint2.add_widget(MdLabel(text=t, color=TEXT_DIM, font_size=sp(10),
-                                         size_hint_x=1))
+            hint2.add_widget(MdLabel(text="导热系数 k=a+bT+cT²",
+                                     color=TEXT_DIM, font_size=sp(10),
+                                     size_hint_x=1))
+            hint2.add_widget(MdLabel(text="接触热阻 Rc", color=TEXT_DIM,
+                                     font_size=sp(10), halign="left",
+                                     size_hint_x=None, width=dp(64)))
             card.add_widget(hint2)
 
             # 保存到材料库按钮（仅自定义时可用）
