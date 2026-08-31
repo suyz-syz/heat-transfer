@@ -260,24 +260,26 @@ for idx, row in enumerate(_ss.layers):
     if row.get("k_coef") is None:
         row["k_coef"] = [float(row["k"]), 0.0, 0.0]
     if sel == "自定义":
-        with c3.expander("系数 a/b/c", expanded=True):
-            row["k_coef"] = [
-                c3.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a",
-                                format="%.6g"),
-                c3.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b",
-                                format="%.6g"),
-                c3.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c",
-                                format="%.6g"),
-            ]
-            # 保存当前层为材料库条目（材料名 = 层名，可覆盖已有）
-            save_name = row["name"].strip() or f"层{idx + 1}"
-            if c3.button(f"💾 保存『{save_name}』到材料库",
-                         key=f"layer_{uid}_save"):
-                try:
-                    save_user_material(save_name, row["k_coef"])
-                    st.success(f"已保存到材料库：{save_name}")
-                except ValueError as exc:
-                    st.error(f"保存失败：{exc}")
+        # 导热系数 a/b/c 与「保存到材料库」整合到同一行（跨整行宽度），
+        # 替代原 expander 展开项的多行堆叠布局，界面更紧凑。
+        ka, kb, kc, ks = st.columns([1.0, 1.0, 1.0, 2.2])
+        row["k_coef"] = [
+            ka.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a",
+                            format="%.6g"),
+            kb.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b",
+                            format="%.6g"),
+            kc.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c",
+                            format="%.6g"),
+        ]
+        # 保存当前层为材料库条目：优先使用「层名称」输入框内容，为空时回退默认名
+        save_name = row["name"].strip() or f"层{idx + 1}"
+        if ks.button(f"💾 保存『{save_name}』到材料库",
+                     key=f"layer_{uid}_save"):
+            try:
+                save_user_material(save_name, row["k_coef"])
+                st.success(f"已保存到材料库：{save_name}")
+            except ValueError as exc:
+                st.error(f"保存失败：{exc}")
     else:
         a, b, c = row["k_coef"]
         c3.markdown(f"λ={a:g}+{b:g}T+{c:g}T²")
