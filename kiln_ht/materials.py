@@ -71,6 +71,22 @@ def save_user_material(name: str, k_coef, path: str = None) -> None:
         json.dump(store, f, ensure_ascii=False, indent=2)
 
 
+def delete_user_material(name: str, path: str = None) -> bool:
+    """从材料库删除一个材料，返回是否真的删除了。
+
+    材料名不存在时返回 False（不抛异常），便于 GUI 侧直接提示。
+    """
+    store = load_user_materials(path)
+    if name not in store:
+        return False
+    del store[name]
+    path = path or materials_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(store, f, ensure_ascii=False, indent=2)
+    return True
+
+
 def material_names(path: str = None) -> List[str]:
     """返回全部用户材料名。"""
     return list(load_user_materials(path).keys())

@@ -23,6 +23,7 @@ from .calc import (
     validate_params,
 )
 from .materials import (
+    delete_user_material,
     get_material,
     load_user_materials,
     material_names,
