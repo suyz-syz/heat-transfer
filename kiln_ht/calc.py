@@ -465,8 +465,16 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         T_w1 = T_w1 + relax * corr1
         T_wN = T_wN + relax * corrN
         prev_corr1 = corr1
-        hci_new = inner_convection_h(params.v_gas, params.L_char, L, (T_g + T_w1) / 2.0, P_pa=params.P_total * 1.0e5)
-        hri_new, _ = inner_radiation_h(T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total)
+        hci_new = inner_convection_h(
+            params.v_gas, params.L_char, L, (T_g + T_w1) / 2.0,
+            P_pa=params.P_total * 1.0e5,
+            gas=params.gas_mixture,
+            use_air=(params.property_model.lower() == "air"),
+        )
+        hri_new, _ = inner_radiation_h(
+            T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O,
+            params.P_total, model=params.radiation_model,
+        )
         hco_new_nat = outer_natural_h(T_wN, T_a, D_out)
         hco_new_for = outer_forced_h(params.v_amb, T_wN, T_a, D_out)
         hco_new = (hco_new_nat ** 3.5 + hco_new_for ** 3.5) ** (1.0 / 3.5)
