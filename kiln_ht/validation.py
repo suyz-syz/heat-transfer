@@ -45,3 +45,32 @@ def run_radiation_benchmark(cases=None) -> List[RadiationBenchmarkResult]:
 
 def benchmark_table(cases=None) -> List[Dict[str, Any]]:
     return [asdict(x) for x in run_radiation_benchmark(cases)]
+
+from .calc import KilnParams, Layer, solve_wall
+
+@dataclass(frozen=True)
+class WallBenchmarkResult:
+    case: str
+    Q_air_leckner: float
+    Tw_air_leckner: float
+    Q_mix_wsgg: float
+    Tw_mix_wsgg: float
+    delta_Q_percent: float
+    delta_Tw_K: float
+
+def run_wall_benchmark(cases=None) -> List[WallBenchmarkResult]:
+    layers = [Layer("fiber", 0.150, k=0.10), Layer("brick", 0.100, k=0.30),
+              Layer("shell", 0.012, k=45.0)]
+    out = []
+    for c in cases or default_benchmark_cases():
+        old = KilnParams(T_gas=c.T_gas, P_total=c.P_bar, CO2=c.pCO2_y, H2O=c.pH2O_y,
+                         N2=1.0-c.pCO2_y-c.pH2O_y, O2=0.0,
+                         radiation_model="leckner", property_model="air")
+        new = KilnParams(T_gas=c.T_gas, P_total=c.P_bar, CO2=c.pCO2_y, H2O=c.pH2O_y,
+                         N2=max(0.0, 1.0-c.pCO2_y-c.pH2O_y-0.03), O2=0.03,
+                         radiation_model="wsgg", property_model="mixture")
+        a = solve_wall(layers, old)
+        b = solve_wall(layers, new)
+        out.append(WallBenchmarkResult(c.name, a.Qprime, a.T_w1, b.Qprime, b.T_w1,
+                    100.0*(b.Qprime-a.Qprime)/max(abs(a.Qprime),1e-30), b.T_w1-a.T_w1))
+    return out
