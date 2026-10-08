@@ -483,8 +483,14 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         T_w1 = T_w1 + relax * corr1
         T_wN = T_wN + relax * corrN
         prev_corr1 = corr1
-        Q_in = h_in * (T_g - T_w1) * 2.0 * math.pi * r_in
-        Q_out = q_out_surface * 2.0 * math.pi * r_out
+        hci_new = inner_convection_h(params.v_gas, params.L_char, L, (T_g + T_w1) / 2.0)
+        hri_new, _ = inner_radiation_h(T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total)
+        hco_new_nat = outer_natural_h(T_wN, T_a, D_out)
+        hco_new_for = outer_forced_h(params.v_amb, T_wN, T_a, D_out)
+        hco_new = (hco_new_nat ** 3.5 + hco_new_for ** 3.5) ** (1.0 / 3.5)
+        hro_new = outer_radiation_h(T_wN, T_sur, params.eps_shell)
+        Q_in = (hci_new + hri_new) * (T_g - T_w1) * 2.0 * math.pi * r_in
+        Q_out = (hco_new * (T_wN - T_a) + hro_new * (T_wN - T_sur)) * 2.0 * math.pi * r_out
         energy_rel = abs(Q_in - Q_out) / max(abs(Qprime), 1.0)
         if max(abs(corr1), abs(corrN)) < WALL_TOL and energy_rel < ENERGY_REL_TOL:
             break
