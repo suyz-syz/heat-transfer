@@ -521,33 +521,70 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     )
 
 
+def _k_integral(k_coef: Tuple[float, float, float], T_c: float) -> float:
+    """K(T)=∫k(T)dT，用于温度相关导热的严格积分解。"""
+    a, b, c = k_coef
+    return a * T_c + 0.5 * b * T_c ** 2 + (c / 3.0) * T_c ** 3
+
+
+def _temperature_from_radius(
+    T1_c: float,
+    Qprime: float,
+    r: float,
+    r1: float,
+    k_coef: Tuple[float, float, float],
+) -> float:
+    """由 K(T)-K(T1)=-Q'/(2π)ln(r/r1) 反解 T(r)。"""
+    target = _k_integral(k_coef, T1_c) - Qprime / (2.0 * math.pi) * math.log(r / r1)
+    T = T1_c
+    for _ in range(50):
+        f = _k_integral(k_coef, T) - target
+        k = k_coef[0] + k_coef[1] * T + k_coef[2] * T * T
+        if k <= 0.0 or not math.isfinite(k):
+            raise ValueError("温度曲线反解过程中 k(T) <= 0")
+        dT = f / k
+        T -= dT
+        if abs(dT) < 1.0e-10:
+            return T
+    raise RuntimeError("k(T) 温度曲线反解未收敛")
+
+
 def compute_temperature_curve(
     layers: List[Layer],
     sol: WallSolution,
     n_points: Optional[int] = None,
 ) -> Tuple[List[float], List[float]]:
-    """计算沿壁厚方向的温度分布。
+    """计算沿壁厚方向的温度分布，返回 (x_mm, T_c)。
 
-    返回 (x_mm, T_c)：
-        x_mm — 距内壁距离 (mm)
-        T_c  — 温度 (℃)
-    各层内采用圆筒壁对数分布精确解，导热系数使用 solve_wall 的积分平均 k_avg。
-    纯标准库实现，不依赖 numpy。
+    对每一层严格使用 ∫k(T)dT 的圆筒壁导热积分解；k(T) 为二次函数时
+    通过 Newton 反解 T(r)。接触热阻在界面处形成温度跳跃 ΔT=Q'Rc'。
+    为保持原 API，不强制把界面重复采样成两个点。
     """
     n_points = max(n_points or 500, 2)
-    # 各层界面位置 (m)
     positions = [0.0]
-    for l in layers:
-        positions.append(positions[-1] + l.thickness)
+    for layer in layers:
+        positions.append(positions[-1] + layer.thickness)
+
     total = positions[-1]
     x_all = [total * i / (n_points - 1) for i in range(n_points)]
     T_all = [0.0] * n_points
+
     for j, x in enumerate(x_all):
-        for i, l in enumerate(layers):
+        if j == n_points - 1:
+            T_all[j] = sol.T_wN - 273.15
+            continue
+
+        for i, layer in enumerate(layers):
             if positions[i] <= x <= positions[i + 1]:
                 r_i = sol.r_in + positions[i]
-                k_avg = sol.k_avg[i] if i < len(sol.k_avg) else l.k_const
-                T_all[j] = sol.T_iface[i] - (sol.Qprime / (2.0 * math.pi * k_avg)) * math.log(
-                    (sol.r_in + x) / r_i)
+                T_i_c = sol.T_iface[i] - 273.15
+                T_all[j] = _temperature_from_radius(
+                    T_i_c,
+                    sol.Qprime,
+                    sol.r_in + x,
+                    r_i,
+                    layer.k_coef,
+                )
                 break
-    return [x * 1000.0 for x in x_all], [t - 273.15 for t in T_all]
+
+    return [x * 1000.0 for x in x_all], T_all
