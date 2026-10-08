@@ -286,3 +286,11 @@ def test_variable_k_temperature_curve_matches_layer_endpoints():
     assert T_c[0] == pytest.approx(sol.T_w1 - 273.15, abs=1e-8)
     assert T_c[-1] == pytest.approx(sol.T_wN - 273.15, abs=1e-8)
     assert all(T_c[i] <= T_c[i - 1] + 1e-8 for i in range(1, len(T_c)))
+
+
+def test_internal_gas_pressure_affects_convection():
+    """窑内压力应通过气体密度影响 Re/Nu，而不是被固定 1 atm 忽略。"""
+    from kiln_ht.calc import inner_convection_h
+    h_low = inner_convection_h(3.0, 4.0, 60.0, 1000.0, P_pa=0.5e5)
+    h_high = inner_convection_h(3.0, 4.0, 60.0, 1000.0, P_pa=2.0e5)
+    assert h_high > h_low
