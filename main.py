@@ -1073,4 +1073,11 @@ class HeatTransferApp(App):
 
 
 if __name__ == "__main__":
-    HeatTransferApp().run()
+    # 使用增强版 GUI（Accordion 折叠卡片 + Stepper 步进器 + Material Design 3）
+    try:
+        from kivy_enhanced_app import KilnHTApp
+        KilnHTApp().run()
+    except ImportError:
+        # 如果增强版组件不可用，回退到旧版
+        print("⚠️ 增强版 UI 组件加载失败，使用旧版界面")
+        HeatTransferApp().run()
