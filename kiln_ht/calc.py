@@ -193,7 +193,7 @@ def integral_mean_k(k_coef: Tuple[float, float, float], T_h_c: float, T_c_c: flo
 
 # ============ 内侧换热 ============
 def inner_convection_h(v: float, D: float, L: float, T_f: float,
-                       P_pa: float = 101325.0, gas: Optional[GasMixture] = None) -> float:
+                       P_pa: float = 101325.0, gas: Optional[GasMixture] = None,\n                       use_air: bool = False) -> float:
     """四组分烟气 Gnielinski 工程换热系数；T[K], P[Pa], h[W/(m² K)]。"""
     if min(v, D, L, T_f, P_pa) <= 0:
         raise ValueError("速度、尺度、温度和压力必须为正")
@@ -212,7 +212,7 @@ def inner_convection_h(v: float, D: float, L: float, T_f: float,
             1.0 + 12.7 * math.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1.0))
         x = (Re - 2300.0) / 7700.0
         Nu_fd = 3.66 + x * (Nu_turb - 3.66)
-    return Nu_fd * (1.0 + (D / L) ** (2.0 / 3.0)) * props.k / D
+    return Nu_fd * (1.0 + (D / L) ** (2.0 / 3.0)) * k_gas / D
 
 
 def gas_emissivity(T_g: float, pCO2: float, pH2O: float, beam: float,
@@ -411,7 +411,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
 
         # 内侧：对流 + 烟气辐射
         T_f = (T_g + T_w1) / 2
-        h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f, P_pa=params.P_total * 1.0e5, gas=params.gas_mixture)
+        h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f, P_pa=params.P_total * 1.0e5, gas=params.gas_mixture, use_air=(params.property_model.lower() == "air"))
         h_rad_in, eg = inner_radiation_h(
             T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total, model=params.radiation_model)
         h_in = h_conv_in + h_rad_in
