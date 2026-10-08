@@ -100,7 +100,7 @@ class InputScreen(Screen):
 
         # 标题
         title = Label(
-            text="🎛️ 工况参数",
+            text="工况参数",
             size_hint_y=None,
             height=dp(60),
             color=MD3_PRIMARY,
@@ -114,8 +114,7 @@ class InputScreen(Screen):
         content.bind(minimum_height=content.setter('height'))
 
         # Accordion 1: 必填参数（默认展开）
-        section1 = AccordionSection(title="🔥 必填参数", expanded=True)
-        section1.content_height = dp(140)
+        section1 = AccordionSection(title="必填参数", expanded=True)
 
         self.stepper_T_gas = StepperRow("烟气温度", "°C", APP_STATE.T_gas_C, 10, 500, 2000)
         section1.add_content(self.stepper_T_gas)
@@ -126,8 +125,7 @@ class InputScreen(Screen):
         content.add_widget(section1)
 
         # Accordion 2: 常用参数（默认展开）
-        section2 = AccordionSection(title="⚙️ 常用参数", expanded=True)
-        section2.content_height = dp(140)
+        section2 = AccordionSection(title="常用参数", expanded=True)
 
         self.stepper_v_gas = StepperRow("烟气流速", "m/s", APP_STATE.v_gas, 0.1, 0.1, 20.0)
         section2.add_content(self.stepper_v_gas)
@@ -138,8 +136,7 @@ class InputScreen(Screen):
         content.add_widget(section2)
 
         # Accordion 3: 高级参数（默认收起）
-        section3 = AccordionSection(title="🔬 高级参数", expanded=False)
-        section3.content_height = dp(210)
+        section3 = AccordionSection(title="高级参数", expanded=False)
 
         self.stepper_emiss_gas = StepperRow("烟气发射率", "", APP_STATE.emiss_gas, 0.01, 0.1, 1.0)
         section3.add_content(self.stepper_emiss_gas)
@@ -159,14 +156,14 @@ class InputScreen(Screen):
         btn_layout = BoxLayout(size_hint_y=None, height=dp(70), spacing=dp(10), padding=dp(10))
 
         btn_layers = Button(
-            text="🧱 衬层配置",
+            text="衬层配置",
             background_color=MD3_PRIMARY,
             on_press=self._goto_layers,
         )
         btn_layout.add_widget(btn_layers)
 
         btn_calc = Button(
-            text="🚀 开始计算",
+            text="开始计算",
             background_color=(76/255, 175/255, 80/255, 1),  # 绿色
             on_press=self._start_calculation,
         )
@@ -189,57 +186,73 @@ class InputScreen(Screen):
         """开始计算"""
         trigger_haptic(50)
 
-        # 从 Stepper 读取参数（实际值）
-        APP_STATE.T_gas_C = self.stepper_T_gas.value
-        APP_STATE.T_env_C = self.stepper_T_env.value
-        APP_STATE.v_gas = self.stepper_v_gas.value
-        APP_STATE.L_char = self.stepper_L_char.value
-        APP_STATE.emiss_gas = self.stepper_emiss_gas.value
-        APP_STATE.emiss_wall = self.stepper_emiss_wall.value
-        APP_STATE.h_out = self.stepper_h_out.value
-
         if not CALC_AVAILABLE:
-            print("❌ 计算模块未加载")
+            self._show_error("计算模块未加载，无法计算")
             return
 
         try:
-            # 构造 Layer 对象
+            # 从 Stepper 读取参数（实际值）
+            APP_STATE.T_gas_C = self.stepper_T_gas.value
+            APP_STATE.T_env_C = self.stepper_T_env.value
+            APP_STATE.v_gas = self.stepper_v_gas.value
+            APP_STATE.L_char = self.stepper_L_char.value
+            APP_STATE.emiss_gas = self.stepper_emiss_gas.value
+            APP_STATE.emiss_wall = self.stepper_emiss_wall.value
+            APP_STATE.h_out = self.stepper_h_out.value
+
+            # 构造 Layer 对象（thickness 单位为米）
             layers = [
                 Layer(
                     name=l["name"],
-                    thickness_mm=l["thickness_mm"],
+                    thickness=l["thickness_mm"] / 1000.0,
                     k_coef=l["k_coef"],
                 )
                 for l in APP_STATE.layers
             ]
 
-            # 构造 KilnParams
+            # 构造 KilnParams（烟气发射率取默认；外部对流由环境风速+外壳发射率驱动）
             params = KilnParams(
                 T_gas=APP_STATE.T_gas_C + 273.15,
                 T_env=APP_STATE.T_env_C + 273.15,
                 v_gas=APP_STATE.v_gas,
                 L_char=APP_STATE.L_char,
-                emiss_gas=APP_STATE.emiss_gas,
-                emiss_wall=APP_STATE.emiss_wall,
-                h_out=APP_STATE.h_out,
+                eps_wall=APP_STATE.emiss_wall,
+                eps_shell=APP_STATE.emiss_wall,
+                v_amb=max(0.5, APP_STATE.h_out / 2.0),
             )
 
-            # 调用计算
-            sol, x_mm, T_c = solve_wall(layers, params)
+            # 调用计算（返回单个 WallSolution）
+            sol = solve_wall(layers, params)
 
             # 保存结果
             APP_STATE.last_result = {
                 "solution": sol,
-                "x_mm": x_mm,
-                "T_c": T_c,
             }
 
             # 跳转到结果页
             self.manager.current = 'result'
-            print("✅ 计算完成")
+            print("计算完成")
 
         except Exception as e:
-            print(f"❌ 计算失败: {e}")
+            import traceback
+            traceback.print_exc()
+            self._show_error(f"计算失败: {e}")
+
+    def _show_error(self, message):
+        """错误弹窗（Popup），确保错误对用户可见"""
+        from kivy.uix.popup import Popup
+        content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
+        content.add_widget(Label(text=message, color=(1, 0.3, 0.3, 1)))
+        btn_ok = Button(
+            text="确定",
+            size_hint_y=None,
+            height=dp(48),
+            background_color=MD3_PRIMARY,
+        )
+        content.add_widget(btn_ok)
+        popup = Popup(title="错误", content=content, size_hint=(0.8, 0.4))
+        btn_ok.bind(on_press=popup.dismiss)
+        popup.open()
 
 # ============ 衬层管理屏（独立页）============
 class LayerManagerScreen(Screen):
@@ -267,7 +280,7 @@ class LayerManagerScreen(Screen):
         header = BoxLayout(size_hint_y=None, height=dp(60), padding=dp(10))
 
         back_btn = Button(
-            text="← 返回",
+            text="< 返回",
             size_hint_x=0.3,
             background_color=MD3_PRIMARY,
             on_press=self._go_back,
@@ -275,7 +288,7 @@ class LayerManagerScreen(Screen):
         header.add_widget(back_btn)
 
         title = Label(
-            text="🧱 衬层配置",
+            text="衬层配置",
             color=MD3_PRIMARY,
             font_size=dp(20),
         )
@@ -373,7 +386,7 @@ class ResultScreen(Screen):
         header = BoxLayout(size_hint_y=None, height=dp(60), padding=dp(10))
 
         back_btn = Button(
-            text="← 返回",
+            text="< 返回",
             size_hint_x=0.3,
             background_color=MD3_PRIMARY,
             on_press=self._go_back,
@@ -381,7 +394,7 @@ class ResultScreen(Screen):
         header.add_widget(back_btn)
 
         title = Label(
-            text="📊 计算结果",
+            text="计算结果",
             color=MD3_PRIMARY,
             font_size=dp(20),
         )
@@ -491,7 +504,7 @@ class ResultScreen(Screen):
 
         # ponytail: 温度曲线绘制待实现（可用 kivy.garden.graph 或 matplotlib）
         curve_placeholder = Label(
-            text="📈 温度曲线（待实现）",
+            text="温度曲线（待实现）",
             color=MD3_ON_SURFACE,
             size_hint_y=None,
             height=dp(200),

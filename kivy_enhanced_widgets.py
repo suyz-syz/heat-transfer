@@ -107,7 +107,7 @@ class StepperRow(BoxLayout):
 
         # 减少按钮
         self.btn_minus = Button(
-            text="−",
+            text="-",
             size_hint_x=0.15,
             background_color=MD3_PRIMARY,
             color=MD3_ON_PRIMARY,
@@ -204,7 +204,7 @@ class LayerCard(FloatLayout):
 
         # 删除按钮（隐藏在右侧）
         self.delete_btn = Button(
-            text="🗑️ 删除",
+            text="删除",
             size_hint=(0.3, 1),
             pos_hint={'right': 1, 'y': 0},
             background_color=(0, 0, 0, 0),
@@ -407,12 +407,12 @@ class AccordionSection(BoxLayout):
 
     特性：
     - 标题栏可点击展开/收起
-    - 内容区动画过渡
-    - 箭头图标旋转
+    - 内容高度随子组件自动增长（minimum_height 绑定）
+    - 箭头图标切换
     """
-    title = StringProperty("分组")
-    expanded = BooleanProperty(True)
-    content_height = NumericProperty(dp(200))
+
+    # 内容区当前高度（展开=子组件最小高度；收起=0）
+    content_height = NumericProperty(0)
 
     def __init__(self, title="分组", expanded=True, **kwargs):
         super().__init__(orientation='vertical', size_hint_y=None, **kwargs)
@@ -453,12 +453,14 @@ class AccordionSection(BoxLayout):
         self.header.add_widget(self.arrow_btn)
         self.add_widget(self.header)
 
-        # 内容区容器（可折叠）
+        # 内容区容器（高度 = content_height，不再被子组件溢出）
         self.content_container = BoxLayout(
             orientation='vertical',
             size_hint_y=None,
-            height=self.content_height if self.expanded else 0,
+            height=self.content_height,
         )
+        self.content_container.bind(minimum_height=self._on_min_height)
+
         with self.content_container.canvas.before:
             Color(*MD3_SURFACE)
             self.content_rect = Rectangle(
@@ -467,8 +469,18 @@ class AccordionSection(BoxLayout):
         self.content_container.bind(pos=self._update_content_rect, size=self._update_content_rect)
         self.add_widget(self.content_container)
 
-        # 计算总高度
-        self.height = dp(56) + (self.content_height if self.expanded else 0)
+        # 本组件高度 = 标题栏 + 内容区（size_hint_y=None，由 property 驱动）
+        self.bind(content_height=self._update_height)
+        self._update_height()
+
+    def _on_min_height(self, instance, value):
+        """子组件最小高度变化：展开时跟随，收起时保持 0"""
+        if self.expanded:
+            self.content_height = value
+
+    def _update_height(self, *args):
+        """展开时高度 = 标题 + 内容；收起时仅标题"""
+        self.height = dp(56) + self.content_height
 
     def add_content(self, widget):
         """添加内容组件"""
@@ -477,18 +489,15 @@ class AccordionSection(BoxLayout):
     def _toggle(self, instance):
         """展开/收起"""
         self.expanded = not self.expanded
-        target_height = self.content_height if self.expanded else 0
-
-        # 动画
-        anim = Animation(height=target_height, duration=0.3)
-        anim.start(self.content_container)
-
+        if self.expanded:
+            # 展开：恢复为子组件最小高度
+            self.content_height = self.content_container.minimum_height
+        else:
+            # 收起：内容高度归零，避免内容区覆盖/重叠
+            self.content_container.height = 0
+            self.content_height = 0
         # 更新箭头
         self.arrow_btn.text = "▼" if self.expanded else "▶"
-
-        # 更新总高度
-        self.height = dp(56) + target_height
-
         trigger_haptic(30)
 
     def _update_header_rect(self, *args):
