@@ -331,6 +331,10 @@ def validate_params(params: KilnParams) -> None:
         raise ValueError("窑长需为正值")
     if params.P_total <= 0:
         raise ValueError("窑内压力需为正值")
+    if params.T_gas <= 0 or params.T_env <= 0:
+        raise ValueError("温度必须使用绝对温度 K，且需大于 0")
+    if params.T_env_rad is not None and params.T_env_rad <= 0:
+        raise ValueError("T_env_rad 必须使用绝对温度 K，且需大于 0")
     if not (0 < params.CO2 < 1):
         raise ValueError("CO2 体积分数需在 0~1 之间")
     if not (0 < params.H2O < 1):
