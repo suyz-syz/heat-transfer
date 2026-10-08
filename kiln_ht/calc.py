@@ -24,6 +24,10 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from .gas import GasMixture, DEFAULT_GAS
+from .properties import get_gas_properties
+from .radiation import get_gas_radiation
+
 # ============ 物理常数 ============
 SIGMA = 5.670374419e-8      # Stefan-Boltzmann 常数 W/(m²·K⁴)
 GRAVITY = 9.81              # 重力加速度 m/s²
@@ -84,11 +88,19 @@ class KilnParams:
     P_total: float = 1.01325    # 窑内压力 (bar)
     CO2: float = 0.20           # CO2 体积分数
     H2O: float = 0.08           # H2O 体积分数
+    N2: float = 0.69            # N2 体积分数
+    O2: float = 0.03            # O2 体积分数
+    radiation_model: str = "wsgg" # "wsgg" 或 "leckner"
     eps_wall: float = 0.85      # 内壁发射率
     T_env: float = 298.15       # 环境空气温度 (K)，默认 25 ℃
     T_env_rad: Optional[float] = None  # 环境平均辐射温度 (K)，None 表示采用 T_env
     v_amb: float = 2.0          # 环境风速 (m/s)
     eps_shell: float = 0.85     # 外壳发射率
+
+    @property
+    def gas_mixture(self) -> GasMixture:
+        """返回四组分摩尔分数混合物。"""
+        return GasMixture(CO2=self.CO2, H2O=self.H2O, N2=self.N2, O2=self.O2)
 
 
 @dataclass
@@ -146,16 +158,13 @@ class WallSolution:
 
 # ============ 空气物性 ============
 def air_properties(T_k: float, P_pa: float = 101325.0) -> Tuple[float, float, float]:
-    """温度依赖的空气物性（Sutherland 拟合）。
-
-    返回 (导热系数 lam W/m·K, Prandtl 数 Pr, 运动黏度 nu m²/s)。
-    """
+    """兼容旧 API：返回空气的 (k, Pr, nu)；核心求解器已使用四组分烟气物性。"""
     if T_k <= 0.0 or P_pa <= 0.0:
         raise ValueError("气体温度和绝对压力必须为正")
-    mu = 1.458e-6 * T_k ** 1.5 / (T_k + 110.4)   # 动力黏度 (Pa·s)
-    rho = P_pa / (287 * T_k)                      # 密度 (kg/m³)，空气近似
+    mu = 1.458e-6 * T_k ** 1.5 / (T_k + 110.4)
+    rho = P_pa / (287.0 * T_k)
     nu = mu / rho
-    lam = 2.495e-3 * T_k ** 1.5 / (T_k + 194)    # 导热系数 (W/m·K)
+    lam = 2.495e-3 * T_k ** 1.5 / (T_k + 194.0)
     return lam, 0.71, nu
 
 
@@ -183,98 +192,50 @@ def integral_mean_k(k_coef: Tuple[float, float, float], T_h_c: float, T_c_c: flo
 
 
 # ============ 内侧换热 ============
-def inner_convection_h(v: float, D: float, L: float, T_f: float, P_pa: float = 101325.0) -> float:
-    """管内强制对流换热系数 (W/m²·K)（Gnielinski + 入口效应修正）。
-
-    - Re >= 10000：Gnielinski（充分发展湍流）
-    - Re <  2300：层流充分发展恒定 Nu=3.66
-    - 2300~10000：线性平滑过渡
-    - 平均 Nu 乘以入口效应修正因子 (1+(D/L)^(2/3))
-    """
-    lam, Pr, nu = air_properties(T_f, P_pa=P_pa)
-    Re = v * D / nu
-    if Re >= 10000:
-        f = (0.79 * math.log(Re) - 1.64) ** -2        # Petukhov 摩擦因子
-        Nu_fd = (f / 8.0) * (Re - 1000) * Pr / (
-            1 + 12.7 * math.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1))
-    elif Re <= 2300:
+def inner_convection_h(v: float, D: float, L: float, T_f: float,
+                       P_pa: float = 101325.0, gas: Optional[GasMixture] = None) -> float:
+    """四组分烟气 Gnielinski 工程换热系数；T[K], P[Pa], h[W/(m² K)]。"""
+    if min(v, D, L, T_f, P_pa) <= 0:
+        raise ValueError("速度、尺度、温度和压力必须为正")
+    props = get_gas_properties(T_f, P_pa, gas or DEFAULT_GAS)
+    Re = v * D / (props.mu / props.rho)
+    Pr = props.Pr
+    if Re >= 10000.0:
+        f = (0.79 * math.log(Re) - 1.64) ** -2
+        Nu_fd = (f / 8.0) * (Re - 1000.0) * Pr / (
+            1.0 + 12.7 * math.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1.0))
+    elif Re <= 2300.0:
         Nu_fd = 3.66
     else:
-        # 过渡区（2300~10000）线性插值，避免层流/湍流突变
         f = (0.79 * math.log(Re) - 1.64) ** -2
-        Nu_turb = (f / 8.0) * (Re - 1000) * Pr / (
-            1 + 12.7 * math.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1))
-        x = (Re - 2300) / (10000 - 2300)
+        Nu_turb = (f / 8.0) * (Re - 1000.0) * Pr / (
+            1.0 + 12.7 * math.sqrt(f / 8.0) * (Pr ** (2.0 / 3.0) - 1.0))
+        x = (Re - 2300.0) / 7700.0
         Nu_fd = 3.66 + x * (Nu_turb - 3.66)
-    # 入口效应修正（有限长管内平均 Nu）
-    Nu = Nu_fd * (1.0 + (D / L) ** (2.0 / 3.0))
-    return Nu * lam / D
+    return Nu_fd * (1.0 + (D / L) ** (2.0 / 3.0)) * props.k / D
 
 
-def gas_emissivity(
-    T_g: float,
-    pCO2: float,
-    pH2O: float,
-    beam: float,
-    P_total: float = DEFAULT_P_TOTAL,
-) -> float:
-    """水泥窑烟气辐射发射率（Hottel/Leckner 灰气体拟合）。
-
-    pCO2/pH2O 为体积分数 (0~1)；beam 为气体平均射线程长 (m)，圆柱空腔取 0.95*D；
-    P_total 为系统总压 (bar)，默认 1.01325 bar（1 atm）。
-
-    Leckner 相关式采用分压×射线长度 p·L (bar·m)，故先由体积分数×总压求得各组元分压。
-    说明：相关式可靠范围 T_g > ~500 K 且 pL < 5 bar·m；
-         低温烟气辐射贡献微弱，500~600K 线性过渡避免发射率非物理跳变。
-    """
-    pCO2 = max(pCO2, 1e-4)
-    pH2O = max(pH2O, 1e-4)
-    P_CO2 = pCO2 * P_total          # 分压 (bar)
-    P_H2O = pH2O * P_total          # 分压 (bar)
-    pL_CO2 = P_CO2 * beam           # bar·m
-    pL_H2O = P_H2O * beam           # bar·m
-    # pL 超出相关式范围时保守截断
-    if pL_CO2 + pL_H2O > 5.0:
-        pL_CO2 = min(pL_CO2, 4.0)
-        pL_H2O = min(pL_H2O, 1.0)
-
-    def _leckner(T: float) -> float:
-        Td = T / 1000.0
-        e_CO2 = 0.2257 * Td ** -1.5 * pL_CO2 ** 0.4 / (
-            1 + 0.2757 * Td ** -0.5 * pL_CO2 ** 0.5)
-        e_H2O = 0.569 * Td ** -0.5 * pL_H2O ** 0.3 / (
-            1 + 0.569 * Td ** -0.5 * pL_H2O ** 0.5)
-        de = 0.0089 * Td ** -1.5 * (pL_CO2 + pL_H2O) ** 0.5 / (
-            1 + 0.0089 * Td ** -1.5 * (pL_CO2 + pL_H2O) ** 0.5)
-        return min(1.0, max(0.0, e_CO2 + e_H2O - de))
-
-    if T_g < 600.0:
-        # 相关式低温段拟合发散且辐射贡献微弱：500K 以下取近似值，500~600K 线性过渡
-        if T_g <= 500.0:
-            return 0.02
-        eg_600 = _leckner(600.0)
-        frac = (T_g - 500.0) / 100.0
-        return 0.02 + frac * (eg_600 - 0.02)
-    return _leckner(T_g)
+def gas_emissivity(T_g: float, pCO2: float, pH2O: float, beam: float,
+                   P_total: float = DEFAULT_P_TOTAL) -> float:
+    """兼容旧 API；pCO2/pH2O 为摩尔分数，P_total 为 bar。"""
+    result = get_gas_radiation(
+        T_g, max(300.0, T_g - 1.0),
+        pCO2 * P_total * 1.0e5, pH2O * P_total * 1.0e5,
+        beam, model="leckner")
+    return result.emissivity
 
 
-def inner_radiation_h(
-    T_g: float,
-    T_w: float,
-    eps_wall: float,
-    beam: float,
-    pCO2: float,
-    pH2O: float,
-    P_total: float = DEFAULT_P_TOTAL,
-) -> Tuple[float, float]:
-    """烟气-内壁辐射等效换热系数 (W/m²·K)（灰气体-灰壁面空腔模型）。
+def inner_radiation_h(T_g: float, T_w: float, eps_wall: float, beam: float,
+                       pCO2: float, pH2O: float,
+                       P_total: float = DEFAULT_P_TOTAL,
+                       model: str = "wsgg") -> Tuple[float, float]:
+    """统一烟气辐射接口；pCO2/pH2O 为摩尔分数，P_total 为 bar。"""
+    result = get_gas_radiation(
+        T_g, T_w, pCO2 * P_total * 1.0e5, pH2O * P_total * 1.0e5,
+        beam, eps_wall=eps_wall, model=model)
+    return result.h_rad, result.emissivity
 
-    返回 (h_rad, eg)：h_rad 等效辐射换热系数，eg 烟气发射率。
-    """
-    eg = gas_emissivity(T_g, pCO2, pH2O, beam, P_total)
-    h_rad = SIGMA * (T_g ** 2 + T_w ** 2) * (T_g + T_w) / (
-        1.0 / eg + 1.0 / eps_wall - 1.0)
-    return h_rad, eg
+
 
 
 # ============ 外侧换热 ============
@@ -339,8 +300,13 @@ def validate_params(params: KilnParams) -> None:
         raise ValueError("T_env_rad 必须使用绝对温度 K，且需大于 0")
     if not (0 < params.CO2 < 1):
         raise ValueError("CO2 体积分数需在 0~1 之间")
-    if not (0 < params.H2O < 1):
-        raise ValueError("H2O 体积分数需在 0~1 之间")
+    fractions = [params.CO2, params.H2O, params.N2, params.O2]
+    if any(x < 0 or x >= 1 for x in fractions):
+        raise ValueError("CO2/H2O/N2/O2 体积分数必须在 [0,1) 内")
+    if abs(sum(fractions) - 1.0) > 1e-8:
+        raise ValueError("CO2+H2O+N2+O2 摩尔分数必须等于 1")
+    if params.radiation_model.lower() not in ("wsgg", "leckner"):
+        raise ValueError("radiation_model 必须为 wsgg 或 leckner")
     if not (0 < params.eps_wall <= 1):
         raise ValueError("内壁发射率需在 0~1 之间")
     if params.v_amb < 0:
@@ -445,9 +411,9 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
 
         # 内侧：对流 + 烟气辐射
         T_f = (T_g + T_w1) / 2
-        h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f, P_pa=params.P_total * 1.0e5)
+        h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f, P_pa=params.P_total * 1.0e5, gas=params.gas_mixture)
         h_rad_in, eg = inner_radiation_h(
-            T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total)
+            T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total, model=params.radiation_model)
         h_in = h_conv_in + h_rad_in
 
         # 外侧：自然对流 + 强制对流 采用 Churchill-Usagi 组合相关式（指数 3.5）
