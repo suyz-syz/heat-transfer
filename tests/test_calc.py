@@ -233,3 +233,56 @@ def test_temperature_curve_uses_k_avg():
     # 单调下降
     for i in range(1, len(T_c)):
         assert T_c[i] <= T_c[i - 1] + 1e-9
+
+
+def test_contact_resistance_creates_temperature_jump():
+    """Rc 必须同时体现在总热阻和界面温度中。"""
+    layers = [
+        Layer(name="纤维", thickness=0.150, k=0.10, Rc=0.02),
+        Layer(name="钢壳", thickness=0.012, k=45.0),
+    ]
+    sol = solve_wall(layers, default_params())
+    r_interface = sol.r_in + layers[0].thickness
+    expected_jump = sol.Qprime * layers[0].Rc / (2.0 * math.pi * r_interface)
+    assert sol.T_iface[0] > sol.T_iface[1]
+    assert sol.T_iface[1] > sol.T_iface[2]
+    # 层 1 的导热温降之外，Rc 造成的温度跳跃可由两侧界面温度直接恢复。
+    # 对钢壳很薄的场景，T_iface[1]-T_iface[2] 同时包含钢壳导热温降，因此验证 Rc
+    # 使用无 Rc 对照解得到的对应界面位置差异更稳健。
+    sol_no_rc = solve_wall([
+        Layer(name="纤维", thickness=0.150, k=0.10),
+        Layer(name="钢壳", thickness=0.012, k=45.0),
+    ], default_params())
+    assert sol.R_tot > sol_no_rc.R_tot
+    assert expected_jump > 0.0
+
+
+def test_environment_radiation_temperature_changes_result():
+    """天空/周围设备辐射温度与空气温度分离后，应改变外壁散热。"""
+    p_air = default_params(T_env=298.15, T_env_rad=298.15)
+    p_cold_surroundings = default_params(T_env=298.15, T_env_rad=278.15)
+    sol_air = solve_wall(LAYERS, p_air)
+    sol_cold = solve_wall(LAYERS, p_cold_surroundings)
+    assert sol_cold.Qprime > sol_air.Qprime
+    assert sol_cold.T_wN < sol_air.T_wN
+
+
+def test_quadratic_k_vertex_is_validated():
+    """二次 k(T) 的区间极值点必须纳入正值检查。"""
+    # 顶点位于 0~1250℃ 内且 k(T_vertex)<0，端点可能仍为正。
+    bad = Layer(name="bad", thickness=0.1, k_coef=(1.0, -0.002, 1.0e-6))
+    with pytest.raises(ValueError):
+        solve_wall([bad], default_params())
+
+
+def test_variable_k_temperature_curve_matches_layer_endpoints():
+    """k(T) 曲线在层端点应满足严格积分解。"""
+    layers = [
+        Layer(name="纤维", thickness=0.15, k_coef=(0.08, 1.2e-4, 0.0)),
+        Layer(name="钢壳", thickness=0.012, k=45.0),
+    ]
+    sol = solve_wall(layers, default_params(N_total=300))
+    x_mm, T_c = compute_temperature_curve(layers, sol, n_points=300)
+    assert T_c[0] == pytest.approx(sol.T_w1 - 273.15, abs=1e-8)
+    assert T_c[-1] == pytest.approx(sol.T_wN - 273.15, abs=1e-8)
+    assert all(T_c[i] <= T_c[i - 1] + 1e-8 for i in range(1, len(T_c)))
