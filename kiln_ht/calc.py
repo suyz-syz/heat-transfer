@@ -195,12 +195,18 @@ def integral_mean_k(k_coef: Tuple[float, float, float], T_h_c: float, T_c_c: flo
 def inner_convection_h(v: float, D: float, L: float, T_f: float,
                        P_pa: float = 101325.0, gas: Optional[GasMixture] = None,
                        use_air: bool = False) -> float:
-    """四组分烟气 Gnielinski 工程换热系数；T[K], P[Pa], h[W/(m² K)]。"""
+    """Gnielinski 工程换热系数；T[K]、P[Pa]、h[W/(m² K)]。"""
     if min(v, D, L, T_f, P_pa) <= 0:
         raise ValueError("速度、尺度、温度和压力必须为正")
-    props = get_gas_properties(T_f, P_pa, gas or DEFAULT_GAS)
-    Re = v * D / (props.mu / props.rho)
-    Pr = props.Pr
+    if use_air:
+        lam, Pr, nu = air_properties(T_f, P_pa=P_pa)
+        k_gas = lam
+    else:
+        props = get_gas_properties(T_f, P_pa, gas or DEFAULT_GAS)
+        Pr = props.Pr
+        nu = props.mu / props.rho
+        k_gas = props.k
+    Re = v * D / nu
     if Re >= 10000.0:
         f = (0.79 * math.log(Re) - 1.64) ** -2
         Nu_fd = (f / 8.0) * (Re - 1000.0) * Pr / (
