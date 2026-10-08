@@ -390,6 +390,8 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
             raise ValueError(f"第 {i + 1} 层导热系数需为正值")
         if layer.Rc < 0:
             raise ValueError(f"第 {i + 1} 层接触热阻 Rc 不能为负值")
+    if layers[-1].Rc != 0.0:
+        raise ValueError("最后一层的 Rc 必须为 0；Rc 仅表示相邻固体层之间的接触热阻")
     validate_layer_conductivity(layers, params)
 
     r_in = params.L_char / 2.0
@@ -451,8 +453,15 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         h_nat_out = outer_natural_h(T_wN, T_a, D_out)
         h_for_out = outer_forced_h(params.v_amb, T_wN, T_a, D_out)
         h_conv_out = (h_nat_out ** 3.5 + h_for_out ** 3.5) ** (1.0 / 3.5)
-        h_rad_out = outer_radiation_h(T_wN, params.T_env if params.T_env_rad is None else params.T_env_rad, params.eps_shell)
-        h_out = h_conv_out + h_rad_out
+        T_sur = params.T_env if params.T_env_rad is None else params.T_env_rad
+        h_rad_out = outer_radiation_h(T_wN, T_sur, params.eps_shell)
+
+        # 外侧总热流是对流和辐射之和；当 T_env_rad != T_env 时，
+        # 不能直接把 h_conv+h_rad 乘以 (T_wN-T_env)。
+        q_out_surface = h_conv_out * (T_wN - T_a) + h_rad_out * (T_wN - T_sur)
+        if q_out_surface <= 0.0:
+            raise ValueError("外壁净散热通量必须为正，请检查壁温和环境边界")
+        h_out = q_out_surface / (T_wN - T_a)
 
         # 单位长度热阻网络（含 k(T) 导热热阻 + 层间接触热阻）
         R_in = 1.0 / (h_in * 2.0 * math.pi * r_in)
@@ -475,7 +484,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         T_wN = T_wN + relax * corrN
         prev_corr1 = corr1
         Q_in = h_in * (T_g - T_w1) * 2.0 * math.pi * r_in
-        Q_out = h_out * (T_wN - T_a) * 2.0 * math.pi * r_out
+        Q_out = q_out_surface * 2.0 * math.pi * r_out
         energy_rel = abs(Q_in - Q_out) / max(abs(Qprime), 1.0)
         if max(abs(corr1), abs(corrN)) < WALL_TOL and energy_rel < ENERGY_REL_TOL:
             break
