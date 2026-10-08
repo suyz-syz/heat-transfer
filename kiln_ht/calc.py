@@ -145,13 +145,15 @@ class WallSolution:
 
 
 # ============ 空气物性 ============
-def air_properties(T_k: float) -> Tuple[float, float, float]:
+def air_properties(T_k: float, P_pa: float = 101325.0) -> Tuple[float, float, float]:
     """温度依赖的空气物性（Sutherland 拟合）。
 
     返回 (导热系数 lam W/m·K, Prandtl 数 Pr, 运动黏度 nu m²/s)。
     """
+    if T_k <= 0.0 or P_pa <= 0.0:
+        raise ValueError("气体温度和绝对压力必须为正")
     mu = 1.458e-6 * T_k ** 1.5 / (T_k + 110.4)   # 动力黏度 (Pa·s)
-    rho = 101325 / (287 * T_k)                   # 密度 (kg/m³)，空气近似
+    rho = P_pa / (287 * T_k)                      # 密度 (kg/m³)，空气近似
     nu = mu / rho
     lam = 2.495e-3 * T_k ** 1.5 / (T_k + 194)    # 导热系数 (W/m·K)
     return lam, 0.71, nu
@@ -181,7 +183,7 @@ def integral_mean_k(k_coef: Tuple[float, float, float], T_h_c: float, T_c_c: flo
 
 
 # ============ 内侧换热 ============
-def inner_convection_h(v: float, D: float, L: float, T_f: float) -> float:
+def inner_convection_h(v: float, D: float, L: float, T_f: float, P_pa: float = 101325.0) -> float:
     """管内强制对流换热系数 (W/m²·K)（Gnielinski + 入口效应修正）。
 
     - Re >= 10000：Gnielinski（充分发展湍流）
@@ -189,7 +191,7 @@ def inner_convection_h(v: float, D: float, L: float, T_f: float) -> float:
     - 2300~10000：线性平滑过渡
     - 平均 Nu 乘以入口效应修正因子 (1+(D/L)^(2/3))
     """
-    lam, Pr, nu = air_properties(T_f)
+    lam, Pr, nu = air_properties(T_f, P_pa=P_pa)
     Re = v * D / nu
     if Re >= 10000:
         f = (0.79 * math.log(Re) - 1.64) ** -2        # Petukhov 摩擦因子
@@ -443,7 +445,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
 
         # 内侧：对流 + 烟气辐射
         T_f = (T_g + T_w1) / 2
-        h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f)
+        h_conv_in = inner_convection_h(params.v_gas, params.L_char, L, T_f, P_pa=params.P_total * 1.0e5)
         h_rad_in, eg = inner_radiation_h(
             T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total)
         h_in = h_conv_in + h_rad_in
@@ -487,7 +489,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         T_w1 = T_w1 + relax * corr1
         T_wN = T_wN + relax * corrN
         prev_corr1 = corr1
-        hci_new = inner_convection_h(params.v_gas, params.L_char, L, (T_g + T_w1) / 2.0)
+        hci_new = inner_convection_h(params.v_gas, params.L_char, L, (T_g + T_w1) / 2.0, P_pa=params.P_total * 1.0e5)
         hri_new, _ = inner_radiation_h(T_g, T_w1, params.eps_wall, beam, params.CO2, params.H2O, params.P_total)
         hco_new_nat = outer_natural_h(T_wN, T_a, D_out)
         hco_new_for = outer_forced_h(params.v_amb, T_wN, T_a, D_out)
