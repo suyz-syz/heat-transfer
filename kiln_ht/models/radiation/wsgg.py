@@ -50,7 +50,9 @@ def evaluate(T_gas: float, T_wall: float, pCO2: float, pH2O: float, L: float, ep
             lo = mid
         else:
             hi = mid
-    scale = 0.5 * (lo + hi)
+    # 第一阶段 provisional WSGG：用 Leckner 的总光学厚度确定尺度，
+    # 但保留独立四灰气体谱形。0.85 是保守的临时尺度因子；该值不是 HITEMP 拟合常数。
+    scale = 0.85 * tau_target
     eg = eps_at(scale)
     tau = -math.log(max(1e-12, 1.0 - eg))
     return WSGGResult(eg, eg, tau / L, tau, L)
