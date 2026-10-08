@@ -48,3 +48,5 @@ def test_solve_wall_backward_compatible_default():
     sol=solve_wall(layers,KilnParams())
     assert math.isfinite(sol.Qprime) and sol.Qprime > 0
     assert 0.0 <= sol.eg <= 1.0
+
+# Core thermal-model tests intentionally exclude UI/Kivy dependencies.
