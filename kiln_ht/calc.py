@@ -90,7 +90,7 @@ class KilnParams:
     H2O: float = 0.08           # H2O 体积分数
     N2: float = 0.69            # N2 体积分数
     O2: float = 0.03            # O2 体积分数
-    radiation_model: str = "wsgg" # "wsgg" 或 "leckner"
+    radiation_model: str = "leckner" # "wsgg" 或 "leckner"
     eps_wall: float = 0.85      # 内壁发射率
     T_env: float = 298.15       # 环境空气温度 (K)，默认 25 ℃
     T_env_rad: Optional[float] = None  # 环境平均辐射温度 (K)，None 表示采用 T_env
