@@ -20,6 +20,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Mapping
+import math
 
 R_UNIVERSAL = 8.31446261815324  # J/(mol K)
 
@@ -44,7 +45,7 @@ class GasMixture:
 
     def __post_init__(self) -> None:
         ys = [self.CO2, self.H2O, self.N2, self.O2]
-        if any((not isinstance(v, (int, float)) or v < 0.0) for v in ys):
+        if any((not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0.0) for v in ys):
             raise ValueError("气体组分分数必须为有限非负数")
         total = sum(ys)
         if not total > 0.0:
