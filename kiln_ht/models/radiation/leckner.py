@@ -6,6 +6,7 @@ pCO2、pH2O 输入为 Pa；内部转换为 bar·m 的 pL。
 """
 from __future__ import annotations
 import math
+from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class LecknerResult:
@@ -16,7 +17,6 @@ class LecknerResult:
     path_length: float
     model_name: str = "leckner"
 
-from dataclasses import dataclass
 
 def emissivity(T: float, pCO2: float, pH2O: float, L: float) -> float:
     if T <= 0 or L <= 0 or pCO2 < 0 or pH2O < 0:
