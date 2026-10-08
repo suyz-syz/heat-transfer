@@ -91,6 +91,7 @@ class KilnParams:
     N2: float = 0.69            # N2 体积分数
     O2: float = 0.03            # O2 体积分数
     radiation_model: str = "leckner" # "wsgg" 或 "leckner"
+    property_model: str = "mixture"   # "mixture" 或 "air"（旧基线兼容）
     eps_wall: float = 0.85      # 内壁发射率
     T_env: float = 298.15       # 环境空气温度 (K)，默认 25 ℃
     T_env_rad: Optional[float] = None  # 环境平均辐射温度 (K)，None 表示采用 T_env
@@ -314,6 +315,8 @@ def validate_params(params: KilnParams) -> None:
         raise ValueError("CO2+H2O+N2+O2 摩尔分数必须等于 1")
     if params.radiation_model.lower() not in ("wsgg", "leckner"):
         raise ValueError("radiation_model 必须为 wsgg 或 leckner")
+    if params.property_model.lower() not in ("mixture", "air"):
+        raise ValueError("property_model 必须为 mixture 或 air")
     if not (0 < params.eps_wall <= 1):
         raise ValueError("内壁发射率需在 0~1 之间")
     if params.v_amb < 0:
