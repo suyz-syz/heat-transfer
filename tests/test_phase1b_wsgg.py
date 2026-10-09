@@ -102,7 +102,7 @@ def test_hitemp_benchmark_builder_parses_standard_molecule_ids():
     raw = (
         f"{2:2d}{1:1d}{2200.123456:12.6f}{1.0e-22:10.3E}"
         f"{1.0:10.3E}{0.070:5.3f}{0.100:5.3f}{100.0000:10.4f}"
-        f"{0.70:4.2f}"
+        f"{0.70:4.2f}" + " " * 101
     )
     parsed = parse_hitemp_line(raw, Path("fixture.par"))
     assert parsed is not None
