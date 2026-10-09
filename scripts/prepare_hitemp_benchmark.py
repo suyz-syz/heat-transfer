@@ -18,7 +18,7 @@ import math
 from pathlib import Path
 from typing import Iterable
 
-MOLECULE_IDS = {"01": "H2O", "02": "CO2"}
+MOLECULE_IDS = {"1": "H2O", "2": "CO2"}
 LINE_FIELDS = [
     "molecule", "nu", "strength_ref", "lower_energy", "air_gamma",
     "self_gamma", "temp_exponent", "partition_ref", "partition_exponent", "isotope",
@@ -37,7 +37,7 @@ def parse_hitemp_line(raw: str, source: Path) -> dict | None:
     """Parse standard 160-column HITRAN/HITEMP fixed-width transition records."""
     if len(raw.rstrip("\r\n")) < 67:
         return None
-    molecule_id = raw[0:2]
+    molecule_id = raw[0:2].strip()
     molecule = MOLECULE_IDS.get(molecule_id)
     if molecule is None:
         return None
