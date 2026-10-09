@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fit WSGG to Marzouk (2025) public EM2C-SNB emissivity tables.
+"""Fit WSGG to published EM2C-SNB tables or a labelled built-in analytic surrogate.
 
 This is a literature-reference benchmark, NOT a HITEMP-LBL run. Input files are
 the .dat files from https://data.mendeley.com/datasets/x5wjzk6sjs/1
@@ -164,12 +164,12 @@ def polyval(coefficients: list[float], x: float) -> float:
     return result
 
 
-def run_fit(data: dict, n_gases: int, wall_temperature_k: float | None) -> dict:
+def run_fit(data: dict, n_gases: int, wall_temperature_k: float | None, grid_size: int = 140) -> dict:
     pl = data["pressure_pathlength_atm_m"]
     temperatures = data["temperature_K"]
     train_indices = [i for i in range(len(pl)) if i % 2 == 0]
     test_indices = [i for i in range(len(pl)) if i % 2 == 1]
-    kappas = choose_shared_kappas(data, n_gases, train_indices)
+    kappas = choose_shared_kappas(data, n_gases, train_indices, grid_size=grid_size)
     train_pl = [pl[i] for i in train_indices]
     test_pl = [pl[i] for i in test_indices]
     train_basis = basis_for(train_pl, kappas)
@@ -259,33 +259,59 @@ def run_fit(data: dict, n_gases: int, wall_temperature_k: float | None) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", action="append", required=True, type=Path,
+    parser.add_argument("--input", action="append", default=[], type=Path,
                         help="one or more published R=..._totalEmissivities_90x105.dat files")
+    parser.add_argument("--builtin", action="store_true",
+                        help="run the built-in analytic surrogate (pipeline test only; not Leckner/SNB/HITEMP ground truth)")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--wall-temperature-k", type=float, default=None,
-                        help="optional wall temperature for a clearly labelled gray flux proxy")
+    parser.add_argument("--wall-temperature-k", type=float, default=800.0,
+                        help="wall temperature for a labelled gray black-wall equivalent-flux proxy (default: 800 K)")
     args = parser.parse_args()
+    if args.builtin and args.input:
+        parser.error("--builtin cannot be combined with --input")
+    if not args.builtin and not args.input:
+        parser.error("provide --builtin or at least one --input")
     if args.wall_temperature_k is not None and (
         not math.isfinite(args.wall_temperature_k) or args.wall_temperature_k < 0
     ):
         parser.error("--wall-temperature-k must be finite and nonnegative")
     report = {
-        "benchmark": "Marzouk 2025 public EM2C-SNB emissivity dataset",
-        "doi": "10.17632/x5wjzk6sjs.1",
-        "source_url": "https://data.mendeley.com/datasets/x5wjzk6sjs/1",
-        "method": "hold out alternate pressure-pathlength samples; shared kappa across temperatures per composition",
+        "benchmark": ("built-in physics-inspired multi-gray surrogate; pipeline validation only"
+                      if args.builtin else "Marzouk 2025 public EM2C-SNB emissivity dataset"),
+        "scientific_status": (
+            "SYNTHETIC ANALYTIC SURROGATE: not an implementation of Leckner correlation, "
+            "not an EM2C SNB calculation, and not HITEMP LBL ground truth"
+            if args.builtin else
+            "Published EM2C-SNB integrated-emissivity reference; not raw HITEMP LBL"
+        ),
+        "doi": None if args.builtin else "10.17632/x5wjzk6sjs.1",
+        "source_url": None if args.builtin else "https://data.mendeley.com/datasets/x5wjzk6sjs/1",
+        "method": "hold out alternate pressure-pathlength samples; shared kappa across temperatures per dataset",
         "wall_temperature_k": args.wall_temperature_k,
+        "heat_flux_metric_definition": (
+            "gray black-wall equivalent-flux proxy: abs(delta_epsilon)*sigma*abs(Tgas^4-Twall^4); "
+            "not a general non-gray wall heat-flux solution"
+        ),
         "datasets": [],
     }
-    for path in args.input:
-        data = parse_emissivity_table(path)
+    datasets = []
+    if args.builtin:
+        datasets.append((None, generate_builtin_ground_truth()))
+    else:
+        datasets.extend((path, parse_emissivity_table(path)) for path in args.input)
+    for path, data in datasets:
+        is_builtin = path is None
         report["datasets"].append({
-            "source_file": path.name,
+            "source_file": data["source_file"] if is_builtin else path.name,
+            "ground_truth_model": data.get("ground_truth_model"),
             "temperature_range_K": [min(data["temperature_K"]), max(data["temperature_K"])],
             "pressure_pathlength_range_atm_m": [
                 min(data["pressure_pathlength_atm_m"]), max(data["pressure_pathlength_atm_m"])
             ],
-            "results": [run_fit(data, n, args.wall_temperature_k) for n in (3, 4, 5)],
+            "results": [
+                run_fit(data, n, args.wall_temperature_k, grid_size=60 if is_builtin else 140)
+                for n in (3, 4, 5)
+            ],
         })
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
