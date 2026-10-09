@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install --upgrade pip pytest
-      - run: python -m pytest tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py tests/test_phase1b_wsgg.py -q
+      - run: python -m pytest tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py tests/test_phase1b_wsgg.py tests/test_phase2_architecture.py -q
       - name: Generate built-in WSGG surrogate report
         run: >-
           python scripts/benchmark_literature_emissivity.py
