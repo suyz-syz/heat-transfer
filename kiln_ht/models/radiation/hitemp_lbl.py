@@ -79,12 +79,13 @@ def _partition_ratio(
 ) -> float:
     """Return Q(Tref)/Q(T); log-log interpolate validated TIPS tabulations.
 
-    Keys are isotope identifiers when present, otherwise molecule names. Tables
-    must cover both Tref and requested T; extrapolation is deliberately rejected.
+    Keys are "MOLECULE:isotope" (for example "CO2:1") when isotope is present,
+    otherwise molecule names. Tables must cover both Tref and requested T;
+    extrapolation is deliberately rejected.
     """
     if partition_sums is None:
         return (T_REF / temperature) ** line.partition_exponent
-    key = line.isotope or line.molecule.upper()
+    key = f"{line.molecule.upper()}:{line.isotope}" if line.isotope else line.molecule.upper()
     table = partition_sums.get(key)
     if not table or len(table) < 2:
         raise ValueError(f"missing partition-sum table with >=2 points for {key}")
