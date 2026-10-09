@@ -34,11 +34,11 @@ The CSV must be a documented conversion from a named HITEMP release, not hand-en
 
 | Item | Result |
 |---|---|
-| CI software regression | 64 tests passed on the prior code state; later physical-unit and spectral-flux changes are awaiting their own final CI result |
+| CI software regression | **67 passed** on commit `5750c0ba7eb78b0a026c6dd8636f87bd70556130` (GitHub Actions run 37863445652) |
 | Synthetic WSGG recovery | Software test only; not evidence of HITEMP accuracy |
-| LBL line-strength unit conversion | Corrected and covered by a new analytical unit test; CI pending |
-| TIPS table interpolation / no extrapolation | Added; CI pending |
-| Spectral net flux integration | Added; CI pending |
+| LBL line-strength unit conversion | Corrected and covered by an analytical unit test; CI passed |
+| TIPS table interpolation / no extrapolation | Added and tested; CI passed |
+| Spectral net flux integration | Added and tested; CI passed |
 | Actual HITEMP CO2/H2O benchmark | **Not run — source data not supplied/available in this workspace** |
 | 300–2400 K × 0.1–10 atm × CO2/H2O composition sweep | **Not run on real spectral data** |
 | Mean / maximum relative heat-flux error | **Not available; must not be fabricated** |
