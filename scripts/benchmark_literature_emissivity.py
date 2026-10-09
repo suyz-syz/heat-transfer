@@ -16,7 +16,6 @@ abs(Tgas**4 - Twall**4). It is NOT a general non-gray wall heat-flux solution.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import math
 import statistics
@@ -33,21 +32,20 @@ def parse_emissivity_table(path: Path) -> dict:
     with path.open(encoding="utf-8-sig", errors="strict") as stream:
         for line_no, line in enumerate(stream, 1):
             fields = line.replace(",", " ").split()
-            if len(fields) < 3:
+            # Published data records have exactly three numeric fields
+            # (pressure-pathlength, temperature, emissivity). Ignore metadata
+            # lines rather than scanning arbitrary numeric substrings.
+            if len(fields) != 3:
                 continue
-            # The source file contains descriptive metadata before its numeric
-            # table. Only physical records have T on the published 300..2900 K grid.
-            for start in range(len(fields) - 2):
-                try:
-                    pl, temp, eps = map(float, fields[start:start + 3])
-                except ValueError:
-                    continue
-                if (pl > 0 and TEMPERATURE_MIN <= temp <= TEMPERATURE_MAX
-                        and abs((temp - TEMPERATURE_MIN) / 25.0 -
-                                round((temp - TEMPERATURE_MIN) / 25.0)) < 1e-8
-                        and 0.0 <= eps <= 1.0):
-                    rows.append((pl, temp, eps, line_no))
-                    break
+            try:
+                pl, temp, eps = map(float, fields)
+            except ValueError:
+                continue
+            if (pl > 0 and TEMPERATURE_MIN <= temp <= TEMPERATURE_MAX
+                    and abs((temp - TEMPERATURE_MIN) / 25.0 -
+                            round((temp - TEMPERATURE_MIN) / 25.0)) < 1e-8
+                    and 0.0 <= eps <= 1.0):
+                rows.append((pl, temp, eps, line_no))
     if not rows:
         raise ValueError(f"no valid emissivity records found in {path}")
     by_temp: dict[float, dict[float, float]] = {}
