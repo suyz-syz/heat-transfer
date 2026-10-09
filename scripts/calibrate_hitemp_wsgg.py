@@ -134,7 +134,7 @@ def run_calibration(
                 "sample_count": fitted.samples,
                 "closure_sum_weights": sum(fitted.weights),
                 "holdout": {
-                    "method": "every fifth path-length sample held out from refit is NOT performed; metrics below are in-sample",
+                    "performed": False,\n                    "reason": "no independent holdout; metrics below are in-sample",
                     "in_sample_rmse": math.sqrt(sum(e * e for e in errors) / len(errors)),
                     "in_sample_max_abs_error": max(abs(e) for e in errors),
                 },
