@@ -92,3 +92,23 @@ def test_spectral_net_flux_is_finite_and_positive_for_hot_gas():
     )
     assert math.isfinite(q)
     assert q > 0
+
+
+def test_hitemp_benchmark_builder_parses_standard_molecule_ids():
+    from pathlib import Path
+    from scripts.prepare_hitemp_benchmark import parse_hitemp_line
+
+    # Standard fixed-width identifiers are right-justified (" 2" for CO2).
+    raw = (
+        f"{2:2d}{1:1d}{2200.123456:12.6f}{1.0e-22:10.3E}"
+        f"{1.0:10.3E}{0.070:5.3f}{0.100:5.3f}{100.0000:10.4f}"
+        f"{0.70:4.2f}"
+    )
+    parsed = parse_hitemp_line(raw, Path("fixture.par"))
+    assert parsed is not None
+    assert parsed["molecule"] == "CO2"
+    assert parsed["isotope"] == "1"
+    assert parsed["nu"] == pytest.approx(2200.123456)
+    assert parsed["strength_ref"] == pytest.approx(1.0e-22)
+    assert parsed["lower_energy"] == pytest.approx(100.0)
+    assert parsed["temp_exponent"] == pytest.approx(0.70)
