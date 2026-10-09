@@ -122,6 +122,7 @@ def test_literature_emissivity_parser_and_fit_smoke(tmp_path):
     temperatures = [300.0, 600.0, 900.0, 1200.0, 1500.0]
     with source.open("w", encoding="utf-8") as stream:
         stream.write("Synthetic parser fixture for software testing only; not literature data.\n")
+        stream.write("90 105 0.01 300 2900 metadata fields must be ignored\n")
         for pl in pls:
             for temp in temperatures:
                 eps = 0.2 * (1.0 - math.exp(-0.8 * pl)) + 0.3 * (
