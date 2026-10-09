@@ -264,7 +264,7 @@ def main() -> None:
     parser.add_argument("--builtin", action="store_true",
                         help="run the built-in analytic surrogate (pipeline test only; not Leckner/SNB/HITEMP ground truth)")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--wall-temperature-k", type=float, default=800.0,
+    parser.add_argument("--wall-temperature-k", type=float, default=None,
                         help="wall temperature for a labelled gray black-wall equivalent-flux proxy (default: 800 K)")
     args = parser.parse_args()
     if args.builtin and args.input:
