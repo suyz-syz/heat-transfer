@@ -215,15 +215,57 @@ def gas_emissivity_from_spectrum(
 
 
 def spectral_net_radiative_flux(
-    absorption: Sequence[float], wavenumbers_cm: Sequence[float],
-    gas_temperature_K: float, wall_temperature_K: float,
+    absorption_coefficients_m_inv: Sequence[float],
+    wavenumbers_cm_inv: Sequence[float],
+    gas_temperature_K: float,
+    wall_temperature_K: float,
+    path_length_m: float,
     wall_emissivity: float = 1.0,
 ) -> float:
-    """Net gas-to-wall radiative flux [W/m2] over the supplied spectral band.
+    """Net gas-to-wall radiative heat flux [W/m2] over the supplied band.
 
-    Uses a gray, opaque wall with constant emissivity and a non-scattering,
-    isothermal absorbing/emitting slab. Spectral gas emissivity is 1-exp(-alpha L)
-    only if absorption already represents alpha*path; therefore this function
-    accepts optical-depth values, not absorption coefficients.
+    Assumes a uniform, isothermal, non-scattering slab and an opaque gray wall.
+    Spectral exchange factor is eps_g*eps_w/(eps_g+eps_w-eps_g*eps_w).
+    The returned flux covers only the supplied wavenumber interval; a total-flux
+    benchmark requires a sufficiently broad grid and a grid-convergence check.
     """
-    raise NotImplementedError("Use spectral_net_flux_from_absorption_and_path")
+    n = len(wavenumbers_cm_inv)
+    if n < 2 or len(absorption_coefficients_m_inv) != n:
+        raise ValueError("absorption and wavenumber arrays must have equal length >= 2")
+    if (not math.isfinite(gas_temperature_K) or not math.isfinite(wall_temperature_K)
+            or gas_temperature_K <= 0 or wall_temperature_K <= 0
+            or not math.isfinite(path_length_m) or path_length_m < 0):
+        raise ValueError("temperatures must be positive and path length nonnegative")
+    if not math.isfinite(wall_emissivity) or not 0 < wall_emissivity <= 1:
+        raise ValueError("wall_emissivity must be in (0, 1]")
+    if any(not math.isfinite(x) or x < 0 for x in absorption_coefficients_m_inv):
+        raise ValueError("absorption coefficients must be finite and nonnegative")
+    if any(not math.isfinite(x) or x < 0 for x in wavenumbers_cm_inv):
+        raise ValueError("wavenumbers must be finite and nonnegative")
+
+    h = 6.62607015e-34
+    c = 299792458.0
+    k_b = 1.380649e-23
+
+    def planck_exitance(nu_m_inv: float, temp: float) -> float:
+        if nu_m_inv <= 0:
+            return 0.0
+        z = h * c * nu_m_inv / (k_b * temp)
+        if z > 700:
+            return 0.0
+        return 2.0 * math.pi * h * c*c * nu_m_inv**3 / math.expm1(z)
+
+    total = 0.0
+    for i in range(n - 1):
+        nu_cm = 0.5 * (wavenumbers_cm_inv[i] + wavenumbers_cm_inv[i+1])
+        nu_m = 100.0 * nu_cm
+        delta_nu_m = 100.0 * abs(wavenumbers_cm_inv[i+1] - wavenumbers_cm_inv[i])
+        alpha = 0.5 * (absorption_coefficients_m_inv[i] + absorption_coefficients_m_inv[i+1])
+        eps_g = -math.expm1(-alpha * path_length_m)
+        denom = eps_g + wall_emissivity - eps_g * wall_emissivity
+        eps_exchange = eps_g * wall_emissivity / denom if denom > 0 else 0.0
+        total += eps_exchange * (
+            planck_exitance(nu_m, gas_temperature_K)
+            - planck_exitance(nu_m, wall_temperature_K)
+        ) * delta_nu_m
+    return total
