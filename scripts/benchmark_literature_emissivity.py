@@ -360,7 +360,7 @@ def main() -> None:
                 min(data["pressure_pathlength_atm_m"]), max(data["pressure_pathlength_atm_m"])
             ],
             "results": [
-                run_fit(data, n, args.wall_temperature_k, grid_size=24 if is_builtin else 140)
+                run_fit(data, n, args.wall_temperature_k, grid_size=12 if is_builtin else 140)
                 for n in (3, 4, 5)
             ],
         })
