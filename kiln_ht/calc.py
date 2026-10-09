@@ -651,6 +651,10 @@ class KilnAxialSolution:
             "coupling_iterations": self.coupling_iterations,
             "max_energy_residual_w": self.max_energy_residual_w,
             "model_scope": (
+                "steady 1-D gas-bed-wall energy network; radial wall conductances "
+                "are linearized from solve_wall; states contain coupled wall temperatures; "
+                "axial solid conduction, pressure drop, reactions and phase change are excluded"
+                if self.states else
                 "steady 1-D plug-flow gas energy balance coupled to independent "
                 "radial wall solves; axial solid conduction, pressure drop and "
                 "gas mixing are not included"
