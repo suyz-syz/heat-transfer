@@ -105,9 +105,16 @@ def choose_shared_kappas(data: dict, n_gases: int, train_indices: list[int],
     candidates = [math.exp(log_min + i * (log_max - log_min) / (grid_size - 1))
                   for i in range(grid_size)]
     selected: list[float] = []
+    # The built-in analytic fixture uses every other temperature for the
+    # coarse shared-kappa search, then fits weights and reports errors at all
+    # temperatures. Published reference tables retain the full temperature grid.
+    selection_temperatures = (
+        data["temperature_K"][::2]
+        if data.get("ground_truth_model") else data["temperature_K"]
+    )
     all_targets = {
         t: [data["emissivity"][str(t)][i] for i in train_indices]
-        for t in data["temperature_K"]
+        for t in selection_temperatures
     }
     train_pl = [pl[i] for i in train_indices]
     for _ in range(n_gases):
@@ -353,7 +360,7 @@ def main() -> None:
                 min(data["pressure_pathlength_atm_m"]), max(data["pressure_pathlength_atm_m"])
             ],
             "results": [
-                run_fit(data, n, args.wall_temperature_k, grid_size=60 if is_builtin else 140)
+                run_fit(data, n, args.wall_temperature_k, grid_size=24 if is_builtin else 140)
                 for n in (3, 4, 5)
             ],
         })
