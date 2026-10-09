@@ -140,3 +140,23 @@ def test_literature_emissivity_parser_and_fit_smoke(tmp_path):
     assert result["temperature_polynomial_weight_holdout_metrics"][
         "max_black_wall_flux_proxy_error_W_m2"
     ] >= 0
+
+
+
+def test_builtin_physics_inspired_ground_truth_domain_and_label():
+    from scripts.benchmark_literature_emissivity import generate_builtin_ground_truth
+
+    data = generate_builtin_ground_truth()
+    assert data["temperature_K"][0] == 300.0
+    assert data["temperature_K"][-1] == 2500.0
+    assert min(data["pressure_pathlength_atm_m"]) == pytest.approx(0.01)
+    assert max(data["pressure_pathlength_atm_m"]) == pytest.approx(10.0)
+    assert len(data["temperature_K"]) == 23
+    assert len(data["pressure_pathlength_atm_m"]) == 31
+    assert data["ground_truth_model"]["not_a_leckner_or_snb_solver"] is True
+    assert data["ground_truth_model"]["not_hitemp_lbl"] is True
+    for temp in data["temperature_K"]:
+        values = data["emissivity"][str(temp)]
+        assert len(values) == 31
+        assert all(0.0 <= value <= 1.0 for value in values)
+        assert values == sorted(values)
