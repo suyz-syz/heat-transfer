@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
 
 from .gas import GasMixture, DEFAULT_GAS
@@ -578,3 +578,124 @@ def compute_temperature_curve(
                 break
 
     return [x * 1000.0 for x in x_all], T_all
+
+
+
+# ============ Phase 2: 轴向分段窑体模型（显式稳态一维气体能量耦合） ============
+@dataclass
+class KilnAxialSolution:
+    """轴向 Z 控制体积求解结果。
+
+    z_faces_m 长度 Z+1；各温度/WallSolution/heat_transfer 数组长度 Z。
+    当前版本忽略固体轴向导热、气体压降和轴向混合；气体按 plug-flow
+    逐段降温。每段径向换热仍由兼容的 solve_wall() 计算。
+    """
+    z_faces_m: List[float]
+    gas_temperature_in_k: List[float]
+    gas_temperature_out_k: List[float]
+    wall_solutions: List[WallSolution]
+    heat_transfer_w: List[float]
+    mass_flow_kg_s: float
+    cp_gas_j_kg_k: float
+
+    @property
+    def gas_temperature_mean_k(self) -> List[float]:
+        return [(a + b) / 2.0 for a, b in zip(
+            self.gas_temperature_in_k, self.gas_temperature_out_k
+        )]
+
+    @property
+    def total_heat_transfer_w(self) -> float:
+        return sum(self.heat_transfer_w)
+
+    def as_dict(self) -> Dict:
+        return {
+            "z_faces_m": list(self.z_faces_m),
+            "gas_temperature_in_k": list(self.gas_temperature_in_k),
+            "gas_temperature_out_k": list(self.gas_temperature_out_k),
+            "gas_temperature_mean_k": self.gas_temperature_mean_k,
+            "heat_transfer_w": list(self.heat_transfer_w),
+            "total_heat_transfer_w": self.total_heat_transfer_w,
+            "mass_flow_kg_s": self.mass_flow_kg_s,
+            "cp_gas_j_kg_k": self.cp_gas_j_kg_k,
+            "wall_solutions": [wall.as_dict() for wall in self.wall_solutions],
+            "model_scope": (
+                "steady 1-D plug-flow gas energy balance coupled to independent "
+                "radial wall solves; axial solid conduction, pressure drop and "
+                "gas mixing are not included"
+            ),
+        }
+
+
+def solve_kiln(
+    layers: List[Layer],
+    params: KilnParams,
+    *,
+    n_cells: int = 20,
+    mass_flow_kg_s: float = 10.0,
+    cp_gas_j_kg_k: float = 1150.0,
+    inlet_gas_temperature_k: Optional[float] = None,
+) -> KilnAxialSolution:
+    """按轴向控制体积耦合烟气降温与局部径向壁体传热。
+
+    保留 solve_wall(layers, params) 原签名和行为。每个控制体使用局部
+    气体入口温度调用 solve_wall；气体焓降由 Q'_wall * dz 估算。
+    这是 Phase 2 的首个可测骨架，不包含轴向固体导热或辐射沿程再分配。
+
+    Args:
+        n_cells: 轴向控制体积数 Z。
+        mass_flow_kg_s: 烟气质量流量 (kg/s)，必须为正。
+        cp_gas_j_kg_k: 代表性定压比热 (J/kg/K)，必须为正。
+        inlet_gas_temperature_k: 可选入口温度；缺省沿用 params.T_gas。
+    """
+    validate_params(params)
+    if not layers:
+        raise ValueError("至少需要 1 层衬里结构")
+    if not isinstance(n_cells, int) or isinstance(n_cells, bool) or n_cells < 1:
+        raise ValueError("n_cells 必须为正整数")
+    if not math.isfinite(mass_flow_kg_s) or mass_flow_kg_s <= 0.0:
+        raise ValueError("mass_flow_kg_s 必须为有限正值")
+    if not math.isfinite(cp_gas_j_kg_k) or cp_gas_j_kg_k <= 0.0:
+        raise ValueError("cp_gas_j_kg_k 必须为有限正值")
+    inlet = params.T_gas if inlet_gas_temperature_k is None else inlet_gas_temperature_k
+    if not math.isfinite(inlet) or inlet <= 0.0:
+        raise ValueError("inlet_gas_temperature_k 必须为有限正值")
+    if inlet <= params.T_env:
+        raise ValueError("入口烟气温度必须高于环境温度；当前模型只处理向外散热")
+
+    dz = params.L_kiln / n_cells
+    z_faces = [i * dz for i in range(n_cells + 1)]
+    gas_in, gas_out, walls, cell_heat = [], [], [], []
+    t_gas = inlet
+    heat_capacity_rate = mass_flow_kg_s * cp_gas_j_kg_k
+
+    for cell in range(n_cells):
+        if t_gas <= params.T_env:
+            raise ValueError(
+                f"第 {cell} 个轴向控制体入口温度已不高于环境温度，"
+                "当前单向散热模型不适用"
+            )
+        local_params = replace(params, T_gas=t_gas)
+        wall = solve_wall(layers, local_params)
+        q_cell = wall.Qprime * dz
+        t_next = t_gas - q_cell / heat_capacity_rate
+        if t_next <= params.T_env:
+            raise ValueError(
+                f"第 {cell} 个控制体预测烟气出口温度 {t_next:.3f} K "
+                "不高于环境温度；请增加质量流量或细化物理边界模型"
+            )
+        gas_in.append(t_gas)
+        gas_out.append(t_next)
+        walls.append(wall)
+        cell_heat.append(q_cell)
+        t_gas = t_next
+
+    return KilnAxialSolution(
+        z_faces_m=z_faces,
+        gas_temperature_in_k=gas_in,
+        gas_temperature_out_k=gas_out,
+        wall_solutions=walls,
+        heat_transfer_w=cell_heat,
+        mass_flow_kg_s=mass_flow_kg_s,
+        cp_gas_j_kg_k=cp_gas_j_kg_k,
+    )
