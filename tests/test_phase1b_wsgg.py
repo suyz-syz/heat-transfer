@@ -160,3 +160,47 @@ def test_builtin_physics_inspired_ground_truth_domain_and_label():
         assert len(values) == 31
         assert all(0.0 <= value <= 1.0 for value in values)
         assert values == sorted(values)
+
+
+def test_hitemp_calibration_runner_generates_n345_provenance_report(tmp_path):
+    import csv
+    import json
+    from scripts.calibrate_hitemp_wsgg import run_calibration
+
+    line_csv = tmp_path / "lines.csv"
+    with line_csv.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=[
+            "molecule", "nu", "strength_ref", "lower_energy", "air_gamma",
+            "self_gamma", "temp_exponent", "partition_ref",
+            "partition_exponent", "isotope",
+        ])
+        writer.writeheader()
+        writer.writerow({
+            "molecule": "CO2", "nu": 2200.0, "strength_ref": 1e-20,
+            "lower_energy": 100.0, "air_gamma": 0.07, "self_gamma": 0.1,
+            "temp_exponent": 0.7, "partition_ref": 1.0,
+            "partition_exponent": 0.0, "isotope": "1",
+        })
+    tips_csv = tmp_path / "tips.csv"
+    with tips_csv.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=[
+            "molecule", "isotope", "temperature_K", "Q",
+        ])
+        writer.writeheader()
+        for temp, q_value in ((296.0, 100.0), (500.0, 200.0), (800.0, 400.0)):
+            writer.writerow({
+                "molecule": "CO2", "isotope": "1",
+                "temperature_K": temp, "Q": q_value,
+            })
+    output = tmp_path / "report.json"
+    report = run_calibration(
+        line_csv, tips_csv, output, release="synthetic-test-fixture",
+        wn_min_cm=2190.0, wn_max_cm=2210.0, wn_step_cm=1.0,
+        temperatures_k=(500.0,), path_min_m=0.05, path_max_m=2.0,
+        path_count=8, fit_grid_size=20, fit_iterations=30,
+    )
+    saved = json.loads(output.read_text(encoding="utf-8"))
+    assert report["report_type"].startswith("HITEMP/TIPS-derived")
+    assert saved["provenance"]["line_count"] == 1
+    assert set(saved["results"][0]["fits_by_n_gray_gases"]) == {"3", "4", "5"}
+    assert "not total-spectrum emissivity" in " ".join(saved["limitations"])
