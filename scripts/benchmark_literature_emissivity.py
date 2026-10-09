@@ -257,6 +257,45 @@ def run_fit(data: dict, n_gases: int, wall_temperature_k: float | None, grid_siz
     }
 
 
+
+def generate_builtin_ground_truth() -> dict:
+    """Generate an analytic multi-gray surrogate for pipeline validation only.
+
+    This is NOT a numerical implementation of Leckner's correlation, an EM2C
+    SNB calculation, or HITEMP LBL ground truth. It is a deterministic software
+    fixture whose known exponential gray-gas structure makes fit behavior
+    inspectable until published SNB or HITEMP-derived targets are supplied.
+    """
+    temperatures = [float(t) for t in range(300, 2501, 100)]
+    log_min, log_max = math.log(0.01), math.log(10.0)
+    path_lengths = [
+        math.exp(log_min + i * (log_max - log_min) / 30.0)
+        for i in range(31)
+    ]
+    reference_kappa = [0.025, 0.25, 2.5, 25.0]
+    emissivity = {}
+    for temp in temperatures:
+        x = (temp - 300.0) / 2200.0
+        weights = [0.18 + 0.02*x, 0.30 - 0.02*x,
+                   0.27 + 0.01*x, 0.15 - 0.01*x]
+        emissivity[str(temp)] = [
+            sum(w * (-math.expm1(-k * pl))
+                for w, k in zip(weights, reference_kappa))
+            for pl in path_lengths
+        ]
+    return {
+        "source_file": "builtin_physics_inspired_surrogate",
+        "temperature_K": temperatures,
+        "pressure_pathlength_atm_m": path_lengths,
+        "emissivity": emissivity,
+        "ground_truth_model": {
+            "label": "built-in physics-inspired multi-gray attenuation surrogate",
+            "reference_kappa_per_atm_m_inverse": reference_kappa,
+            "not_a_leckner_or_snb_solver": True,
+            "not_hitemp_lbl": True,
+        },
+    }
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", action="append", default=[], type=Path,
