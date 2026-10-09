@@ -60,8 +60,10 @@ def fit_wsgg(
             if any(abs(math.log(k/s)) < 1e-9 for s in selected):
                 continue
             basis = [1-math.exp(-k*l) for l in path_lengths_m]
-            score = abs(sum((e - sum(1/len(selected)*(1-math.exp(-s*l)) for s in selected))
-                            * b for e, b in zip(target_emissivities, basis)))
+            score = abs(sum(
+                (e - sum(1/len(selected)*(1-math.exp(-s*length)) for s in selected)) * b
+                for e, b, length in zip(target_emissivities, basis, path_lengths_m)
+            ))
             if score > best_score:
                 best_k, best_score = k, score
         selected.append(best_k)
