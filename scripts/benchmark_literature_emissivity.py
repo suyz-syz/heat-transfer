@@ -249,8 +249,13 @@ def run_fit(data: dict, n_gases: int, wall_temperature_k: float | None, grid_siz
         "state_specific_weight_holdout_metrics": metrics(test_records),
         "temperature_polynomial_weight_holdout_metrics": metrics(poly_records),
         "limitations": [
-            "Ground truth is published EM2C-SNB total emissivity, not raw HITEMP LBL.",
-            "Total pressure is fixed at 1 atm in the source dataset; PL is pressure times path length.",
+            ("Ground truth is a synthetic analytic multi-gray surrogate; it is not a Leckner correlation, "
+             "an EM2C SNB calculation, or HITEMP LBL."
+             if data.get("ground_truth_model") else
+             "Ground truth is published EM2C-SNB total emissivity, not raw HITEMP LBL."),
+            ("The built-in surrogate spans pathlength products from 0.01 to 10 atm*m; these are not independent total-pressure cases."
+             if data.get("ground_truth_model") else
+             "Total pressure is fixed at 1 atm in the source dataset; PL is pressure times path length."),
             "Heat-flux value is only an equivalent black-wall gray flux proxy if wall temperature is supplied.",
             "The polynomial weights are clipped/renormalized at evaluation; inspect polynomial behavior before deployment.",
         ],
@@ -304,7 +309,7 @@ def main() -> None:
                         help="run the built-in analytic surrogate (pipeline test only; not Leckner/SNB/HITEMP ground truth)")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--wall-temperature-k", type=float, default=None,
-                        help="wall temperature for a labelled gray black-wall equivalent-flux proxy (default: 800 K)")
+                        help="optional wall temperature for a labelled gray black-wall equivalent-flux proxy")
     args = parser.parse_args()
     if args.builtin and args.input:
         parser.error("--builtin cannot be combined with --input")
