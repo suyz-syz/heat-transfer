@@ -48,3 +48,47 @@ def test_wsgg_rejects_invalid_inputs():
         wsgg_emissivity((-0.1,), (1.0,), 1.0)
     with pytest.raises(ValueError):
         fit_wsgg((1.0,), (0.2,), n_gases=2)
+
+
+
+def test_tips_partition_table_overrides_power_law_approximation():
+    line = SpectralLine("CO2", 2200.0, 1e-22, 100.0, 0.07, 0.1,
+                        0.7, 1.0, 9.0)
+    table = {"CO2": [(296.0, 100.0), (1000.0, 1000.0), (2500.0, 5000.0)]}
+    ratio = line_strength(line, 1000.0, partition_sums=table) / line_strength(
+        SpectralLine("CO2", 2200.0, 1e-22, 100.0, 0.07, 0.1,
+                     0.7, 1.0, 0.0), 1000.0
+    )
+    assert ratio == pytest.approx(0.1, rel=1e-12)
+
+
+def test_absorption_coefficient_unit_conversion_has_no_extra_factor_100():
+    from kiln_ht.models.radiation import hitemp_lbl
+
+    line = SpectralLine("CO2", 2200.0, 1e-22, 100.0, 0.07, 0.1,
+                        0.7, 1.0, 0.0)
+    temperature = 296.0
+    pressure = 1.0
+    xco2 = 0.1
+    alpha = absorption_spectrum([line], [line.nu], temperature, pressure,
+                                {"CO2": xco2}, 1.0)[0]
+    mass_kg = 44.0095 / 1000.0 / 6.02214076e23
+    sigma_d = line.nu * math.sqrt(
+        hitemp_lbl.K_B * temperature / (mass_kg * 299792458.0**2)
+    )
+    gamma = pressure * (line.air_gamma * (1.0-xco2) + line.self_gamma*xco2)
+    profile = hitemp_lbl._pseudo_voigt(0.0, sigma_d, gamma)
+    number_density = xco2 * pressure * 101325.0 / (hitemp_lbl.K_B*temperature)
+    expected = line.strength_ref * profile * number_density * 1e-4
+    assert alpha == pytest.approx(expected, rel=1e-12)
+
+
+def test_spectral_net_flux_is_finite_and_positive_for_hot_gas():
+    from kiln_ht.models.radiation.hitemp_lbl import spectral_net_radiative_flux
+
+    q = spectral_net_radiative_flux(
+        [0.2] * 5, [500.0, 1000.0, 1500.0, 2000.0, 2500.0],
+        1200.0, 700.0, 1.5,
+    )
+    assert math.isfinite(q)
+    assert q > 0
