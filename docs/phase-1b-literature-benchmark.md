@@ -27,6 +27,21 @@ The runner trains on alternating pressure-pathlength samples and reports held-ou
 
 Run all compositions by supplying repeated --input arguments. Retain the original downloaded files and cite the dataset DOI with any report.
 
+## Built-in pipeline check (no external data download)
+
+For a deterministic software/pipeline check over 300–2500 K and 0.01–10 atm·m, run:
+
+~~~bash
+python scripts/benchmark_literature_emissivity.py \
+  --builtin \
+  --output reports/literature_wsgg_R1.json \
+  --wall-temperature-k 800
+~~~
+
+**Important scientific qualification:** the built-in case is an analytic multi-gray attenuation surrogate whose emissivity is generated from a known set of exponential gray-gas terms. It is useful for checking data interfaces, hold-out splitting, N=3/4/5 fitting, polynomial weight regression, and error-report serialization. It is **not** an implementation of Leckner's correlation, not an EM2C SNB calculation, and not HITEMP-LBL ground truth. It is intentionally marked as synthetic in the JSON report. Its errors must not be quoted as physical validation or engineering accuracy; in particular, N=4 is fitting a four-gray synthetic model and can be expected to perform favorably for structural reasons.
+
+The optional flux number remains an equivalent gray black-wall proxy based on the emissivity error and the selected wall temperature, not a spectral/non-gray wall heat-flux solution. Use the published EM2C-SNB tables or later HITEMP/TIPS-derived LBL tables for physical calibration.
+
 ## Acceptance and handoff
 
 This benchmark can establish whether the WSGG fitting and error-reporting pipeline behaves correctly against a published integrated-emissivity reference. It does not establish HITEMP LBL accuracy, independent pressure generalization, or engineering acceptance for a rotary kiln. Those remain blocked until local HITEMP line lists/TIPS tables are used for the spectral LBL calculations and the owner approves error thresholds.
