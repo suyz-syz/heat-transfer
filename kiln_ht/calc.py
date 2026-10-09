@@ -582,6 +582,25 @@ def compute_temperature_curve(
 
 
 # ============ Phase 2: 轴向分段窑体模型（显式稳态一维气体能量耦合） ============
+@dataclass(frozen=True)
+class KilnState:
+    """Local three-phase axial state at a cell centre (all temperatures in K)."""
+    z_m: float
+    T_gas_k: float
+    T_bed_k: float
+    T_wall_inner_k: float
+    T_wall_outer_k: float
+
+    def as_dict(self) -> Dict:
+        return {
+            "z_m": self.z_m,
+            "T_gas_k": self.T_gas_k,
+            "T_bed_k": self.T_bed_k,
+            "T_wall_inner_k": self.T_wall_inner_k,
+            "T_wall_outer_k": self.T_wall_outer_k,
+        }
+
+
 @dataclass
 class KilnAxialSolution:
     """轴向 Z 控制体积求解结果。
@@ -597,6 +616,12 @@ class KilnAxialSolution:
     heat_transfer_w: List[float]
     mass_flow_kg_s: float
     cp_gas_j_kg_k: float
+    states: List[KilnState] = field(default_factory=list)
+    bed_temperature_in_k: List[float] = field(default_factory=list)
+    bed_temperature_out_k: List[float] = field(default_factory=list)
+    bed_flow_direction: Optional[str] = None
+    coupling_iterations: int = 0
+    max_energy_residual_w: float = 0.0
 
     @property
     def gas_temperature_mean_k(self) -> List[float]:
@@ -619,6 +644,12 @@ class KilnAxialSolution:
             "mass_flow_kg_s": self.mass_flow_kg_s,
             "cp_gas_j_kg_k": self.cp_gas_j_kg_k,
             "wall_solutions": [wall.as_dict() for wall in self.wall_solutions],
+            "states": [state.as_dict() for state in self.states],
+            "bed_temperature_in_k": list(self.bed_temperature_in_k),
+            "bed_temperature_out_k": list(self.bed_temperature_out_k),
+            "bed_flow_direction": self.bed_flow_direction,
+            "coupling_iterations": self.coupling_iterations,
+            "max_energy_residual_w": self.max_energy_residual_w,
             "model_scope": (
                 "steady 1-D plug-flow gas energy balance coupled to independent "
                 "radial wall solves; axial solid conduction, pressure drop and "
@@ -635,6 +666,16 @@ def solve_kiln(
     mass_flow_kg_s: float = 10.0,
     cp_gas_j_kg_k: float = 1150.0,
     inlet_gas_temperature_k: Optional[float] = None,
+    bed_inlet_temperature_k: Optional[float] = None,
+    bed_mass_flow_kg_s: Optional[float] = None,
+    cp_bed_j_kg_k: Optional[float] = None,
+    gas_bed_h_w_m2_k: Optional[float] = None,
+    wall_bed_h_w_m2_k: Optional[float] = None,
+    gas_bed_area_per_length_m: Optional[float] = None,
+    wall_bed_contact_per_length_m: Optional[float] = None,
+    bed_flow_direction: str = "counter-current",
+    coupling_max_iterations: int = 100,
+    coupling_tolerance_k: float = 1.0e-5,
 ) -> KilnAxialSolution:
     """按轴向控制体积耦合烟气降温与局部径向壁体传热。
 
@@ -649,6 +690,33 @@ def solve_kiln(
         inlet_gas_temperature_k: 可选入口温度；缺省沿用 params.T_gas。
     """
     validate_params(params)
+    if bed_inlet_temperature_k is not None:
+        required_bed = {
+            "bed_mass_flow_kg_s": bed_mass_flow_kg_s,
+            "cp_bed_j_kg_k": cp_bed_j_kg_k,
+            "gas_bed_h_w_m2_k": gas_bed_h_w_m2_k,
+            "wall_bed_h_w_m2_k": wall_bed_h_w_m2_k,
+            "gas_bed_area_per_length_m": gas_bed_area_per_length_m,
+            "wall_bed_contact_per_length_m": wall_bed_contact_per_length_m,
+        }
+        missing_bed = [name for name, value in required_bed.items() if value is None]
+        if missing_bed:
+            raise ValueError("three-phase mode requires: " + ", ".join(missing_bed))
+        return _solve_kiln_three_phase(
+            layers, params, n_cells=n_cells, mass_flow_kg_s=mass_flow_kg_s,
+            cp_gas_j_kg_k=cp_gas_j_kg_k,
+            inlet_gas_temperature_k=inlet_gas_temperature_k,
+            bed_inlet_temperature_k=bed_inlet_temperature_k,
+            bed_mass_flow_kg_s=bed_mass_flow_kg_s,
+            cp_bed_j_kg_k=cp_bed_j_kg_k,
+            gas_bed_h_w_m2_k=gas_bed_h_w_m2_k,
+            wall_bed_h_w_m2_k=wall_bed_h_w_m2_k,
+            gas_bed_area_per_length_m=gas_bed_area_per_length_m,
+            wall_bed_contact_per_length_m=wall_bed_contact_per_length_m,
+            bed_flow_direction=bed_flow_direction,
+            coupling_max_iterations=coupling_max_iterations,
+            coupling_tolerance_k=coupling_tolerance_k,
+        )
     if not layers:
         raise ValueError("至少需要 1 层衬里结构")
     if not isinstance(n_cells, int) or isinstance(n_cells, bool) or n_cells < 1:
@@ -698,4 +766,211 @@ def solve_kiln(
         heat_transfer_w=cell_heat,
         mass_flow_kg_s=mass_flow_kg_s,
         cp_gas_j_kg_k=cp_gas_j_kg_k,
+    )
+
+
+
+def _solve_kiln_three_phase(
+    layers: List[Layer],
+    params: KilnParams,
+    *,
+    n_cells: int,
+    mass_flow_kg_s: float,
+    cp_gas_j_kg_k: float,
+    inlet_gas_temperature_k: Optional[float],
+    bed_inlet_temperature_k: float,
+    bed_mass_flow_kg_s: float,
+    cp_bed_j_kg_k: float,
+    gas_bed_h_w_m2_k: float,
+    wall_bed_h_w_m2_k: float,
+    gas_bed_area_per_length_m: float,
+    wall_bed_contact_per_length_m: float,
+    bed_flow_direction: str,
+    coupling_max_iterations: int,
+    coupling_tolerance_k: float,
+) -> KilnAxialSolution:
+    """Conservative fixed-point coupling of gas, bed and radial wall nodes.
+
+    h values are explicit user inputs for gas-bed and wall-bed paths. Areas are
+    effective exchange area per axial length (m²/m = m), so each conductance
+    has units W/(m K). Wall conductances are linearized from solve_wall() at
+    the local gas mean temperature. This is a bounded engineering prototype,
+    not a universal kiln correlation or a simultaneous nonlinear radiation solve.
+    """
+    if not isinstance(n_cells, int) or isinstance(n_cells, bool) or n_cells < 1:
+        raise ValueError("n_cells must be a positive integer")
+    if bed_flow_direction not in ("co-current", "counter-current"):
+        raise ValueError("bed_flow_direction must be 'co-current' or 'counter-current'")
+    positive = {
+        "mass_flow_kg_s": mass_flow_kg_s,
+        "cp_gas_j_kg_k": cp_gas_j_kg_k,
+        "bed_inlet_temperature_k": bed_inlet_temperature_k,
+        "bed_mass_flow_kg_s": bed_mass_flow_kg_s,
+        "cp_bed_j_kg_k": cp_bed_j_kg_k,
+        "gas_bed_h_w_m2_k": gas_bed_h_w_m2_k,
+        "wall_bed_h_w_m2_k": wall_bed_h_w_m2_k,
+        "gas_bed_area_per_length_m": gas_bed_area_per_length_m,
+        "wall_bed_contact_per_length_m": wall_bed_contact_per_length_m,
+        "coupling_tolerance_k": coupling_tolerance_k,
+    }
+    for name, value in positive.items():
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(f"{name} must be finite and positive")
+    if not isinstance(coupling_max_iterations, int) or coupling_max_iterations < 1:
+        raise ValueError("coupling_max_iterations must be a positive integer")
+    inlet_gas = params.T_gas if inlet_gas_temperature_k is None else inlet_gas_temperature_k
+    if not math.isfinite(inlet_gas) or inlet_gas <= params.T_env:
+        raise ValueError("inlet gas temperature must be finite and above ambient")
+    if not math.isfinite(bed_inlet_temperature_k):
+        raise ValueError("bed inlet temperature must be finite")
+
+    dz = params.L_kiln / n_cells
+    z_faces = [i * dz for i in range(n_cells + 1)]
+    z_centres = [(i + 0.5) * dz for i in range(n_cells)]
+    gas_in = [inlet_gas] * n_cells
+    gas_out = [inlet_gas] * n_cells
+    bed_in = [bed_inlet_temperature_k] * n_cells
+    bed_out = [bed_inlet_temperature_k] * n_cells
+    ggb = gas_bed_h_w_m2_k * gas_bed_area_per_length_m
+    gwb = wall_bed_h_w_m2_k * wall_bed_contact_per_length_m
+    gas_capacity = mass_flow_kg_s * cp_gas_j_kg_k
+    bed_capacity = bed_mass_flow_kg_s * cp_bed_j_kg_k
+    relax = 0.5
+    final_walls: List[WallSolution] = []
+    final_twi: List[float] = []
+    final_two: List[float] = []
+    final_qgas: List[float] = []
+    final_qbed: List[float] = []
+    final_qout: List[float] = []
+    converged_iteration = 0
+
+    for iteration in range(1, coupling_max_iterations + 1):
+        walls: List[WallSolution] = []
+        twi_values, two_values, qgas_values, qbed_values, qout_values = [], [], [], [], []
+        for i in range(n_cells):
+            tgm = 0.5 * (gas_in[i] + gas_out[i])
+            tbm = 0.5 * (bed_in[i] + bed_out[i])
+            if tgm <= params.T_env:
+                raise ValueError("gas reached ambient; signed wall boundary conditions are not implemented")
+            base = solve_wall(layers, replace(params, T_gas=tgm))
+            ggw = base.h_in * 2.0 * math.pi * base.r_in
+            gcond = base.Qprime / max(base.T_w1 - base.T_wN, 1.0e-9)
+            gout = base.h_out * 2.0 * math.pi * base.r_out
+            if min(ggw, gcond, gout) <= 0 or not all(
+                math.isfinite(v) for v in (ggw, gcond, gout)
+            ):
+                raise RuntimeError("could not form positive local wall conductances")
+
+            twi = min(tgm, max(params.T_env, base.T_w1))
+            two = min(twi, max(params.T_env, base.T_wN))
+            for _ in range(100):
+                two_new = (gcond * twi + gout * params.T_env) / (gcond + gout)
+                twi_new = (ggw * tgm + gcond * two_new + gwb * tbm) / (ggw + gcond + gwb)
+                if max(abs(two_new - two), abs(twi_new - twi)) < 1.0e-8:
+                    two, twi = two_new, twi_new
+                    break
+                two = 0.5 * two + 0.5 * two_new
+                twi = 0.5 * twi + 0.5 * twi_new
+            qgw = ggw * (tgm - twi)
+            qgb = ggb * (tgm - tbm)
+            qwb = gwb * (twi - tbm)
+            qout = gout * (two - params.T_env)
+            qcond = gcond * (twi - two)
+            wall_residual = abs(qgw - qcond - qwb)
+            outer_residual = abs(qcond - qout)
+            if max(wall_residual, outer_residual) > 1.0e-3 * max(abs(qgw), abs(qout), 1.0):
+                raise RuntimeError("local wall-bed energy balance failed to close")
+            walls.append(base)
+            twi_values.append(twi)
+            two_values.append(two)
+            qgas_values.append(qgw + qgb)
+            qbed_values.append(qgb + qwb)
+            qout_values.append(qout)
+
+        next_gas_in = [0.0] * n_cells
+        next_gas_out = [0.0] * n_cells
+        next_gas_in[0] = inlet_gas
+        for i in range(n_cells):
+            next_gas_out[i] = next_gas_in[i] - qgas_values[i] * dz / gas_capacity
+            if i + 1 < n_cells:
+                next_gas_in[i + 1] = next_gas_out[i]
+
+        next_bed_in = [0.0] * n_cells
+        next_bed_out = [0.0] * n_cells
+        if bed_flow_direction == "co-current":
+            next_bed_in[0] = bed_inlet_temperature_k
+            for i in range(n_cells):
+                next_bed_out[i] = next_bed_in[i] + qbed_values[i] * dz / bed_capacity
+                if i + 1 < n_cells:
+                    next_bed_in[i + 1] = next_bed_out[i]
+        else:
+            next_bed_in[-1] = bed_inlet_temperature_k
+            for i in range(n_cells - 1, -1, -1):
+                next_bed_out[i] = next_bed_in[i] + qbed_values[i] * dz / bed_capacity
+                if i > 0:
+                    next_bed_in[i - 1] = next_bed_out[i]
+
+        if not all(math.isfinite(t) and t > 0.0 for t in next_gas_in + next_gas_out + next_bed_in + next_bed_out):
+            raise ValueError("three-phase iteration produced non-physical temperature")
+        delta = max(
+            max(abs(a - b) for a, b in zip(next_gas_in, gas_in)),
+            max(abs(a - b) for a, b in zip(next_gas_out, gas_out)),
+            max(abs(a - b) for a, b in zip(next_bed_in, bed_in)),
+            max(abs(a - b) for a, b in zip(next_bed_out, bed_out)),
+        )
+        gas_in = [relax * new + (1.0 - relax) * old for new, old in zip(next_gas_in, gas_in)]
+        gas_out = [relax * new + (1.0 - relax) * old for new, old in zip(next_gas_out, gas_out)]
+        bed_in = [relax * new + (1.0 - relax) * old for new, old in zip(next_bed_in, bed_in)]
+        bed_out = [relax * new + (1.0 - relax) * old for new, old in zip(next_bed_out, bed_out)]
+        # Preserve the exact prescribed inlet boundaries.
+        gas_in[0] = inlet_gas
+        if bed_flow_direction == "co-current":
+            bed_in[0] = bed_inlet_temperature_k
+        else:
+            bed_in[-1] = bed_inlet_temperature_k
+        final_walls, final_twi, final_two = walls, twi_values, two_values
+        final_qgas, final_qbed, final_qout = qgas_values, qbed_values, qout_values
+        converged_iteration = iteration
+        if delta <= coupling_tolerance_k:
+            gas_in, gas_out = next_gas_in, next_gas_out
+            bed_in, bed_out = next_bed_in, next_bed_out
+            break
+    else:
+        raise RuntimeError(
+            f"three-phase coupling did not converge in {coupling_max_iterations} iterations"
+        )
+
+    states = [
+        KilnState(
+            z_m=z_centres[i],
+            T_gas_k=0.5 * (gas_in[i] + gas_out[i]),
+            T_bed_k=0.5 * (bed_in[i] + bed_out[i]),
+            T_wall_inner_k=final_twi[i],
+            T_wall_outer_k=final_two[i],
+        )
+        for i in range(n_cells)
+    ]
+    gas_residuals = [
+        abs(gas_capacity * (gas_in[i] - gas_out[i]) - final_qgas[i] * dz)
+        for i in range(n_cells)
+    ]
+    bed_residuals = [
+        abs(bed_capacity * (bed_out[i] - bed_in[i]) - final_qbed[i] * dz)
+        for i in range(n_cells)
+    ]
+    max_residual = max(gas_residuals + bed_residuals + [0.0])
+    return KilnAxialSolution(
+        z_faces_m=z_faces,
+        gas_temperature_in_k=gas_in,
+        gas_temperature_out_k=gas_out,
+        wall_solutions=final_walls,
+        heat_transfer_w=[q * dz for q in final_qgas],
+        mass_flow_kg_s=mass_flow_kg_s,
+        cp_gas_j_kg_k=cp_gas_j_kg_k,
+        states=states,
+        bed_temperature_in_k=bed_in,
+        bed_temperature_out_k=bed_out,
+        bed_flow_direction=bed_flow_direction,
+        coupling_iterations=converged_iteration,
+        max_energy_residual_w=max_residual,
     )
