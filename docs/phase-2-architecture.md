@@ -45,13 +45,31 @@ The gas-bed and wall-bed coefficients/areas are explicit inputs rather than gues
 - Form a conservative finite-volume residual for each gas, bed, inner-wall, outer-wall, and shell node; solve the coupled nonlinear system with bounded Newton/Picard iteration and energy-residual checks.
 - Add mesh-refinement checks (Z, 2Z, 4Z), published benchmark cases, and uncertainty/range checks before promoting any correlation to production.
 
-## 3. Compatibility contract
+## 3. Real HITEMP/TIPS calibration readiness
+
+`scripts/prepare_hitemp_benchmark.py` parses user-supplied fixed-width HITEMP line records and normalized TIPS tables with provenance hashes. The additive `scripts/calibrate_hitemp_wsgg.py` then computes a Planck-weighted LBL band-emissivity curve and fits N=3, 4, 5 WSGG models for each requested temperature. It writes a JSON report with input hashes, release label, spectral grid, fit coefficients and in-sample errors. Example:
+
+```bash
+python scripts/prepare_hitemp_benchmark.py \\
+  --line-file /data/HITEMP_CO2.par --line-file /data/HITEMP_H2O.par \\
+  --tips-csv /data/tips.csv --output-dir /data/normalized \\
+  --release 'CO2-<release>;H2O-<release>'
+python scripts/calibrate_hitemp_wsgg.py \\
+  --line-csv /data/normalized/hitemp_co2_h2o_1000_4000.csv \\
+  --tips-csv /data/normalized/tips_partition_sums_296_2400.csv \\
+  --release 'CO2-<release>;H2O-<release>' \\
+  --output reports/hitemp_wsgg_calibration.json
+```
+
+No real HITEMP/TIPS files were supplied during this implementation, so no real-data coefficient set or physical validation result is claimed. The default calibration is band-limited (2000–2400 cm⁻¹) and the current LBL profile is pseudo-Voigt; extend the band/grid and verify convergence before interpreting it as total-spectrum behavior.
+
+## 4. Compatibility contract
 
 - `solve_wall(layers, params)` keeps its original signature and return type.
 - The new API is additive: `solve_kiln` and `KilnAxialSolution`.
 - Convection extensions are opt-in and do not silently replace the Phase 1A/1B correlation path.
 - All new code uses the Python standard library only.
 
-## 4. Tests
+## 5. Tests
 
 `tests/test_phase2_architecture.py` checks axial discretization and gas-energy monotonicity, first-cell agreement with `solve_wall`, input validation, the Gnielinski scope warning, adapter validation, Tscheng-Watkinson formula fixtures and trends, domain guardrails, and three-phase energy balance in co-/counter-current modes. Formula fixtures validate implementation of the published equations; they are not independent experimental validation.
