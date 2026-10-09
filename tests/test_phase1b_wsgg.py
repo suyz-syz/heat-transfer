@@ -112,3 +112,30 @@ def test_hitemp_benchmark_builder_parses_standard_molecule_ids():
     assert parsed["strength_ref"] == pytest.approx(1.0e-22)
     assert parsed["lower_energy"] == pytest.approx(100.0)
     assert parsed["temp_exponent"] == pytest.approx(0.70)
+
+
+def test_literature_emissivity_parser_and_fit_smoke(tmp_path):
+    from scripts.benchmark_literature_emissivity import parse_emissivity_table, run_fit
+
+    source = tmp_path / "R=01.000_EM2C-SNB_totalEmissivities_90x105.dat"
+    pls = [0.01 * (1.5 ** i) for i in range(8)]
+    temperatures = [300.0, 600.0, 900.0, 1200.0, 1500.0]
+    with source.open("w", encoding="utf-8") as stream:
+        stream.write("Synthetic parser fixture for software testing only; not literature data.\n")
+        for pl in pls:
+            for temp in temperatures:
+                eps = 0.2 * (1.0 - math.exp(-0.8 * pl)) + 0.3 * (
+                    1.0 - math.exp(-8.0 * pl)
+                )
+                stream.write(f"{pl:.10g} {temp:.1f} {eps:.12g}\n")
+
+    data = parse_emissivity_table(source)
+    assert len(data["temperature_K"]) == len(temperatures)
+    assert len(data["pressure_pathlength_atm_m"]) == len(pls)
+    result = run_fit(data, n_gases=3, wall_temperature_k=800.0)
+    assert len(result["shared_kappa_per_atm_m_inverse"]) == 3
+    assert len(result["weight_polynomial_coefficients_low_to_high"]) == 3
+    assert result["temperature_polynomial_weight_holdout_metrics"]["heldout_points"] > 0
+    assert result["temperature_polynomial_weight_holdout_metrics"][
+        "max_black_wall_flux_proxy_error_W_m2"
+    ] >= 0
