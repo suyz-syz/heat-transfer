@@ -74,3 +74,52 @@ def run_wall_benchmark(cases=None) -> List[WallBenchmarkResult]:
         out.append(WallBenchmarkResult(c.name, a.Qprime, a.T_w1, b.Qprime, b.T_w1,
                     100.0*(b.Qprime-a.Qprime)/max(abs(a.Qprime),1e-30), b.T_w1-a.T_w1))
     return out
+
+
+@dataclass(frozen=True)
+class LBLWSGGMapPoint:
+    temperature_K: float
+    pressure_atm: float
+    path_length_m: float
+    emissivity_lbl: float
+    emissivity_wsgg: float
+    q_rad_lbl_W_m2: float
+    q_rad_wsgg_W_m2: float
+    relative_q_error_percent: float
+
+
+def run_lbl_wsgg_error_map(
+    lines, wavenumbers, path_lengths_m, temperatures_K, pressure_atm,
+    mole_fractions, wall_temperature_K, weights, kappa,
+) -> List[LBLWSGGMapPoint]:
+    """Compare supplied HITEMP/LBL line data against a fitted WSGG parameter set.
+
+    weights/kappa must have been fitted for the relevant gas-state slice. This
+    routine deliberately does not label synthetic or uncalibrated coefficients as
+    HITEMP validated. Gas is treated as a uniform, isothermal, non-scattering slab.
+    """
+    from .models.radiation.hitemp_lbl import absorption_spectrum, gas_emissivity_from_spectrum
+    from .models.radiation.wsgg_fit import wsgg_emissivity
+    from .radiation import SIGMA_SB
+
+    if wall_temperature_K <= 0:
+        raise ValueError("wall_temperature_K must be positive")
+    out = []
+    for temperature in temperatures_K:
+        if temperature <= 0:
+            raise ValueError("temperatures_K must be positive")
+        for length in path_lengths_m:
+            alpha = absorption_spectrum(
+                lines, wavenumbers, temperature, pressure_atm, mole_fractions, length
+            )
+            eps_lbl = gas_emissivity_from_spectrum(alpha, wavenumbers, temperature, length)
+            eps_wsgg = wsgg_emissivity(weights, kappa, length)
+            blackbody_delta = SIGMA_SB * (temperature**4 - wall_temperature_K**4)
+            q_lbl = eps_lbl * blackbody_delta
+            q_wsgg = eps_wsgg * blackbody_delta
+            rel = 100.0 * (q_wsgg-q_lbl) / max(abs(q_lbl), 1e-30)
+            out.append(LBLWSGGMapPoint(
+                temperature, pressure_atm, length, eps_lbl, eps_wsgg,
+                q_lbl, q_wsgg, rel
+            ))
+    return out
