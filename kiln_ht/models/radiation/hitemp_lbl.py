@@ -73,15 +73,55 @@ def load_hitemp_csv(path: str | Path) -> list[SpectralLine]:
     return lines
 
 
-def line_strength(line: SpectralLine, temperature: float) -> float:
-    """Temperature-scaled line strength with explicit power-law partition ratio.
+def _partition_ratio(
+    line: SpectralLine, temperature: float,
+    partition_sums: dict[str, Sequence[tuple[float, float]]] | None,
+) -> float:
+    """Return Q(Tref)/Q(T); log-log interpolate validated TIPS tabulations.
 
-    The partition-function power law is an approximation. Set partition_exponent
-    from a validated species partition-function fit for the temperature range.
+    Keys are isotope identifiers when present, otherwise molecule names. Tables
+    must cover both Tref and requested T; extrapolation is deliberately rejected.
+    """
+    if partition_sums is None:
+        return (T_REF / temperature) ** line.partition_exponent
+    key = line.isotope or line.molecule.upper()
+    table = partition_sums.get(key)
+    if not table or len(table) < 2:
+        raise ValueError(f"missing partition-sum table with >=2 points for {key}")
+    points = sorted((float(t), float(q)) for t, q in table)
+    if any(not math.isfinite(t) or not math.isfinite(q) or t <= 0 or q <= 0 for t, q in points):
+        raise ValueError(f"invalid partition-sum table for {key}")
+    if any(points[i][0] == points[i-1][0] for i in range(1, len(points))):
+        raise ValueError(f"duplicate temperatures in partition-sum table for {key}")
+
+    def interpolate_q(t: float) -> float:
+        if t < points[0][0] or t > points[-1][0]:
+            raise ValueError(f"partition-sum table for {key} does not cover {t:g} K")
+        for (t0, q0), (t1, q1) in zip(points, points[1:]):
+            if t0 <= t <= t1:
+                if t == t0:
+                    return q0
+                if t == t1:
+                    return q1
+                fraction = math.log(t / t0) / math.log(t1 / t0)
+                return math.exp(math.log(q0) + fraction * math.log(q1 / q0))
+        return points[-1][1]
+
+    return interpolate_q(T_REF) / interpolate_q(temperature)
+
+
+def line_strength(
+    line: SpectralLine, temperature: float,
+    partition_sums: dict[str, Sequence[tuple[float, float]]] | None = None,
+) -> float:
+    """Temperature-scaled line strength using TIPS tables when supplied.
+
+    Without partition_sums, partition_exponent is a documented power-law
+    approximation and must not be treated as a validated HITEMP/TIPS result.
     """
     if not math.isfinite(temperature) or temperature <= 0:
         raise ValueError("temperature must be finite and positive")
-    q_ratio = (T_REF / temperature) ** line.partition_exponent
+    q_ratio = _partition_ratio(line, temperature, partition_sums)
     boltzmann = math.exp(-C2_CM_K * line.lower_energy * (1.0 / temperature - 1.0 / T_REF))
     stim_ref = -math.expm1(-C2_CM_K * line.nu / T_REF)
     stim_t = -math.expm1(-C2_CM_K * line.nu / temperature)
@@ -107,6 +147,7 @@ def absorption_spectrum(
     lines: Sequence[SpectralLine], wavenumbers: Sequence[float], temperature: float,
     pressure_atm: float, mole_fractions: dict[str, float], path_length_m: float,
     *, molar_masses_g_mol: dict[str, float] | None = None,
+    partition_sums: dict[str, Sequence[tuple[float, float]]] | None = None,
 ) -> list[float]:
     """Return spectral absorption coefficient in 1/m on a supplied cm-1 grid.
 
@@ -131,13 +172,16 @@ def absorption_spectrum(
             line.air_gamma * max(0.0, 1.0-xmol) + line.self_gamma*xmol)
         mass_kg = mass / 1000.0 / 6.02214076e23
         sigma_d = nu0 * math.sqrt(K_B*temperature/(mass_kg*299792458.0**2))
-        strength = line_strength(line, temperature)
+        strength = line_strength(line, temperature, partition_sums)
         # Integrated line strength in cm/molecule -> m2/molecule after cm^-1 conversion.
         # Number density is ideal-gas molecular number density; final coefficient is 1/m.
         number_density = xmol * pressure_atm * 101325.0 / (K_B*temperature)
         for i, nu in enumerate(wavenumbers):
             profile = _pseudo_voigt(nu-nu0, sigma_d, gamma)
-            result[i] += strength * profile * 100.0 * number_density * 1e-4
+            # S has units cm/molecule and profile has units cm, so S*profile
+            # is cm^2/molecule. Convert the cross-section to m^2 (1e-4), then
+            # multiply by number density in molecules/m^3 to obtain 1/m.
+            result[i] += strength * profile * number_density * 1e-4
     return result
 
 
@@ -167,3 +211,19 @@ def gas_emissivity_from_spectrum(
     if weighted_planck <= 0:
         raise ValueError("wavenumber grid has no positive Planck weight")
     return min(1.0, max(0.0, weighted_abs/weighted_planck))
+
+
+
+def spectral_net_radiative_flux(
+    absorption: Sequence[float], wavenumbers_cm: Sequence[float],
+    gas_temperature_K: float, wall_temperature_K: float,
+    wall_emissivity: float = 1.0,
+) -> float:
+    """Net gas-to-wall radiative flux [W/m2] over the supplied spectral band.
+
+    Uses a gray, opaque wall with constant emissivity and a non-scattering,
+    isothermal absorbing/emitting slab. Spectral gas emissivity is 1-exp(-alpha L)
+    only if absorption already represents alpha*path; therefore this function
+    accepts optical-depth values, not absorption coefficients.
+    """
+    raise NotImplementedError("Use spectral_net_flux_from_absorption_and_path")
