@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'fix/kiln-heat-transfer-audit'
+      - 'feat/phase-1b-hitemp-wsgg'
   pull_request:
 
 jobs:
