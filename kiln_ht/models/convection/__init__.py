@@ -105,7 +105,7 @@ class RotaryKilnCorrelationAdapter:
         )
 
 
-__all__ = [
+from .tscheng_watkinson import (\n    TschengWatkinsonCorrelation,\n    TschengWatkinsonGasBed,\n    TschengWatkinsonGasWall,\n)\n\n\n__all__ = [
     "ConvectionEvaluation",
     "ConvectionModel",
     "GnielinskiPipeModel",
