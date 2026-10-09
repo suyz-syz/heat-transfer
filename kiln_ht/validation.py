@@ -91,6 +91,7 @@ class LBLWSGGMapPoint:
 def run_lbl_wsgg_error_map(
     lines, wavenumbers, path_lengths_m, temperatures_K, pressure_atm,
     mole_fractions, wall_temperature_K, weights, kappa,
+    *, partition_sums=None, wall_emissivity=1.0,
 ) -> List[LBLWSGGMapPoint]:
     """Compare supplied HITEMP/LBL line data against a fitted WSGG parameter set.
 
@@ -98,9 +99,11 @@ def run_lbl_wsgg_error_map(
     routine deliberately does not label synthetic or uncalibrated coefficients as
     HITEMP validated. Gas is treated as a uniform, isothermal, non-scattering slab.
     """
-    from .models.radiation.hitemp_lbl import absorption_spectrum, gas_emissivity_from_spectrum
+    from .models.radiation.hitemp_lbl import (
+        absorption_spectrum, gas_emissivity_from_spectrum, spectral_net_radiative_flux,
+    )
     from .models.radiation.wsgg_fit import wsgg_emissivity
-    from .radiation import SIGMA_SB
+    from .radiation import SIGMA
 
     if wall_temperature_K <= 0:
         raise ValueError("wall_temperature_K must be positive")
@@ -110,16 +113,113 @@ def run_lbl_wsgg_error_map(
             raise ValueError("temperatures_K must be positive")
         for length in path_lengths_m:
             alpha = absorption_spectrum(
-                lines, wavenumbers, temperature, pressure_atm, mole_fractions, length
+                lines, wavenumbers, temperature, pressure_atm, mole_fractions, length,
+                partition_sums=partition_sums,
             )
             eps_lbl = gas_emissivity_from_spectrum(alpha, wavenumbers, temperature, length)
             eps_wsgg = wsgg_emissivity(weights, kappa, length)
-            blackbody_delta = SIGMA_SB * (temperature**4 - wall_temperature_K**4)
-            q_lbl = eps_lbl * blackbody_delta
-            q_wsgg = eps_wsgg * blackbody_delta
+            q_lbl = spectral_net_radiative_flux(
+                alpha, wavenumbers, temperature, wall_temperature_K, length,
+                wall_emissivity=wall_emissivity,
+            )
+            eps_exchange = (
+                eps_wsgg * wall_emissivity
+                / (eps_wsgg + wall_emissivity - eps_wsgg * wall_emissivity)
+                if eps_wsgg + wall_emissivity - eps_wsgg * wall_emissivity > 0 else 0.0
+            )
+            q_wsgg = eps_exchange * SIGMA * (temperature**4 - wall_temperature_K**4)
             rel = 100.0 * (q_wsgg-q_lbl) / max(abs(q_lbl), 1e-30)
             out.append(LBLWSGGMapPoint(
                 temperature, pressure_atm, length, eps_lbl, eps_wsgg,
                 q_lbl, q_wsgg, rel
             ))
+    return out
+
+
+
+@dataclass(frozen=True)
+class LBLWSGGConditionResult:
+    temperature_K: float
+    pressure_atm: float
+    pCO2_atm: float
+    pH2O_atm: float
+    training_rmse_emissivity: float
+    holdout_mean_abs_q_error_percent: float
+    holdout_max_abs_q_error_percent: float
+    holdout_max_abs_q_error_W_m2: float
+    weights: tuple[float, ...]
+    kappa_m_inv: tuple[float, ...]
+    holdout_points: int
+
+
+def run_lbl_wsgg_calibration_sweep(
+    lines, wavenumbers, path_lengths_m, temperatures_K, pressures_atm,
+    co2_mole_fractions, h2o_mole_fractions, wall_temperature_K,
+    *, n_gases=4, partition_sums=None, wall_emissivity=1.0,
+    kappa_min=1e-4, kappa_max=1e3, grid_size=180, iterations=5000,
+) -> list[LBLWSGGConditionResult]:
+    """Calibrate and hold out WSGG fits over T/P/CO2/H2O composition combinations.
+
+    For each thermodynamic state, fit on alternating path-length samples and
+    score only the held-out samples. Coefficients are state-specific and are NOT
+    a single deployable WSGG correlation; a separate regression/model-selection
+    step is required before production use. A broad, converged spectral grid and
+    real, sourced line and partition-sum data are required for scientific claims.
+    """
+    from .models.radiation.hitemp_lbl import absorption_spectrum, spectral_net_radiative_flux
+    from .models.radiation.wsgg_fit import fit_wsgg, wsgg_emissivity
+    from .radiation import SIGMA
+
+    if len(path_lengths_m) < max(2 * (n_gases + 1), 6):
+        raise ValueError("need at least 2*(n_gases+1) path lengths for train/holdout split")
+    if not 0 < wall_emissivity <= 1 or wall_temperature_K <= 0:
+        raise ValueError("invalid wall emissivity or temperature")
+    train_idx = [i for i in range(len(path_lengths_m)) if i % 2 == 0]
+    test_idx = [i for i in range(len(path_lengths_m)) if i % 2 == 1]
+    if len(train_idx) < n_gases + 1 or not test_idx:
+        raise ValueError("insufficient training/holdout path lengths")
+
+    out = []
+    for temperature in temperatures_K:
+        for pressure in pressures_atm:
+            for xco2 in co2_mole_fractions:
+                for xh2o in h2o_mole_fractions:
+                    if temperature <= 0 or pressure <= 0 or xco2 < 0 or xh2o < 0 or xco2 + xh2o > 1:
+                        raise ValueError("invalid T/P or mole fractions")
+                    composition = {"CO2": xco2, "H2O": xh2o}
+                    eps_lbls = []
+                    q_lbls = []
+                    for length in path_lengths_m:
+                        alpha = absorption_spectrum(
+                            lines, wavenumbers, temperature, pressure, composition, length,
+                            partition_sums=partition_sums,
+                        )
+                        eps = gas_emissivity_from_spectrum(alpha, wavenumbers, temperature, length)
+                        eps_lbls.append(eps)
+                        q_lbls.append(spectral_net_radiative_flux(
+                            alpha, wavenumbers, temperature, wall_temperature_K, length,
+                            wall_emissivity=wall_emissivity,
+                        ))
+                    fit = fit_wsgg(
+                        [path_lengths_m[i] for i in train_idx],
+                        [eps_lbls[i] for i in train_idx],
+                        n_gases=n_gases, kappa_min=kappa_min, kappa_max=kappa_max,
+                        grid_size=grid_size, iterations=iterations,
+                    )
+                    abs_pct, abs_wm2 = [], []
+                    for i in test_idx:
+                        eps_fit = wsgg_emissivity(fit.weights, fit.kappa, path_lengths_m[i])
+                        denom = eps_fit + wall_emissivity - eps_fit * wall_emissivity
+                        eps_exchange = eps_fit * wall_emissivity / denom if denom > 0 else 0.0
+                        q_fit = eps_exchange * SIGMA * (
+                            temperature**4 - wall_temperature_K**4
+                        )
+                        abs_pct.append(100.0 * abs(q_fit - q_lbls[i]) / max(abs(q_lbls[i]), 1e-12))
+                        abs_wm2.append(abs(q_fit - q_lbls[i]))
+                    out.append(LBLWSGGConditionResult(
+                        temperature, pressure, xco2*pressure, xh2o*pressure,
+                        fit.rmse,
+                        sum(abs_pct)/len(abs_pct), max(abs_pct), max(abs_wm2),
+                        fit.weights, fit.kappa, len(test_idx),
+                    ))
     return out
