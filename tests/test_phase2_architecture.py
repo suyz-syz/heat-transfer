@@ -113,3 +113,22 @@ def test_rotary_kiln_adapter_is_injectable_and_validates_h():
             velocity_m_s=2.0, characteristic_diameter_m=3.0,
             length_m=30.0, pressure_pa=101325.0,
         )
+
+
+
+def test_rotary_adapter_requires_source_and_applicability_metadata():
+    model = RotaryKilnCorrelationAdapter(
+        model_name="unreferenced",
+        source="",
+        applicability="",
+        evaluator=lambda **kwargs: 10.0,
+    )
+    with pytest.raises(ValueError):
+        model.evaluate(
+            bulk_temperature_k=1000.0,
+            wall_temperature_k=800.0,
+            velocity_m_s=2.0,
+            characteristic_diameter_m=3.0,
+            length_m=20.0,
+            pressure_pa=101325.0,
+        )
