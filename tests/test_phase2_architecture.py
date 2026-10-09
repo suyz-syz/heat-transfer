@@ -211,3 +211,15 @@ def test_solve_kiln_three_phase_requires_complete_boundary_data():
         solve_kiln(
             LAYERS, KilnParams(), bed_inlet_temperature_k=350.0,
         )
+
+
+def test_solve_kiln_three_phase_rejects_unknown_bed_flow_direction():
+    with pytest.raises(ValueError, match="bed_flow_direction"):
+        solve_kiln(
+            LAYERS, KilnParams(), bed_inlet_temperature_k=350.0,
+            bed_mass_flow_kg_s=2.0, cp_bed_j_kg_k=1000.0,
+            gas_bed_h_w_m2_k=20.0, wall_bed_h_w_m2_k=50.0,
+            gas_bed_area_per_length_m=1.0,
+            wall_bed_contact_per_length_m=0.2,
+            bed_flow_direction="cross-current",
+        )
