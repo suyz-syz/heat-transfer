@@ -9,6 +9,7 @@ from .calc import (
     WALL_TOL,
     KilnParams,
     KilnAxialSolution,
+    KilnState,
     Layer,
     WallSolution,
     air_properties,
@@ -44,4 +45,7 @@ from .models.convection import (
     ConvectionModel,
     GnielinskiPipeModel,
     RotaryKilnCorrelationAdapter,
+    TschengWatkinsonCorrelation,
+    TschengWatkinsonGasBed,
+    TschengWatkinsonGasWall,
 )
