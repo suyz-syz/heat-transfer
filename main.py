@@ -31,12 +31,14 @@ from kiln_ht import (
     material_names,
     save_user_material,
     solve_wall,
+    solve_kiln,
     compute_temperature_curve,
     ConductivityModel,
     validate_kiln_params,
     normalize_config,
 )
 from kiln_ht.export import build_report, export_result
+from kiln_ht.visualization import axial_plot_data, provisional_wsgg_weight_curves
 
 import os
 import json
@@ -487,6 +489,73 @@ class CurveWidget(Widget):
         with self.canvas:
             Color(1.0, 1.0, 1.0, 1.0)
             Rectangle(texture=tex, pos=(tx, ty), size=tex.size)
+
+
+class MultiCurveWidget(Widget):
+    """Lightweight multi-series Canvas chart for mobile axial and WSGG plots."""
+
+    PALETTE = (PRIMARY, ACCENT, (0.25, 0.78, 0.55, 1.0), (0.78, 0.48, 0.92, 1.0))
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._series = []
+        self.bind(pos=self.redraw, size=self.redraw)
+
+    def set_series(self, series):
+        self._series = [(str(label), list(x), list(y), tuple(color))
+                        for label, x, y, color in series if len(x) == len(y) and len(x) >= 2]
+        self.redraw()
+
+    def redraw(self, *_args):
+        self.canvas.clear()
+        if not self._series or self.width <= dp(60) or self.height <= dp(60):
+            return
+        xs = [v for _, x, _, _ in self._series for v in x]
+        ys = [v for _, _, y, _ in self._series for v in y]
+        if not xs or not ys:
+            return
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        sx, sy = (x1 - x0) or 1.0, (y1 - y0) or 1.0
+        y0 -= 0.06 * sy
+        y1 += 0.06 * sy
+        sy = (y1 - y0) or 1.0
+        left, right, bottom, top = dp(42), dp(12), dp(24), dp(24)
+        iw, ih = self.width - left - right, self.height - bottom - top
+        def px(v): return left + (v - x0) / sx * iw
+        def py(v): return bottom + (v - y0) / sy * ih
+        with self.canvas:
+            Color(*GRID)
+            for i in range(1, 5):
+                gy = bottom + ih * i / 5
+                Line(points=[left, gy, left + iw, gy], width=dp(1))
+                gx = left + iw * i / 5
+                Line(points=[gx, bottom, gx, bottom + ih], width=dp(1))
+            Color(*AXIS)
+            Line(points=[left, bottom, left + iw, bottom], width=dp(1))
+            Line(points=[left, bottom, left, bottom + ih], width=dp(1))
+            for idx, (label, x, y, color) in enumerate(self._series):
+                Color(*color)
+                pts = []
+                for xv, yv in zip(x, y):
+                    pts.extend((px(xv), py(yv)))
+                Line(points=pts, width=dp(2))
+                self._draw_label(label, left + dp(4) + (idx % 2) * self.width * 0.47,
+                                 self.y + self.height - dp(10), color)
+            self._draw_label(f"{y1:.0f}", dp(2), self.y + py(y1), TEXT_DIM)
+            self._draw_label(f"{y0:.0f}", dp(2), self.y + py(y0), TEXT_DIM)
+
+    def _draw_label(self, text, x, y, color):
+        try:
+            label = CoreLabel(text=str(text), font_size=sp(9), color=color)
+            label.refresh()
+            tex = label.texture
+            with self.canvas:
+                Color(1, 1, 1, 1)
+                Rectangle(texture=tex, pos=(self.x + x, y - tex.height / 2),
+                          size=tex.size)
+        except Exception:  # noqa: BLE001 — a missing glyph must not break charting
+            pass
 
 
 # ============ 结果页指标高亮卡 ============
@@ -1125,10 +1194,17 @@ class ResultScreen(Screen):
 
         root.add_widget(tables)
 
-        # ---- 下半区：温度分布大图（填满剩余垂直空间，size_hint_y=1） ----
-        curve_card = MDCard(spacing=dp(6), size_hint_y=1)
-        curve_card.add_widget(make_title("温度分布（内壁 → 外壁）"))
-        self.curve = CurveWidget(size_hint=(1, 1))
+        # ---- 多维曲线区：壁厚温度、轴向温度、辐射热流与 WSGG 权重 ----
+        chart_scroll = ScrollView(bar_width=dp(4), bar_color=GRID,
+                                  bar_inactive_color=GRID, size_hint_y=1)
+        chart_content = BoxLayout(orientation="vertical", spacing=dp(10),
+                                  padding=[dp(14), dp(4), dp(14), dp(14)],
+                                  size_hint_y=None)
+        chart_content.bind(minimum_height=chart_content.setter("height"))
+
+        curve_card = auto_height(MDCard(spacing=dp(6), height=dp(270)))
+        curve_card.add_widget(make_title("壁厚温度分布（内壁 → 外壁）"))
+        self.curve = CurveWidget(size_hint_y=None, height=dp(210))
         self.curve_hint = Label(text="等待计算…", color=TEXT_DIM, font_size=sp(14),
                                 size_hint=(None, None), size=(dp(200), dp(30)))
         self.curve.add_widget(self.curve_hint)
@@ -1137,14 +1213,38 @@ class ResultScreen(Screen):
         self.curve_foot = MdLabel(text="", color=TEXT_DIM, font_size=sp(12),
                                   size_hint_y=None, height=dp(20))
         curve_card.add_widget(self.curve_foot)
-        root.add_widget(curve_card)
+        chart_content.add_widget(curve_card)
+
+        axial_card = auto_height(MDCard(spacing=dp(6), height=dp(270)))
+        axial_card.add_widget(make_title("轴向温度 T(z) · 烟气 / 内壁 / 外壁 / 物料（如启用）"))
+        self.axial_curve = MultiCurveWidget(size_hint_y=None, height=dp(220))
+        axial_card.add_widget(self.axial_curve)
+        chart_content.add_widget(axial_card)
+
+        flux_card = auto_height(MDCard(spacing=dp(6), height=dp(230)))
+        flux_card.add_widget(make_title("轴向辐射热流密度 (W/m²)"))
+        self.flux_curve = MultiCurveWidget(size_hint_y=None, height=dp(180))
+        flux_card.add_widget(self.flux_curve)
+        chart_content.add_widget(flux_card)
+
+        weight_card = auto_height(MDCard(spacing=dp(6), height=dp(230)))
+        weight_card.add_widget(make_title("WSGG 暂定权重 a_j(T)"))
+        self.weight_curve = MultiCurveWidget(size_hint_y=None, height=dp(180))
+        weight_card.add_widget(self.weight_curve)
+        weight_card.add_widget(MdLabel(
+            text="当前系数为固定暂定权重，水平线不代表 HITEMP 温度拟合。",
+            color=ACCENT, font_size=sp(10), size_hint_y=None, height=dp(22)))
+        chart_content.add_widget(weight_card)
+
+        chart_scroll.add_widget(chart_content)
+        root.add_widget(chart_scroll)
 
         self.add_widget(root)
 
     def _center_hint(self, *_args):
         self.curve_hint.center = self.curve.center
 
-    def set_result(self, layers, sol, x_mm, T_c):
+    def set_result(self, layers, sol, x_mm, T_c, axial_data=None):
         """用最新计算结果刷新整个结果页。"""
         self._last = (layers, sol, x_mm, T_c)
         self.export_status.text = ""
@@ -1181,6 +1281,29 @@ class ResultScreen(Screen):
         self.curve.set_data(x_mm, T_c)
         self.curve_hint.opacity = 0
         self.curve_foot.text = f"距内壁 0 mm  →  {x_mm[-1]:.0f} mm"
+
+        if axial_data:
+            z = axial_data["z_m"]
+            series = [
+                ("烟气 °C", z, [v - 273.15 for v in axial_data["gas_temperature_k"]], PRIMARY),
+                ("内壁 °C", z, [v - 273.15 for v in axial_data["wall_inner_temperature_k"]], ACCENT),
+                ("外壁 °C", z, [v - 273.15 for v in axial_data["wall_outer_temperature_k"]], (0.25, 0.78, 0.55, 1.0)),
+            ]
+            if "material_temperature_k" in axial_data:
+                series.append(("物料 °C", z, [v - 273.15 for v in axial_data["material_temperature_k"]], (0.78, 0.48, 0.92, 1.0)))
+            self.axial_curve.set_series(series)
+            self.flux_curve.set_series([
+                ("q_rad W/m²", z, axial_data["radiative_heat_flux_w_m2"], PRIMARY)
+            ])
+        else:
+            self.axial_curve.set_series([])
+            self.flux_curve.set_series([])
+
+        weights = provisional_wsgg_weight_curves()
+        self.weight_curve.set_series([
+            (name, weights["temperature_k"], values, self.weight_curve.PALETTE[i % len(self.weight_curve.PALETTE)])
+            for i, (name, values) in enumerate(weights["weights"].items())
+        ])
 
     def _export(self):
         """导出/分享计算结果。"""
@@ -1253,7 +1376,16 @@ class KilnApp(BoxLayout):
         except Exception as exc:  # noqa: BLE001 —— UI 层统一捕获并展示错误
             self.input_screen._flash_error(str(exc))
             return False
-        self.result_screen.set_result(layers, sol, x_mm, T_c)
+        axial_data = None
+        try:
+            axial_solution = solve_kiln(
+                layers, params, n_cells=20, mass_flow_kg_s=20.0,
+                cp_gas_j_kg_k=1150.0,
+            )
+            axial_data = axial_plot_data(axial_solution)
+        except (ValueError, RuntimeError) as exc:
+            self.input_screen._flash_error(f"壁厚计算已完成；轴向图不可用：{exc}")
+        self.result_screen.set_result(layers, sol, x_mm, T_c, axial_data)
         self._on_nav(1)
         return True
 
