@@ -311,6 +311,7 @@ for idx, row in enumerate(_ss.layers):
             key=f"layer_{uid}_conductivity_points",
             height=80,
         )
+        points = None
         try:
             points = json.loads(raw_points)
             preview_model = ConductivityModel.table(points)
