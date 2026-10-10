@@ -34,6 +34,7 @@ from kiln_ht import (
     solve_wall,
     ConductivityModel,
     validate_kiln_params,
+    normalize_config,
 )
 
 # ============ 页面基础配置 ============
@@ -197,9 +198,65 @@ st.markdown(_CSS, unsafe_allow_html=True)
 # ============ 界面 ============
 _init_layer_state()
 
+# ---------- 历史配置导入（在参数控件创建前应用，避免 Streamlit 状态冲突） ----------
+with st.sidebar:
+    st.subheader("配置文件 · Schema v2")
+    _config_upload = st.file_uploader("导入历史配置（JSON / YAML）",
+                                      type=["json", "yaml", "yml"], key="config_upload")
+    if st.button("导入配置并覆盖当前输入", key="config_import_button"):
+        if _config_upload is None:
+            st.warning("请先选择 JSON 或 YAML 配置文件。")
+        else:
+            try:
+                _raw = _config_upload.getvalue().decode("utf-8")
+                if _config_upload.name.lower().endswith(".json"):
+                    _loaded = json.loads(_raw)
+                else:
+                    try:
+                        import yaml
+                    except ImportError as _exc:
+                        raise ValueError("YAML 导入需要安装 PyYAML；可先将文件转为 JSON。") from _exc
+                    _loaded = yaml.safe_load(_raw)
+                _cfg = normalize_config(_loaded)
+                _p = _cfg["params"]
+                _param_defaults = {
+                    "N_total": int(_p.get("N_total", 100)),
+                    "T_gas_C": float(_p.get("T_gas", 1523.15)) - 273.15,
+                    "T_env_C": float(_p.get("T_env", 298.15)) - 273.15,
+                    "v_gas": float(_p.get("v_gas", 3.0)),
+                    "L_char": float(_p.get("L_char", 4.0)),
+                    "L_kiln": float(_p.get("L_kiln", 60.0)),
+                    "P_total": float(_p.get("P_total", 1.01325)),
+                    "CO2": float(_p.get("CO2", 0.20)) * 100.0,
+                    "H2O": float(_p.get("H2O", 0.08)) * 100.0,
+                    "eps_wall": float(_p.get("eps_wall", 0.85)),
+                    "v_amb": float(_p.get("v_amb", 2.0)),
+                    "eps_shell": float(_p.get("eps_shell", 0.85)),
+                }
+                _ss.update(_param_defaults)
+                _ss.layers = []
+                for _idx, _layer in enumerate(_cfg["layers"]):
+                    _tc = _layer["thermal_conductivity"]
+                    _mode = _tc["mode"]
+                    _coef = _tc.get("coefficients", [_tc.get("value", 1.0), 0.0, 0.0])
+                    _ss.layer_count = int(_ss.get("layer_count", 0)) + 1
+                    _ss.layers.append({
+                        "uid": _ss.layer_count, "name": _layer.get("name", f"层{_idx+1}"),
+                        "thickness_mm": float(_layer["thickness_m"]) * 1000.0,
+                        "k": float(_tc.get("value", _coef[0])),
+                        "k_coef": list(_coef), "Rc": float(_layer.get("contact_resistance_m2_k_w", 0.0)),
+                        "conductivity_mode": _mode,
+                        "conductivity_points": _tc.get("points", [[250, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]]),
+                    })
+                st.success(f"已导入 Schema v2 配置：{len(_ss.layers)} 层。请核对单位和物性数据后再计算。")
+                st.rerun()
+            except (ValueError, TypeError, KeyError, json.JSONDecodeError) as _exc:
+                st.error(f"配置导入失败：{_exc}")
+
 # ---------- 侧边栏：工况参数 ----------
 with st.sidebar:
     st.header("🔥 工况参数")
+
     st.caption("温度以 ℃ 输入，后台自动换算为 K")
 
     st.subheader("窑体与热工参数")
@@ -360,6 +417,51 @@ if st.button("➕ 添加衬层", width="stretch"):
     st.rerun()
 
 st.divider()
+
+# ---------- 配置导出：保留 SI 单位与导热模型定义 ----------
+with st.expander("📦 配置导出（JSON / YAML，Schema v2）", expanded=False):
+    _export_layers = []
+    for _i, _row in enumerate(_ss.layers):
+        _uid = _row.get("uid", _i + 1)
+        _mode = _row.get("conductivity_mode", "constant")
+        if _mode == "table":
+            _tc_out = {"mode": "table", "points": _row.get("conductivity_points", [])}
+        elif _mode == "polynomial":
+            _tc_out = {"mode": "polynomial", "temperature_unit": "degC",
+                       "coefficients": list(_row.get("k_coef") or [1.0, 0.0, 0.0])}
+        else:
+            _tc_out = {"mode": "constant", "value": float(_ss.get(f"layer_{_uid}_lambda0",
+                       (_row.get("k_coef") or [_row.get("k", 1.0)])[0]))}
+        _export_layers.append({
+            "name": _ss.get(f"layer_{_uid}_name", _row.get("name", "")),
+            "thickness_m": float(_ss.get(f"layer_{_uid}_thick", _row.get("thickness_mm", 50.0))) / 1000.0,
+            "contact_resistance_m2_k_w": float(_ss.get(f"layer_{_uid}_Rc", _row.get("Rc", 0.0))),
+            "thermal_conductivity": _tc_out,
+        })
+    _export_cfg = normalize_config({
+        "schema_version": 2,
+        "params": {
+            "N_total": int(_ss.get("N_total", 100)),
+            "T_gas": float(_ss.get("T_gas_C", 1250.0)) + 273.15,
+            "T_env": float(_ss.get("T_env_C", 25.0)) + 273.15,
+            "v_gas": float(_ss.get("v_gas", 3.0)), "L_char": float(_ss.get("L_char", 4.0)),
+            "L_kiln": float(_ss.get("L_kiln", 60.0)), "P_total": float(_ss.get("P_total", 1.01325)),
+            "CO2": float(_ss.get("CO2", 20.0)) / 100.0, "H2O": float(_ss.get("H2O", 8.0)) / 100.0,
+            "eps_wall": float(_ss.get("eps_wall", 0.85)), "v_amb": float(_ss.get("v_amb", 2.0)),
+            "eps_shell": float(_ss.get("eps_shell", 0.85)),
+        },
+        "layers": _export_layers,
+    })
+    _json_config = json.dumps(_export_cfg, ensure_ascii=False, indent=2)
+    st.download_button("下载 JSON", _json_config, file_name="kiln-config-v2.json",
+                       mime="application/json", key="config_download_json")
+    try:
+        import yaml as _yaml
+        _yaml_config = _yaml.safe_dump(_export_cfg, allow_unicode=True, sort_keys=False)
+        st.download_button("下载 YAML", _yaml_config, file_name="kiln-config-v2.yaml",
+                           mime="application/yaml", key="config_download_yaml")
+    except ImportError:
+        st.caption("YAML 导出需安装 PyYAML；JSON 导出不受影响。")
 
 # ---------- 主区下部：结果 ----------
 st.subheader("📊 计算结果")
