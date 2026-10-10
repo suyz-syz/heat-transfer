@@ -1,0 +1,95 @@
+{
+  "report_type": "HITEMP/TIPS-derived band-limited WSGG calibration",
+  "status": "LOCAL_CALCULATION_CI_REPRODUCTION_PENDING_NOT_RELEASE_APPROVED",
+  "provenance": {
+    "line_csv": "hitemp_co2_h2o_1000_4000_sample(2).csv",
+    "line_csv_sha256": "396693efc16958d1c011c74997a64c0a7a0589205de016e7d81baeec2fbaa5b7",
+    "line_count": 40676,
+    "tips_csv": "tips_partition_sums_296_2400(1).csv",
+    "tips_csv_sha256": "42a0875b99c16e99829d5e70aac74c33e97ba068663cf62ce182c2e84ef7be3f",
+    "tips_rows": 1032,
+    "isotopologue_pairs": 12,
+    "molecule_id_mapping": {"1": "H2O", "2": "CO2"},
+    "negative_n_air_counts_by_molecule_id": {"1": 1042, "2": 0}
+  },
+  "model": {
+    "band_cm-1": [2000.0, 2400.0],
+    "grid_step_cm-1": 0.01,
+    "grid_point_count": 40001,
+    "line_wing_cutoff_cm-1": 25.0,
+    "line_profile": "pseudo-Voigt approximation",
+    "pressure_shift": "nu0 = nu + delta_air * P_atm * (1 - x_molecule)",
+    "temperature_broadening": "gamma = P * (Tref/T)^n_air * (gamma_air*(1-x) + gamma_self*x)",
+    "kappa_unit": "atm^-1 m^-1",
+    "emissivity_model": "sum_j a_j(T) * (1 - exp(-kappa_j * P_atm * L_m))",
+    "global_fit": "shared kappa_j across temperatures; per-temperature simplex weights",
+    "weight_parameterization": "softmax for fitted weights; nonnegative degree-3 Bernstein coefficients normalized across gases"
+  },
+  "training_design": {
+    "temperatures_K": [600, 1000, 1200, 1400, 1800, 2400],
+    "pressures_atm": [0.3, 1.0, 3.0],
+    "composition_mole_fraction": {"CO2": 0.12, "H2O": 0.08},
+    "path_lengths_m": "12 log-spaced points from 0.05 to 5.0"
+  },
+  "holdout_design": {
+    "type": "composition holdout inside training T/P domain",
+    "temperatures_K": [600, 1000, 1200, 1400, 1800, 2400],
+    "pressures_atm": [0.3, 1.0, 3.0],
+    "compositions": [{"CO2": 0.08, "H2O": 0.04}, {"CO2": 0.20, "H2O": 0.10}],
+    "path_lengths_m": "12 log-spaced points from 0.05 to 5.0"
+  },
+  "grid_convergence": {
+    "condition": {"temperature_K": 1200, "pressure_atm": 1.0, "CO2": 0.12, "H2O": 0.08},
+    "comparison": "0.01 cm^-1 versus 0.005 cm^-1",
+    "max_relative_emissivity_difference_percent": 0.25133769285147195
+  },
+  "results_by_n_gray_gases": {
+    "3": {
+      "global_kappa_atm_inv_m_inv": [0.03204634353489513, 2.863473672190547, 26.765644747346144],
+      "bernstein_coefficients_by_gas": [
+        [0.6249039481920956, 0.46510235065567096, 0.595499569384711, 0.6153500623105558],
+        [0.13828176869865952, 0.1398874951374989, 0.21783772324218512, 0.2890597856321648],
+        [0.23681428310924518, 0.39501015420683083, 0.1866627073731036, 0.0955901520572794]
+      ],
+      "direct_weight_training": {"mape_percent": 5.599091045392331, "mean_absolute_band_flux_bias_W_m2": 423.5467324544418, "max_absolute_band_flux_bias_W_m2": 3920.462809359893},
+      "direct_weight_holdout": {"mape_percent": 11.0759677502137, "mean_absolute_band_flux_bias_W_m2": 726.844446470032, "max_absolute_band_flux_bias_W_m2": 6044.347842638084},
+      "bernstein_training": {"mape_percent": 5.608292493146714, "mean_absolute_band_flux_bias_W_m2": 424.081642041237, "max_absolute_band_flux_bias_W_m2": 3933.8800620812203},
+      "bernstein_holdout": {"mape_percent": 11.077479972828252, "mean_absolute_band_flux_bias_W_m2": 726.8007096832232, "max_absolute_band_flux_bias_W_m2": 6057.765095359412}
+    },
+    "4": {
+      "global_kappa_atm_inv_m_inv": [0.013653779706230267, 0.28395110776984056, 5.179815239616936, 30.144772804236258],
+      "bernstein_coefficients_by_gas": [
+        [0.49766223878969534, 0.3262276233587861, 0.5303988120592991, 0.5206580580173561],
+        [0.17730497145796348, 0.20829398621010098, 0.08016133475265008, 0.1393927761971917],
+        [0.1023419629074564, 0.07256116582577402, 0.2851629521915742, 0.312942019649225],
+        [0.22269082684488503, 0.39291722460533896, 0.10427690099647692, 0.02700714613622709]
+      ],
+      "direct_weight_training": {"mape_percent": 4.532666607560022, "mean_absolute_band_flux_bias_W_m2": 357.83657225051417, "max_absolute_band_flux_bias_W_m2": 3327.593733973925},
+      "direct_weight_holdout": {"mape_percent": 10.806660315658483, "mean_absolute_band_flux_bias_W_m2": 715.1599466971429, "max_absolute_band_flux_bias_W_m2": 5376.543394032285},
+      "bernstein_training": {"mape_percent": 4.547804809170466, "mean_absolute_band_flux_bias_W_m2": 359.85446060448584, "max_absolute_band_flux_bias_W_m2": 3345.0539634302236},
+      "bernstein_holdout": {"mape_percent": 10.809401186057691, "mean_absolute_band_flux_bias_W_m2": 715.113576923601, "max_absolute_band_flux_bias_W_m2": 5394.003623488584}
+    },
+    "5": {
+      "global_kappa_atm_inv_m_inv": [0.008287837915677058, 0.15396948009396083, 1.460986391825608, 9.60574916534534, 44.914166917050444],
+      "bernstein_coefficients_by_gas": [
+        [0.4323189515655682, 0.2564716195999105, 0.46924469585304235, 0.4942436549023772],
+        [0.20942053934906982, 0.2510929949427007, 0.13732619048215824, 0.09822178648097693],
+        [0.06440965864622049, 0.03435605365194641, 0.046629402316156435, 0.18846178128481003],
+        [0.13079106131712367, 0.16779425741645176, 0.3586427365714437, 0.21890265956541458],
+        [0.16382582531112702, 0.2820283357836821, 2.6224017179491343e-16, 3.278186566538514e-10]
+      ],
+      "direct_weight_training": {"mape_percent": 4.235991772389978, "mean_absolute_band_flux_bias_W_m2": 335.5670939822691, "max_absolute_band_flux_bias_W_m2": 2633.3702714905535},
+      "direct_weight_holdout": {"mape_percent": 10.787306663893153, "mean_absolute_band_flux_bias_W_m2": 705.2383350162542, "max_absolute_band_flux_bias_W_m2": 5207.076593096524},
+      "bernstein_training": {"mape_percent": 4.266951747247246, "mean_absolute_band_flux_bias_W_m2": 335.84767041638327, "max_absolute_band_flux_bias_W_m2": 2646.388613227925},
+      "bernstein_holdout": {"mape_percent": 10.810731390404975, "mean_absolute_band_flux_bias_W_m2": 705.4902600209821, "max_absolute_band_flux_bias_W_m2": 5197.576173979247}
+    }
+  },
+  "limitations": [
+    "This JSON contains values calculated from the uploaded CSVs in the current execution; exact CI reproduction remains pending because those CSVs are not tracked in the repository.",
+    "The supplied line list is a sample; completeness against a specific licensed HITEMP edition was not independently authenticated.",
+    "The reference uses pseudo-Voigt profiles and a +/-25 cm^-1 line-wing cutoff, not a validated Hartmann-Tran model.",
+    "The 2000-2400 cm^-1 band metrics are not total-spectrum emissivity or net wall-flux validation.",
+    "Holdout varies composition but remains inside the calibrated temperature and pressure domain.",
+    "Independent EM2C-SNB/experimental validation is required before production use."
+  ]
+}
