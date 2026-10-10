@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Tuple
 from .gas import GasMixture, DEFAULT_GAS
 from .properties import get_gas_properties
 from .radiation import get_gas_radiation
+from .conductivity import ConductivityModel
 
 # ============ 物理常数 ============
 SIGMA = 5.670374419e-8      # Stefan-Boltzmann 常数 W/(m²·K⁴)
@@ -52,6 +53,7 @@ class Layer:
     k: float = 1.0          # 兼容字段：仅提供 k 时自动转 k_coef=(k,0,0)
     k_coef: Optional[Tuple[float, float, float]] = None
     Rc: float = 0.0         # 层间接触热阻 m²·K/W
+    conductivity_model: Optional[ConductivityModel] = None
 
     def __post_init__(self) -> None:
         if self.k_coef is None:
@@ -67,9 +69,17 @@ class Layer:
         return self.k_coef[0]
 
     def k_at(self, T_c: float) -> float:
-        """温度 T(℃) 下的导热系数 W/(m·K)。"""
+        """温度 T(℃) 下的导热系数 W/(m·K)，兼容旧多项式字段。"""
+        if self.conductivity_model is not None:
+            return self.conductivity_model.conductivity(T_c + 273.15)
         a, b, c = self.k_coef
         return a + b * T_c + c * T_c * T_c
+
+    def mean_k_between_k(self, T0_k: float, T1_k: float) -> float:
+        """Layer-average conductivity for radial conduction integration."""
+        if self.conductivity_model is not None:
+            return self.conductivity_model.mean_k(T0_k, T1_k)
+        return integral_mean_k(self.k_coef, T0_k - 273.15, T1_k - 273.15)
 
 
 @dataclass
@@ -337,6 +347,11 @@ def validate_layer_conductivity(layers: List[Layer], params: KilnParams) -> None
     if t_lo > t_hi:
         t_lo, t_hi = t_hi, t_lo
     for i, layer in enumerate(layers):
+        if layer.conductivity_model is not None and layer.conductivity_model.mode == "table":
+            tmin, tmax = layer.conductivity_model.points[0][0], layer.conductivity_model.points[-1][0]
+            if min(params.T_env, params.T_gas) < tmin or max(params.T_env, params.T_gas) > tmax:
+                raise ValueError(f"第 {i + 1} 层「{layer.name}」的导热系数插值表范围 {tmin:g}–{tmax:g} K 未覆盖当前工况温度范围；禁止外推。")
+            continue
         a, b, c = layer.k_coef
         points = [t_lo, (t_lo + t_hi) / 2.0, t_hi]
         if abs(c) > 1e-30:
@@ -413,7 +428,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
 
         # 更新各层积分平均导热系数（层内 T 取 ℃）
         k_avg = [
-            integral_mean_k(l.k_coef, T_iface_est[i] - 273.15, T_iface_est[i + 1] - 273.15)
+            l.mean_k_between_k(T_iface_est[i], T_iface_est[i + 1])
             for i, l in enumerate(layers)
         ]
         # 安全防护：k_avg 必须为正，否则 R_wall<0 → 热流反向 → 温度反常升高
@@ -523,8 +538,33 @@ def _temperature_from_radius(
     r: float,
     r1: float,
     k_coef: Tuple[float, float, float],
+    conductivity_model: Optional[ConductivityModel] = None,
+    T_bounds_k: Optional[Tuple[float, float]] = None,
 ) -> float:
-    """由 K(T)-K(T1)=-Q'/(2π)ln(r/r1) 反解 T(r)。"""
+    """Invert the radial conductivity integral; table mode uses bounded bisection."""
+    if conductivity_model is not None and conductivity_model.mode == "table":
+        target = -Qprime / (2.0 * math.pi) * math.log(r / r1)
+        if abs(target) < 1e-15:
+            return T1_c
+        if T_bounds_k is None:
+            raise ValueError("插值表温度反解缺少界面温度边界")
+        lo, hi = sorted(T_bounds_k)
+        t1_k = T1_c + 273.15
+        def residual(t_k):
+            return conductivity_model.integral_k(t1_k, t_k) - target
+        flo, fhi = residual(lo), residual(hi)
+        if flo > 1e-8 or fhi < -1e-8:
+            raise ValueError("插值表温度反解超出界面温度范围")
+        for _ in range(80):
+            mid = 0.5 * (lo + hi)
+            fm = residual(mid)
+            if abs(fm) < 1e-9 or hi - lo < 1e-8:
+                return mid - 273.15
+            if fm < 0:
+                lo = mid
+            else:
+                hi = mid
+        return 0.5 * (lo + hi) - 273.15
     target = _k_integral(k_coef, T1_c) - Qprime / (2.0 * math.pi) * math.log(r / r1)
     T = T1_c
     for _ in range(50):
@@ -574,6 +614,8 @@ def compute_temperature_curve(
                     sol.r_in + x,
                     r_i,
                     layer.k_coef,
+                    conductivity_model=layer.conductivity_model,
+                    T_bounds_k=(sol.T_iface[i], sol.T_iface[i + 1]),
                 )
                 break
 
