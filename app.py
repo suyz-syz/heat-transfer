@@ -240,7 +240,12 @@ with st.sidebar:
                 for _idx, _layer in enumerate(_cfg["layers"]):
                     _tc = _layer["thermal_conductivity"]
                     _mode = _tc["mode"]
-                    _coef = _tc.get("coefficients", [_tc.get("value", 1.0), 0.0, 0.0])
+                    _coef = list(_tc.get("coefficients", [_tc.get("value", 1.0), 0.0, 0.0]))
+                    if _mode == "polynomial" and _tc.get("temperature_unit", "degC") == "K":
+                        # UI stores legacy polynomial coefficients against degrees C.
+                        _c0, _c1, _c2 = (float(v) for v in _coef)
+                        _coef = [_c0 + 273.15 * _c1 + 273.15 ** 2 * _c2,
+                                 _c1 + 2.0 * 273.15 * _c2, _c2]
                     _ss.layer_count = int(_ss.get("layer_count", 0)) + 1
                     _ss.layers.append({
                         "uid": _ss.layer_count, "name": _layer.get("name", f"层{_idx+1}"),
