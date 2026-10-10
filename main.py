@@ -32,10 +32,13 @@ from kiln_ht import (
     save_user_material,
     solve_wall,
     compute_temperature_curve,
+    ConductivityModel,
+    validate_kiln_params,
 )
 from kiln_ht.export import build_report, export_result
 
 import os
+import json
 
 import kivy
 
@@ -703,11 +706,11 @@ class InputScreen(Screen):
             mat = Spinner(text="自定义", values=["自定义"] + user_mats,
                           size_hint_x=1, font_size=sp(12),
                           background_color=CARD_ELEV)
-            temp_cb = CheckBox(size_hint_x=None, width=dp(36), color=PRIMARY)
+            mode_spinner = Spinner(text="常数", values=["常数", "多项式", "插值表"], size_hint_x=None, width=dp(94), font_size=sp(11), background_color=CARD_ELEV)
             row1.add_widget(name)
             row1.add_widget(thick)
             row1.add_widget(mat)
-            row1.add_widget(temp_cb)
+            row1.add_widget(mode_spinner)
             card.add_widget(row1)
 
             # 第一行下方小注：材料 / 温度相关（勾选后启用 b、c）
@@ -715,8 +718,8 @@ class InputScreen(Screen):
             hint1.add_widget(Widget(size_hint_x=None, width=dp(72)))
             hint1.add_widget(Widget(size_hint_x=None, width=dp(70)))
             hint1.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(10)))
-            hint1.add_widget(MdLabel(text="温度相关", color=TEXT_DIM, font_size=sp(10),
-                                     size_hint_x=None, width=dp(40)))
+            hint1.add_widget(MdLabel(text="导热模式", color=TEXT_DIM, font_size=sp(10),
+                                     size_hint_x=None, width=dp(94)))
             card.add_widget(hint1)
 
             # 行间分隔线：清晰区分「第一行 / 第二行」
@@ -745,6 +748,18 @@ class InputScreen(Screen):
             row2.add_widget(rc)
             card.add_widget(row2)
 
+            table_row = BoxLayout(orientation="horizontal", spacing=dp(6),
+                                  size_hint_y=None, height=dp(44))
+            table_in = TextInput(
+                text="[[300,1.5],[800,1.2],[1300,1.0],[2000,0.8]]",
+                multiline=False, font_size=sp(11), size_hint_x=1,
+                background_color=CARD_ELEV, foreground_color=TEXT,
+                cursor_color=PRIMARY, padding=[dp(8), dp(10), dp(8), dp(8)])
+            table_row.add_widget(MdLabel(text="表格 JSON", color=TEXT_DIM, font_size=sp(10),
+                                         size_hint_x=None, width=dp(72)))
+            table_row.add_widget(table_in)
+            card.add_widget(table_row)
+
             # 第二行下方小注：a/b/c 组上方为弹性「导热系数」公式说明；
             # Rc 输入框内不显示单位后缀，其说明「接触热阻 Rc」作为固定宽度
             # （与 rc 输入框等宽 dp(64)）标签，右端与输入框精确对齐。
@@ -766,21 +781,18 @@ class InputScreen(Screen):
             card.add_widget(save_btn)
 
             self.layer_grid.add_widget(card)
-            self._layer_rows.append((name, thick, mat, a_in, b, c, rc, temp_cb,
-                                     save_btn))
-
-            # 勾选温度相关时启用 b/c
-            def _toggle(*_a, b_=b, c_=c, cb_=temp_cb):
-                b_.disabled = not cb_.active
-                c_.disabled = not cb_.active
-                # 未勾选温度相关时 b/c 显示为置灰但仍保留输入值
-                b_.opacity = 1.0
-                c_.opacity = 1.0
-            temp_cb.bind(active=_toggle)
-            _toggle()
+            self._layer_rows.append((name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in))
+            def _mode_changed(*_a, b_=b, c_=c, mode_=mode_spinner, table_=table_in):
+                is_poly = mode_.text == "多项式"
+                b_.disabled = not is_poly
+                c_.disabled = not is_poly
+                table_.disabled = mode_.text != "插值表"
+                table_.opacity = 1.0 if mode_.text == "插值表" else 0.55
+            mode_spinner.bind(text=_mode_changed)
+            _mode_changed()
 
             # 选择材料时自动填充 a/b/c（并勾选温度相关）
-            def _on_mat(*_a, idx_=i, a_=a_in, b_=b, c_=c, cb_=temp_cb):
+            def _on_mat(*_a, idx_=i, a_=a_in, b_=b, c_=c, mode_=mode_spinner):
                 self._apply_material(idx_)
             mat.bind(text=_on_mat)
 
@@ -788,7 +800,7 @@ class InputScreen(Screen):
 
     def _apply_material(self, idx: int):
         """选中材料库材料时，将其 k_coef 填充到当前层 a/b/c。"""
-        name, thick, mat, a_in, b, c, rc, temp_cb, save_btn = self._layer_rows[idx]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = self._layer_rows[idx]
         if mat.text == "自定义":
             return
         try:
@@ -799,11 +811,11 @@ class InputScreen(Screen):
         a_in.text = f"{k_coef[0]:g}"
         b.text = f"{k_coef[1]:g}"
         c.text = f"{k_coef[2]:g}"
-        temp_cb.active = True
+        mode_spinner.text = "多项式"
 
     def _save_material(self, idx: int):
         """将当前层 a/b/c 保存到用户材料库。"""
-        name, thick, mat, a_in, b, c, rc, temp_cb, save_btn = self._layer_rows[idx]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = self._layer_rows[idx]
         try:
             k_coef = (float(a_in.text), float(b.text), float(c.text))
             save_user_material(name.text.strip() or f"层{idx + 1}", k_coef)
@@ -816,18 +828,26 @@ class InputScreen(Screen):
     def collect_params(self):
         """解析界面参数，非法输入抛 ValueError。"""
         layers = []
-        for i, (name, thick, mat, a_in, b, c, rc, temp_cb, save_btn) in enumerate(self._layer_rows):
+        for i, (name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in) in enumerate(self._layer_rows):
             a = float(a_in.text)
-            if temp_cb.active:
+            mode = mode_spinner.text
+            if mode == "多项式":
                 k_coef = (a, float(b.text), float(c.text))
+                conductivity_model = ConductivityModel.polynomial(k_coef, "degC")
+            elif mode == "插值表":
+                try:
+                    points = json.loads(table_in.text)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"第 {i+1} 层插值表不是有效 JSON") from exc
+                conductivity_model = ConductivityModel.table(points)
+                k_coef = (1.0, 0.0, 0.0)
             else:
-                k_coef = (a, 0.0, 0.0)   # 未勾选温度相关 -> 常数 k
-            layers.append(Layer(
-                name=name.text.strip() or f"层{i+1}",
-                thickness=float(thick.text) / 1000.0,
-                k_coef=k_coef,
-                Rc=float(rc.text),
-            ))
+                k_coef = (a, 0.0, 0.0)
+                conductivity_model = ConductivityModel.constant(a)
+            layers.append(Layer(name=name.text.strip() or f"层{i+1}",
+                                thickness=float(thick.text) / 1000.0,
+                                k_coef=k_coef, Rc=float(rc.text),
+                                conductivity_model=conductivity_model))
         p = self._fields
         params = KilnParams(
             N_total=int(p["N_total"].text),
@@ -843,6 +863,7 @@ class InputScreen(Screen):
             v_amb=float(p["v_amb"].text),
             eps_shell=float(p["eps_shell"].text),
         )
+        validate_kiln_params(vars(params))
         return layers, params
 
     def _on_calc(self):
