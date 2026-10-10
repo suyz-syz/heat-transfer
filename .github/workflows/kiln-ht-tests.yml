@@ -56,7 +56,7 @@ jobs:
               assert c.shape == (int(n), 4) and np.all(np.isfinite(c)) and np.all(c >= 0)
               for t in np.linspace(*result["bernstein_weights"]["temperature_interval_K"], 31):
                   x = (t - result["bernstein_weights"]["temperature_interval_K"][0]) / (result["bernstein_weights"]["temperature_interval_K"][1] - result["bernstein_weights"]["temperature_interval_K"][0])
-                  basis = np.array([3 * x * (1-x)**2, 3*x*x*(1-x), x**3, (1-x)**3])
+                  basis = np.array([(1-x)**3, 3*x*(1-x)**2, 3*x*x*(1-x), x**3])
                   a = c @ basis
                   a = a / a.sum()
                   assert np.all(a >= 0) and abs(float(a.sum()) - 1.0) < 1e-10
