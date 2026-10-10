@@ -15,17 +15,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install --upgrade pip pytest
-      - run: python -m pytest tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py tests/test_phase1b_wsgg.py tests/test_phase2_architecture.py -q
+      - run: python -m pip install --upgrade pip pytest numpy pandas scipy
+      - run: python -m pytest tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py tests/test_phase1b_wsgg.py tests/test_phase2_architecture.py tests/test_hitemp_wsgg_calibration.py -q
       - name: Generate built-in WSGG surrogate report
         run: >-
           python scripts/benchmark_literature_emissivity.py
           --builtin
           --output reports/literature_wsgg_R1.json
           --wall-temperature-k 800
-      - name: Upload built-in benchmark report
+      - name: Regenerate HITEMP WSGG report when source data are provisioned
+        shell: bash
+        run: |
+          if [[ -f data/hitemp_co2_h2o_1000_4000_sample.csv && -f data/tips_partition_sums_296_2400.csv ]]; then
+            python scripts/calibrate_hitemp_wsgg_global.py
+              --line-csv data/hitemp_co2_h2o_1000_4000_sample.csv
+              --tips-csv data/tips_partition_sums_296_2400.csv
+              --release "user-provisioned HITEMP/TIPS CSV"
+              --output reports/hitemp_wsgg_calibration.json
+          else
+            echo "::notice::HITEMP/TIPS source CSVs are not committed; full physical calibration was not run in this CI job."
+          fi
+      - name: Upload benchmark and calibration reports
         uses: actions/upload-artifact@v4
         with:
-          name: builtin-wsgg-report
-          path: reports/literature_wsgg_R1.json
-          if-no-files-found: error
+          name: kiln-ht-reports
+          path: |
+            reports/literature_wsgg_R1.json
+            reports/hitemp_wsgg_calibration.json
+          if-no-files-found: warn
