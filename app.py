@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import streamlit as st
 import pandas as pd
+import json
 
 from kiln_ht import (
     KilnParams,
@@ -31,7 +32,12 @@ from kiln_ht import (
     save_user_material,
     compute_temperature_curve,
     solve_wall,
+    solve_kiln,
+    ConductivityModel,
+    validate_kiln_params,
+    normalize_config,
 )
+from kiln_ht.visualization import axial_plot_data, provisional_wsgg_weight_curves
 
 # ============ 页面基础配置 ============
 st.set_page_config(
@@ -105,14 +111,25 @@ def _solve():
     """
     layers = []
     for i, row in enumerate(_ss.layers):
-        k_coef = row.get("k_coef")
-        if k_coef is None:
-            k_coef = (float(row["k"]), 0.0, 0.0)
+        k_coef = tuple(row.get("k_coef") or (float(row.get("k", 1.0)), 0.0, 0.0))
+        mode = row.get("conductivity_mode", "constant")
+        model = None
+        if mode == "constant":
+            model = ConductivityModel.constant(k_coef[0])
+            k_coef = (k_coef[0], 0.0, 0.0)
+        elif mode == "polynomial":
+            model = ConductivityModel.polynomial(k_coef, "degC")
+        elif mode == "table":
+            points = row.get("conductivity_points", [[250, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
+            model = ConductivityModel.table(points)
+        else:
+            raise ValueError(f"未知导热模型: {mode}")
         layers.append(Layer(
             name=row["name"].strip() or f"层{i+1}",
             thickness=float(row["thickness_mm"]) / 1000.0,
             k_coef=tuple(k_coef),
             Rc=float(row.get("Rc", 0.0)),
+            conductivity_model=model,
         ))
     params = KilnParams(
         N_total=_ss.N_total,
@@ -128,9 +145,10 @@ def _solve():
         v_amb=_ss.v_amb,
         eps_shell=_ss.eps_shell,
     )
+    validate_kiln_params(vars(params))
     sol = solve_wall(layers, params)
     x_mm, T_c = compute_temperature_curve(layers, sol, n_points=params.N_total)
-    return layers, sol, x_mm, T_c
+    return layers, sol, x_mm, T_c, params
 
 
 # ============ 自定义 CSS：输入框与背景的视觉分割 ============
@@ -182,18 +200,80 @@ st.markdown(_CSS, unsafe_allow_html=True)
 # ============ 界面 ============
 _init_layer_state()
 
+# ---------- 历史配置导入（在参数控件创建前应用，避免 Streamlit 状态冲突） ----------
+with st.sidebar:
+    st.subheader("配置文件 · Schema v2")
+    _config_upload = st.file_uploader("导入历史配置（JSON / YAML）",
+                                      type=["json", "yaml", "yml"], key="config_upload")
+    if st.button("导入配置并覆盖当前输入", key="config_import_button"):
+        if _config_upload is None:
+            st.warning("请先选择 JSON 或 YAML 配置文件。")
+        else:
+            try:
+                _raw = _config_upload.getvalue().decode("utf-8")
+                if _config_upload.name.lower().endswith(".json"):
+                    _loaded = json.loads(_raw)
+                else:
+                    try:
+                        import yaml
+                    except ImportError as _exc:
+                        raise ValueError("YAML 导入需要安装 PyYAML；可先将文件转为 JSON。") from _exc
+                    _loaded = yaml.safe_load(_raw)
+                _cfg = normalize_config(_loaded)
+                _p = _cfg["params"]
+                _param_defaults = {
+                    "N_total": int(_p.get("N_total", 100)),
+                    "T_gas_C": float(_p.get("T_gas", 1523.15)) - 273.15,
+                    "T_env_C": float(_p.get("T_env", 298.15)) - 273.15,
+                    "v_gas": float(_p.get("v_gas", 3.0)),
+                    "L_char": float(_p.get("L_char", 4.0)),
+                    "L_kiln": float(_p.get("L_kiln", 60.0)),
+                    "P_total": float(_p.get("P_total", 1.01325)),
+                    "CO2": float(_p.get("CO2", 0.20)) * 100.0,
+                    "H2O": float(_p.get("H2O", 0.08)) * 100.0,
+                    "eps_wall": float(_p.get("eps_wall", 0.85)),
+                    "v_amb": float(_p.get("v_amb", 2.0)),
+                    "eps_shell": float(_p.get("eps_shell", 0.85)),
+                }
+                _ss.update(_param_defaults)
+                _ss.layers = []
+                for _idx, _layer in enumerate(_cfg["layers"]):
+                    _tc = _layer["thermal_conductivity"]
+                    _mode = _tc["mode"]
+                    _coef = list(_tc.get("coefficients", [_tc.get("value", 1.0), 0.0, 0.0]))
+                    if _mode == "polynomial" and _tc.get("temperature_unit", "degC") == "K":
+                        # UI stores legacy polynomial coefficients against degrees C.
+                        _c0, _c1, _c2 = (float(v) for v in _coef)
+                        _coef = [_c0 + 273.15 * _c1 + 273.15 ** 2 * _c2,
+                                 _c1 + 2.0 * 273.15 * _c2, _c2]
+                    _ss.layer_count = int(_ss.get("layer_count", 0)) + 1
+                    _ss.layers.append({
+                        "uid": _ss.layer_count, "name": _layer.get("name", f"层{_idx+1}"),
+                        "thickness_mm": float(_layer["thickness_m"]) * 1000.0,
+                        "k": float(_tc.get("value", _coef[0])),
+                        "k_coef": list(_coef), "Rc": float(_layer.get("contact_resistance_m2_k_w", 0.0)),
+                        "conductivity_mode": _mode,
+                        "conductivity_points": _tc.get("points", [[250, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]]),
+                    })
+                st.success(f"已导入 Schema v2 配置：{len(_ss.layers)} 层。请核对单位和物性数据后再计算。")
+                st.rerun()
+            except (ValueError, TypeError, KeyError, json.JSONDecodeError) as _exc:
+                st.error(f"配置导入失败：{_exc}")
+
 # ---------- 侧边栏：工况参数 ----------
 with st.sidebar:
     st.header("🔥 工况参数")
+
     st.caption("温度以 ℃ 输入，后台自动换算为 K")
 
-    st.subheader("窑体与热工参数")
+    st.subheader("【窑体几何与运行】")
     T_gas_C = st.number_input("烟气温度 (°C)", value=1250.0, step=10.0, key="T_gas_C")
     v_gas = st.number_input("烟气流速 (m/s)", value=3.0, min_value=0.01, step=0.1,
                             key="v_gas")
     L_char = st.number_input("窑内径 (m)", value=4.0, step=0.1, key="L_char")
     L_kiln = st.number_input("窑长 (m)", value=60.0, step=1.0, key="L_kiln")
     P_total = st.number_input("窑内压力 (bar)", value=1.01325, step=0.1, key="P_total")
+    st.subheader("【气相与 WSGG 光谱】")
     CO2 = st.number_input("CO₂ 含量 (%)", value=20.0, min_value=0.0, max_value=100.0,
                           step=0.5, key="CO2")
     H2O = st.number_input("H₂O 含量 (%)", value=8.0, min_value=0.0, max_value=100.0,
@@ -209,8 +289,36 @@ with st.sidebar:
                                 step=0.01, key="eps_shell")
 
     st.divider()
+    st.subheader("【求解控制与输出】")
     N_total = st.slider("温度曲线取点数", min_value=50, max_value=1000, value=100,
                         step=50, key="N_total")
+    st.caption("轴向模型参数（用于真实 solve_kiln 结果图）")
+    st.number_input("轴向控制体数", min_value=2, max_value=200, value=20,
+                    step=2, key="axial_cells")
+    st.number_input("烟气质量流量 (kg/s)", min_value=0.01, value=20.0,
+                    step=1.0, key="axial_mass_flow")
+    st.number_input("烟气定压比热 (J/kg·K)", min_value=1.0, value=1150.0,
+                    step=25.0, key="axial_cp_gas")
+    st.checkbox("启用物料三相耦合（需填写换热边界）", value=False,
+                key="axial_bed_enabled")
+    if _ss.get("axial_bed_enabled", False):
+        st.number_input("物料入口温度 (°C)", value=800.0, step=25.0,
+                        key="axial_bed_inlet_c")
+        st.number_input("物料质量流量 (kg/s)", min_value=0.01, value=2.0,
+                        step=0.1, key="axial_bed_mass_flow")
+        st.number_input("物料定压比热 (J/kg·K)", min_value=1.0, value=1000.0,
+                        step=25.0, key="axial_cp_bed")
+        st.number_input("气-物料换热系数 (W/m²·K)", min_value=0.01, value=20.0,
+                        step=1.0, key="axial_h_gas_bed")
+        st.number_input("壁-物料换热系数 (W/m²·K)", min_value=0.01, value=50.0,
+                        step=1.0, key="axial_h_wall_bed")
+        st.number_input("气-物料有效换热面积/长度 (m)", min_value=0.001,
+                        value=1.0, step=0.1, key="axial_area_gas_bed")
+        st.number_input("壁-物料接触长度/长度 (m)", min_value=0.001,
+                        value=0.2, step=0.05, key="axial_contact_wall_bed")
+        st.selectbox("物料流向", ["counter-current", "co-current"],
+                     format_func=lambda x: {"counter-current": "逆流", "co-current": "顺流"}[x],
+                     key="axial_bed_direction")
 
     st.divider()
     if st.button("🚀 开始计算", type="primary", width="stretch"):
@@ -222,7 +330,7 @@ with st.sidebar:
 st.title("水泥窑窑衬传热计算")
 st.caption("多层圆筒壁一维稳态传热 · 计算核心与 APK / FastAPI 完全一致")
 
-st.subheader("🧱 衬层配置")
+st.subheader("【物料与窑壁物性 λ(T)】 · 衬层配置")
 st.caption("可添加、删除、上下移动耐火衬层；厚度单位为 mm，支持 k(T) 温度相关导热系数（a/b/c），自定义材料可保存到材料库")
 
 col_hint = st.columns([0.2, 0.2, 0.28, 0.12, 0.2])
@@ -256,34 +364,67 @@ for idx, row in enumerate(_ss.layers):
                 _ss.pop(kk, None)
         st.rerun()
 
-    # 系数显示/编辑：自定义材料显示 a/b/c 编辑框 + 保存按钮，材料库选择只读显示
+    # 统一导热模式：常数 / 多项式 / 温度-导热系数表。
     if row.get("k_coef") is None:
-        row["k_coef"] = [float(row["k"]), 0.0, 0.0]
-    if sel == "自定义":
-        # 导热系数 a/b/c 与「保存到材料库」整合到同一行（跨整行宽度），
-        # 替代原 expander 展开项的多行堆叠布局，界面更紧凑。
-        ka, kb, kc, ks = st.columns([1.0, 1.0, 1.0, 2.2])
-        row["k_coef"] = [
-            ka.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a",
-                            format="%.6g"),
-            kb.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b",
-                            format="%.6g"),
-            kc.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c",
-                            format="%.6g"),
-        ]
-        # 保存当前层为材料库条目：优先使用「层名称」输入框内容，为空时回退默认名
-        save_name = row["name"].strip() or f"层{idx + 1}"
-        if ks.button(f"💾 保存『{save_name}』到材料库",
-                     key=f"layer_{uid}_save"):
-            try:
-                save_user_material(save_name, row["k_coef"])
-                st.success(f"已保存到材料库：{save_name}")
-            except ValueError as exc:
-                st.error(f"保存失败：{exc}")
+        row["k_coef"] = [float(row.get("k", 1.0)), 0.0, 0.0]
+    row.setdefault("conductivity_mode", "constant" if cur_material == "自定义" else "polynomial")
+    mode = st.selectbox(
+        "导热系数模式",
+        ["constant", "polynomial", "table"],
+        index=["constant", "polynomial", "table"].index(row["conductivity_mode"]),
+        format_func=lambda v: {"constant": "常数 λ₀", "polynomial": "多项式 c₀+c₁T+c₂T²（T 为 ℃）", "table": "温度-导热系数插值表（温度 K）"}[v],
+        key=f"layer_{uid}_conductivity_mode",
+    )
+    row["conductivity_mode"] = mode
+    if mode in ("constant", "polynomial"):
+        if mode == "constant":
+            row["k_coef"][0] = c3.number_input(
+                "λ₀ (W/m·K)", value=float(row["k_coef"][0]), min_value=0.000001,
+                format="%.6g", key=f"layer_{uid}_lambda0")
+            row["k_coef"][1:] = [0.0, 0.0]
+        else:
+            ka, kb, kc, ks = st.columns([1.0, 1.0, 1.0, 2.2])
+            row["k_coef"] = [
+                ka.number_input("c₀", value=float(row["k_coef"][0]), format="%.6g", key=f"layer_{uid}_a"),
+                kb.number_input("c₁", value=float(row["k_coef"][1]), format="%.6g", key=f"layer_{uid}_b"),
+                kc.number_input("c₂", value=float(row["k_coef"][2]), format="%.6g", key=f"layer_{uid}_c"),
+            ]
+            save_name = row["name"].strip() or f"层{idx + 1}"
+            if ks.button(f"💾 保存多项式材料「{save_name}」", key=f"layer_{uid}_save"):
+                try:
+                    save_user_material(save_name, row["k_coef"])
+                    st.success(f"已保存到材料库：{save_name}")
+                except ValueError as exc:
+                    st.error(f"保存失败：{exc}")
     else:
-        a, b, c = row["k_coef"]
-        c3.markdown(f"λ={a:g}+{b:g}T+{c:g}T²")
-
+        default_points = row.get("conductivity_points", [[250, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
+        raw_points = st.text_area(
+            "插值点 JSON：[[温度 K, λ W/(m·K)], ...]",
+            value=json.dumps(default_points, ensure_ascii=False),
+            key=f"layer_{uid}_conductivity_points",
+            height=80,
+        )
+        points = None
+        try:
+            points = json.loads(raw_points)
+            preview_model = ConductivityModel.table(points)
+            row["conductivity_points"] = points
+            temps = list(range(300, 2001, 25))
+            vals = [preview_model.conductivity(t) for t in temps]
+            st.line_chart(pd.DataFrame({"λ (W/m·K)": vals}, index=temps))
+            st.caption("插值采用分段线性方式；超出表格温度范围时禁止外推。示例点仅用于 UI 演示，请替换为材料实测数据。")
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            st.error(f"插值表无效：{exc}")
+            row["conductivity_points"] = points if "points" in locals() else default_points
+    if mode == "polynomial":
+        try:
+            model_preview = ConductivityModel.polynomial(row["k_coef"], "degC")
+            temps = list(range(300, 2001, 25))
+            vals = [model_preview.conductivity(t) for t in temps]
+            st.line_chart(pd.DataFrame({"λ (W/m·K)": vals}, index=temps))
+            st.caption("多项式温度变量按旧配置约定使用 ℃；图表横轴为 K。")
+        except ValueError as exc:
+            st.error(f"物性曲线无效：{exc}")
     row["Rc"] = c5.number_input(
         "Rc", value=float(row.get("Rc", 0.0)), min_value=0.0, step=0.001,
         key=f"layer_{uid}_rc", label_visibility="collapsed")
@@ -313,12 +454,57 @@ if st.button("➕ 添加衬层", width="stretch"):
 
 st.divider()
 
+# ---------- 配置导出：保留 SI 单位与导热模型定义 ----------
+with st.expander("📦 配置导出（JSON / YAML，Schema v2）", expanded=False):
+    _export_layers = []
+    for _i, _row in enumerate(_ss.layers):
+        _uid = _row.get("uid", _i + 1)
+        _mode = _row.get("conductivity_mode", "constant")
+        if _mode == "table":
+            _tc_out = {"mode": "table", "points": _row.get("conductivity_points", [])}
+        elif _mode == "polynomial":
+            _tc_out = {"mode": "polynomial", "temperature_unit": "degC",
+                       "coefficients": list(_row.get("k_coef") or [1.0, 0.0, 0.0])}
+        else:
+            _tc_out = {"mode": "constant", "value": float(_ss.get(f"layer_{_uid}_lambda0",
+                       (_row.get("k_coef") or [_row.get("k", 1.0)])[0]))}
+        _export_layers.append({
+            "name": _ss.get(f"layer_{_uid}_name", _row.get("name", "")),
+            "thickness_m": float(_ss.get(f"layer_{_uid}_thick", _row.get("thickness_mm", 50.0))) / 1000.0,
+            "contact_resistance_m2_k_w": float(_ss.get(f"layer_{_uid}_rc", _row.get("Rc", 0.0))),
+            "thermal_conductivity": _tc_out,
+        })
+    _export_cfg = normalize_config({
+        "schema_version": 2,
+        "params": {
+            "N_total": int(_ss.get("N_total", 100)),
+            "T_gas": float(_ss.get("T_gas_C", 1250.0)) + 273.15,
+            "T_env": float(_ss.get("T_env_C", 25.0)) + 273.15,
+            "v_gas": float(_ss.get("v_gas", 3.0)), "L_char": float(_ss.get("L_char", 4.0)),
+            "L_kiln": float(_ss.get("L_kiln", 60.0)), "P_total": float(_ss.get("P_total", 1.01325)),
+            "CO2": float(_ss.get("CO2", 20.0)) / 100.0, "H2O": float(_ss.get("H2O", 8.0)) / 100.0,
+            "eps_wall": float(_ss.get("eps_wall", 0.85)), "v_amb": float(_ss.get("v_amb", 2.0)),
+            "eps_shell": float(_ss.get("eps_shell", 0.85)),
+        },
+        "layers": _export_layers,
+    })
+    _json_config = json.dumps(_export_cfg, ensure_ascii=False, indent=2)
+    st.download_button("下载 JSON", _json_config, file_name="kiln-config-v2.json",
+                       mime="application/json", key="config_download_json")
+    try:
+        import yaml as _yaml
+        _yaml_config = _yaml.safe_dump(_export_cfg, allow_unicode=True, sort_keys=False)
+        st.download_button("下载 YAML", _yaml_config, file_name="kiln-config-v2.yaml",
+                           mime="application/yaml", key="config_download_yaml")
+    except ImportError:
+        st.caption("YAML 导出需安装 PyYAML；JSON 导出不受影响。")
+
 # ---------- 主区下部：结果 ----------
 st.subheader("📊 计算结果")
 
 if _ss.get("calc_trigger"):
     try:
-        layers, sol, x_mm, T_c = _solve()
+        layers, sol, x_mm, T_c, params = _solve()
     except (ValueError, Exception) as exc:  # noqa: BLE001 —— UI 层统一捕获展示
         st.error(f"计算失败：{exc}")
         st.stop()
@@ -406,6 +592,89 @@ if _ss.get("calc_trigger"):
             st.pyplot(figm)
         except ImportError:
             st.warning("未安装 plotly 或 matplotlib，无法绘制曲线")
+
+    # ---- 轴向多维可视化：直接使用 solve_kiln 返回的控制体数组 ----
+    st.subheader("轴向温度分布 T(x)")
+    try:
+        _axial_kwargs = {
+            "n_cells": int(_ss.get("axial_cells", 20)),
+            "mass_flow_kg_s": float(_ss.get("axial_mass_flow", 20.0)),
+            "cp_gas_j_kg_k": float(_ss.get("axial_cp_gas", 1150.0)),
+        }
+        if _ss.get("axial_bed_enabled", False):
+            _axial_kwargs.update({
+                "bed_inlet_temperature_k": float(_ss.get("axial_bed_inlet_c", 800.0)) + 273.15,
+                "bed_mass_flow_kg_s": float(_ss.get("axial_bed_mass_flow", 2.0)),
+                "cp_bed_j_kg_k": float(_ss.get("axial_cp_bed", 1000.0)),
+                "gas_bed_h_w_m2_k": float(_ss.get("axial_h_gas_bed", 20.0)),
+                "wall_bed_h_w_m2_k": float(_ss.get("axial_h_wall_bed", 50.0)),
+                "gas_bed_area_per_length_m": float(_ss.get("axial_area_gas_bed", 1.0)),
+                "wall_bed_contact_per_length_m": float(_ss.get("axial_contact_wall_bed", 0.2)),
+                "bed_flow_direction": _ss.get("axial_bed_direction", "counter-current"),
+            })
+        _axial = solve_kiln(layers, params, **_axial_kwargs)
+        _axial_data = axial_plot_data(_axial)
+        _axial_x = _axial_data["z_m"]
+        _axial_fig = go.Figure()
+        for _key, _label in [
+            ("gas_temperature_k", "烟气"),
+            ("wall_inner_temperature_k", "内壁"),
+            ("wall_outer_temperature_k", "外壁"),
+            ("material_temperature_k", "物料"),
+        ]:
+            if _key in _axial_data:
+                _axial_fig.add_trace(go.Scatter(
+                    x=_axial_x, y=[v - 273.15 for v in _axial_data[_key]],
+                    mode="lines+markers", name=_label,
+                ))
+        _axial_fig.update_layout(
+            xaxis_title="窑轴向位置 z (m)", yaxis_title="温度 (°C)",
+            hovermode="x unified", height=420,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#ECEDEE"), xaxis=dict(gridcolor="#3A3D42"),
+            yaxis=dict(gridcolor="#3A3D42"),
+            margin=dict(l=10, r=10, t=30, b=10),
+        )
+        st.plotly_chart(_axial_fig, width="stretch")
+        st.caption(_axial.as_dict()["model_scope"])
+
+        st.subheader("轴向辐射热流密度")
+        _q_fig = go.Figure()
+        _q_fig.add_trace(go.Scatter(
+            x=_axial_x, y=_axial_data["radiative_heat_flux_w_m2"],
+            mode="lines+markers", name="内侧气体辐射热流",
+        ))
+        _q_fig.update_layout(
+            xaxis_title="窑轴向位置 z (m)", yaxis_title="辐射热流密度 (W/m²)",
+            height=340, hovermode="x unified",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#ECEDEE"), xaxis=dict(gridcolor="#3A3D42"),
+            yaxis=dict(gridcolor="#3A3D42"),
+            margin=dict(l=10, r=10, t=30, b=10),
+        )
+        st.plotly_chart(_q_fig, width="stretch")
+        st.caption("辐射热流由各轴向单元壁解的 h_rad_in 与局部烟气/内壁温差重构；属于当前径向壁模型的局部量。")
+    except (ValueError, RuntimeError, TypeError) as _axial_exc:
+        st.warning(f"轴向模型未能求解，未生成轴向曲线：{_axial_exc}")
+
+    st.subheader("WSGG 灰气体权重 a_j(T)")
+    _weight_data = provisional_wsgg_weight_curves()
+    _weight_fig = go.Figure()
+    for _name, _values in _weight_data["weights"].items():
+        _weight_fig.add_trace(go.Scatter(
+            x=_weight_data["temperature_k"], y=_values,
+            mode="lines", name=_name,
+        ))
+    _weight_fig.update_layout(
+        xaxis_title="气体温度 (K)", yaxis_title="权重 a_j (—)",
+        height=340, hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#ECEDEE"), xaxis=dict(gridcolor="#3A3D42"),
+        yaxis=dict(gridcolor="#3A3D42"),
+        margin=dict(l=10, r=10, t=30, b=10),
+    )
+    st.plotly_chart(_weight_fig, width="stretch")
+    st.warning("当前 WSGG 实现使用固定暂定权重（非 HITEMP 温度拟合系数）；曲线为水平线，不代表真实 a_j(T) 温度依赖。获得并验证温度相关系数库后，才能替换为物理可信的温度变化曲线。")
 
     # ---- 详细工况结果 ----
     with st.expander("查看详细工况结果"):

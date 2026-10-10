@@ -8,3 +8,6 @@ pydantic>=2.6
 streamlit>=1.32
 plotly>=5.20
 supervisor>=4.2
+
+# YAML schema-v2 configuration import/export in the Web GUI
+PyYAML>=6.0,<7

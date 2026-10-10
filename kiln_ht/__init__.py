@@ -36,6 +36,8 @@ from .materials import (
 __version__ = "1.0.0"
 
 from .gas import GasMixture, DEFAULT_GAS
+from .conductivity import ConductivityModel
+from .config_schema import SCHEMA_VERSION, load_config, normalize_config, normalize_layer, validate_kiln_params
 from .properties import get_gas_properties
 from .radiation import get_gas_radiation, GasRadiationResult
 from .validation import default_benchmark_cases, run_radiation_benchmark, benchmark_table, run_wall_benchmark

@@ -31,11 +31,17 @@ from kiln_ht import (
     material_names,
     save_user_material,
     solve_wall,
+    solve_kiln,
     compute_temperature_curve,
+    ConductivityModel,
+    validate_kiln_params,
+    normalize_config,
 )
 from kiln_ht.export import build_report, export_result
+from kiln_ht.visualization import axial_plot_data, provisional_wsgg_weight_curves
 
 import os
+import json
 
 import kivy
 
@@ -485,6 +491,73 @@ class CurveWidget(Widget):
             Rectangle(texture=tex, pos=(tx, ty), size=tex.size)
 
 
+class MultiCurveWidget(Widget):
+    """Lightweight multi-series Canvas chart for mobile axial and WSGG plots."""
+
+    PALETTE = (PRIMARY, ACCENT, (0.25, 0.78, 0.55, 1.0), (0.78, 0.48, 0.92, 1.0))
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._series = []
+        self.bind(pos=self.redraw, size=self.redraw)
+
+    def set_series(self, series):
+        self._series = [(str(label), list(x), list(y), tuple(color))
+                        for label, x, y, color in series if len(x) == len(y) and len(x) >= 2]
+        self.redraw()
+
+    def redraw(self, *_args):
+        self.canvas.clear()
+        if not self._series or self.width <= dp(60) or self.height <= dp(60):
+            return
+        xs = [v for _, x, _, _ in self._series for v in x]
+        ys = [v for _, _, y, _ in self._series for v in y]
+        if not xs or not ys:
+            return
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        sx, sy = (x1 - x0) or 1.0, (y1 - y0) or 1.0
+        y0 -= 0.06 * sy
+        y1 += 0.06 * sy
+        sy = (y1 - y0) or 1.0
+        left, right, bottom, top = dp(42), dp(12), dp(24), dp(24)
+        iw, ih = self.width - left - right, self.height - bottom - top
+        def px(v): return left + (v - x0) / sx * iw
+        def py(v): return bottom + (v - y0) / sy * ih
+        with self.canvas:
+            Color(*GRID)
+            for i in range(1, 5):
+                gy = bottom + ih * i / 5
+                Line(points=[left, gy, left + iw, gy], width=dp(1))
+                gx = left + iw * i / 5
+                Line(points=[gx, bottom, gx, bottom + ih], width=dp(1))
+            Color(*AXIS)
+            Line(points=[left, bottom, left + iw, bottom], width=dp(1))
+            Line(points=[left, bottom, left, bottom + ih], width=dp(1))
+            for idx, (label, x, y, color) in enumerate(self._series):
+                Color(*color)
+                pts = []
+                for xv, yv in zip(x, y):
+                    pts.extend((px(xv), py(yv)))
+                Line(points=pts, width=dp(2))
+                self._draw_label(label, left + dp(4) + (idx % 2) * self.width * 0.47,
+                                 self.y + self.height - dp(10), color)
+            self._draw_label(f"{y1:.0f}", dp(2), self.y + py(y1), TEXT_DIM)
+            self._draw_label(f"{y0:.0f}", dp(2), self.y + py(y0), TEXT_DIM)
+
+    def _draw_label(self, text, x, y, color):
+        try:
+            label = CoreLabel(text=str(text), font_size=sp(9), color=color)
+            label.refresh()
+            tex = label.texture
+            with self.canvas:
+                Color(1, 1, 1, 1)
+                Rectangle(texture=tex, pos=(self.x + x, y - tex.height / 2),
+                          size=tex.size)
+        except Exception:  # noqa: BLE001 — a missing glyph must not break charting
+            pass
+
+
 # ============ 结果页指标高亮卡 ============
 class MetricCard(MDCard):
     """大字号指标高亮卡：顶部强调条 + 标题 / 大数值 / 单位。"""
@@ -609,7 +682,7 @@ class InputScreen(Screen):
 
         # ---- 卡片 1：窑体几何 ----
         geom = auto_height(MDCard())
-        geom.add_widget(make_title("窑体几何"))
+        geom.add_widget(make_title("【窑体几何与运行】"))
         self._add_field(geom, "L_char", "窑内径", "m", "4")
         self._add_field(geom, "L_kiln", "窑长", "m", "60")
         row = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
@@ -620,19 +693,21 @@ class InputScreen(Screen):
         self.layer_grid = BoxLayout(orientation="vertical", spacing=dp(6),
                                     size_hint_y=None)
         self.layer_grid.bind(minimum_height=self.layer_grid.setter("height"))
+        geom.add_widget(make_title("【物料与窑壁物性 λ(T)】"))
         geom.add_widget(self.layer_grid)
         content.add_widget(geom)
         self._rebuild_layers()
 
         # ---- 卡片 2：热工与烟气 ----
         thermal = auto_height(MDCard())
-        thermal.add_widget(make_title("热工与烟气"))
+        thermal.add_widget(make_title("【气相与 WSGG 光谱】"))
         self._add_field(thermal, "T_gas", "烟气温度", "°C", "1250")
         self._add_field(thermal, "v_gas", "烟气流速", "m/s", "3")
         self._add_field(thermal, "P_total", "窑内压力", "bar", "1.01325")
         self._add_field(thermal, "CO2", "CO2 含量", "%", "20")
         self._add_field(thermal, "H2O", "H2O 含量", "%", "8")
         self._add_field(thermal, "eps_wall", "内壁发射率", "", "0.85")
+        thermal.add_widget(make_title("【求解控制与输出】"))
         self._add_field(thermal, "N_total", "温度曲线取点数", "点", "100",
                         input_cls=IntInput)
         content.add_widget(thermal)
@@ -644,6 +719,63 @@ class InputScreen(Screen):
         self._add_field(env, "v_amb", "环境风速", "m/s", "2")
         self._add_field(env, "eps_shell", "外壳发射率", "", "0.85")
         content.add_widget(env)
+
+        # ---- 轴向模型边界：可选启用气-物料-窑壁三相耦合 ----
+        axial_card = auto_height(MDCard(spacing=dp(8)))
+        axial_card.add_widget(make_title("轴向模型控制（可选物料三相耦合）"))
+        axial_toggle = BoxLayout(orientation="horizontal", spacing=dp(8),
+                                 size_hint_y=None, height=dp(40))
+        self.axial_bed_enabled = CheckBox(active=False, size_hint=(None, 1), width=dp(36))
+        axial_toggle.add_widget(self.axial_bed_enabled)
+        axial_toggle.add_widget(MdLabel(
+            text="启用物料温度与气-物料 / 壁-物料换热",
+            color=TEXT_DIM, font_size=sp(12)))
+        self.axial_bed_direction = Spinner(
+            text="逆流", values=["逆流", "顺流"], size_hint_x=None, width=dp(76),
+            font_size=sp(11), background_color=CARD_ELEV)
+        axial_toggle.add_widget(self.axial_bed_direction)
+        axial_card.add_widget(axial_toggle)
+        self._add_field(axial_card, "axial_bed_inlet_C", "物料入口温度", "°C", "800")
+        self._add_field(axial_card, "axial_bed_mass_flow", "物料质量流量", "kg/s", "2")
+        self._add_field(axial_card, "axial_cp_bed", "物料定压比热", "J/kg·K", "1000")
+        self._add_field(axial_card, "axial_h_gas_bed", "气-物料换热系数", "W/m²·K", "20")
+        self._add_field(axial_card, "axial_h_wall_bed", "壁-物料换热系数", "W/m²·K", "50")
+        self._add_field(axial_card, "axial_area_gas_bed", "气-物料有效面积/长度", "m", "1")
+        self._add_field(axial_card, "axial_contact_wall_bed", "壁-物料接触长度/长度", "m", "0.2")
+        axial_card.add_widget(MdLabel(
+            text="默认关闭；启用后必须核对流量、比热、换热系数及有效面积，当前为可编辑边界参数。",
+            color=ACCENT, font_size=sp(10), size_hint_y=None, height=dp(34)))
+        content.add_widget(axial_card)
+
+        # ---- 配置文件：移动端粘贴/导入与 JSON/YAML 导出 ----
+        config_card = auto_height(MDCard(spacing=dp(8)))
+        config_card.add_widget(make_title("历史配置导入 / 导出 · Schema v2"))
+        config_card.add_widget(MdLabel(
+            text="粘贴历史 JSON/YAML 后导入；导出文件保存到应用私有目录，同时复制到剪贴板。",
+            color=TEXT_DIM, font_size=sp(11), size_hint_y=None, height=dp(32)))
+        self.config_text = TextInput(
+            text="", hint_text="在此粘贴 JSON 或 YAML 配置",
+            multiline=True, size_hint_y=None, height=dp(132),
+            font_size=sp(11), background_color=CARD_ELEV,
+            foreground_color=TEXT, cursor_color=PRIMARY,
+            padding=[dp(8), dp(8), dp(8), dp(8)])
+        config_card.add_widget(self.config_text)
+        config_actions = BoxLayout(orientation="horizontal", spacing=dp(8),
+                                   size_hint_y=None, height=dp(42))
+        import_btn = AccentButton(text="导入并迁移", size_hint_x=1)
+        import_btn.bind(on_press=lambda *_a: self._import_config_text())
+        export_json_btn = AccentButton(text="导出 JSON", bg=CARD_ELEV, size_hint_x=1)
+        export_json_btn.bind(on_press=lambda *_a: self._export_config("json"))
+        export_yaml_btn = AccentButton(text="导出 YAML", bg=CARD_ELEV, size_hint_x=1)
+        export_yaml_btn.bind(on_press=lambda *_a: self._export_config("yaml"))
+        config_actions.add_widget(import_btn)
+        config_actions.add_widget(export_json_btn)
+        config_actions.add_widget(export_yaml_btn)
+        config_card.add_widget(config_actions)
+        self.config_status = MdLabel(text="", color=TEXT_DIM, font_size=sp(11),
+                                     size_hint_y=None, height=dp(32))
+        config_card.add_widget(self.config_status)
+        content.add_widget(config_card)
 
         # ---- 底部操作区（固定在页面底部，不随卡片滚动，避免遮挡输入框） ----
         bottom = BoxLayout(orientation="vertical", spacing=dp(6),
@@ -703,11 +835,11 @@ class InputScreen(Screen):
             mat = Spinner(text="自定义", values=["自定义"] + user_mats,
                           size_hint_x=1, font_size=sp(12),
                           background_color=CARD_ELEV)
-            temp_cb = CheckBox(size_hint_x=None, width=dp(36), color=PRIMARY)
+            mode_spinner = Spinner(text="常数", values=["常数", "多项式", "插值表"], size_hint_x=None, width=dp(94), font_size=sp(11), background_color=CARD_ELEV)
             row1.add_widget(name)
             row1.add_widget(thick)
             row1.add_widget(mat)
-            row1.add_widget(temp_cb)
+            row1.add_widget(mode_spinner)
             card.add_widget(row1)
 
             # 第一行下方小注：材料 / 温度相关（勾选后启用 b、c）
@@ -715,8 +847,8 @@ class InputScreen(Screen):
             hint1.add_widget(Widget(size_hint_x=None, width=dp(72)))
             hint1.add_widget(Widget(size_hint_x=None, width=dp(70)))
             hint1.add_widget(MdLabel(text="材料", color=TEXT_DIM, font_size=sp(10)))
-            hint1.add_widget(MdLabel(text="温度相关", color=TEXT_DIM, font_size=sp(10),
-                                     size_hint_x=None, width=dp(40)))
+            hint1.add_widget(MdLabel(text="导热模式", color=TEXT_DIM, font_size=sp(10),
+                                     size_hint_x=None, width=dp(94)))
             card.add_widget(hint1)
 
             # 行间分隔线：清晰区分「第一行 / 第二行」
@@ -745,6 +877,49 @@ class InputScreen(Screen):
             row2.add_widget(rc)
             card.add_widget(row2)
 
+            table_row = BoxLayout(orientation="horizontal", spacing=dp(6),
+                                  size_hint_y=None, height=dp(44))
+            table_in = TextInput(
+                text="[[250,1.5],[800,1.2],[1300,1.0],[2000,0.8]]",
+                multiline=False, font_size=sp(11), size_hint_x=1,
+                background_color=CARD_ELEV, foreground_color=TEXT,
+                cursor_color=PRIMARY, padding=[dp(8), dp(10), dp(8), dp(8)])
+            table_row.add_widget(MdLabel(text="表格 JSON", color=TEXT_DIM, font_size=sp(10),
+                                         size_hint_x=None, width=dp(72)))
+            table_row.add_widget(table_in)
+            card.add_widget(table_row)
+
+            # λ(T) 动态预览：复用纯 Kivy Canvas 曲线控件，Android 不依赖 matplotlib。
+            preview_title = MdLabel(text="λ(T) 预览 · 温度 K / 导热系数 W/(m·K)",
+                                    color=TEXT_DIM, font_size=sp(10),
+                                    size_hint_y=None, height=dp(20))
+            preview = CurveWidget(size_hint_y=None, height=dp(104))
+            preview_warning = MdLabel(text="", color=ACCENT, font_size=sp(10),
+                                      size_hint_y=None, height=dp(18))
+            card.add_widget(preview_title)
+            card.add_widget(preview)
+            card.add_widget(preview_warning)
+
+            def _refresh_conductivity_preview(*_args, mode_=mode_spinner, a_=a_in,
+                                              b_=b, c_=c, table_=table_in,
+                                              plot_=preview, warning_=preview_warning):
+                try:
+                    if mode_.text == "插值表":
+                        pts = ConductivityModel.table(json.loads(table_.text)).points
+                    elif mode_.text == "多项式":
+                        model_ = ConductivityModel.polynomial(
+                            (float(a_.text), float(b_.text), float(c_.text)), "degC")
+                        temps_ = [250.0 + j * 50.0 for j in range(36)]
+                        pts = tuple((t, model_.conductivity(t)) for t in temps_)
+                    else:
+                        kval = float(a_.text)
+                        pts = ((250.0, kval), (2000.0, kval))
+                    plot_.set_data([p[0] for p in pts], [p[1] for p in pts])
+                    warning_.text = ""
+                except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                    plot_.set_data([], [])
+                    warning_.text = f"⚠ λ(T) 输入无效：{exc}"
+
             # 第二行下方小注：a/b/c 组上方为弹性「导热系数」公式说明；
             # Rc 输入框内不显示单位后缀，其说明「接触热阻 Rc」作为固定宽度
             # （与 rc 输入框等宽 dp(64)）标签，右端与输入框精确对齐。
@@ -766,21 +941,22 @@ class InputScreen(Screen):
             card.add_widget(save_btn)
 
             self.layer_grid.add_widget(card)
-            self._layer_rows.append((name, thick, mat, a_in, b, c, rc, temp_cb,
-                                     save_btn))
-
-            # 勾选温度相关时启用 b/c
-            def _toggle(*_a, b_=b, c_=c, cb_=temp_cb):
-                b_.disabled = not cb_.active
-                c_.disabled = not cb_.active
-                # 未勾选温度相关时 b/c 显示为置灰但仍保留输入值
-                b_.opacity = 1.0
-                c_.opacity = 1.0
-            temp_cb.bind(active=_toggle)
-            _toggle()
+            self._layer_rows.append((name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in))
+            def _mode_changed(*_a, b_=b, c_=c, mode_=mode_spinner, table_=table_in):
+                is_poly = mode_.text == "多项式"
+                b_.disabled = not is_poly
+                c_.disabled = not is_poly
+                table_.disabled = mode_.text != "插值表"
+                table_.opacity = 1.0 if mode_.text == "插值表" else 0.55
+            mode_spinner.bind(text=_mode_changed)
+            _mode_changed()
+            for _control in (a_in, b, c, table_in):
+                _control.bind(text=_refresh_conductivity_preview)
+            mode_spinner.bind(text=_refresh_conductivity_preview)
+            _refresh_conductivity_preview()
 
             # 选择材料时自动填充 a/b/c（并勾选温度相关）
-            def _on_mat(*_a, idx_=i, a_=a_in, b_=b, c_=c, cb_=temp_cb):
+            def _on_mat(*_a, idx_=i, a_=a_in, b_=b, c_=c, mode_=mode_spinner):
                 self._apply_material(idx_)
             mat.bind(text=_on_mat)
 
@@ -788,7 +964,7 @@ class InputScreen(Screen):
 
     def _apply_material(self, idx: int):
         """选中材料库材料时，将其 k_coef 填充到当前层 a/b/c。"""
-        name, thick, mat, a_in, b, c, rc, temp_cb, save_btn = self._layer_rows[idx]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = self._layer_rows[idx]
         if mat.text == "自定义":
             return
         try:
@@ -799,11 +975,11 @@ class InputScreen(Screen):
         a_in.text = f"{k_coef[0]:g}"
         b.text = f"{k_coef[1]:g}"
         c.text = f"{k_coef[2]:g}"
-        temp_cb.active = True
+        mode_spinner.text = "多项式"
 
     def _save_material(self, idx: int):
         """将当前层 a/b/c 保存到用户材料库。"""
-        name, thick, mat, a_in, b, c, rc, temp_cb, save_btn = self._layer_rows[idx]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = self._layer_rows[idx]
         try:
             k_coef = (float(a_in.text), float(b.text), float(c.text))
             save_user_material(name.text.strip() or f"层{idx + 1}", k_coef)
@@ -816,18 +992,26 @@ class InputScreen(Screen):
     def collect_params(self):
         """解析界面参数，非法输入抛 ValueError。"""
         layers = []
-        for i, (name, thick, mat, a_in, b, c, rc, temp_cb, save_btn) in enumerate(self._layer_rows):
+        for i, (name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in) in enumerate(self._layer_rows):
             a = float(a_in.text)
-            if temp_cb.active:
+            mode = mode_spinner.text
+            if mode == "多项式":
                 k_coef = (a, float(b.text), float(c.text))
+                conductivity_model = ConductivityModel.polynomial(k_coef, "degC")
+            elif mode == "插值表":
+                try:
+                    points = json.loads(table_in.text)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"第 {i+1} 层插值表不是有效 JSON") from exc
+                conductivity_model = ConductivityModel.table(points)
+                k_coef = (1.0, 0.0, 0.0)
             else:
-                k_coef = (a, 0.0, 0.0)   # 未勾选温度相关 -> 常数 k
-            layers.append(Layer(
-                name=name.text.strip() or f"层{i+1}",
-                thickness=float(thick.text) / 1000.0,
-                k_coef=k_coef,
-                Rc=float(rc.text),
-            ))
+                k_coef = (a, 0.0, 0.0)
+                conductivity_model = ConductivityModel.constant(a)
+            layers.append(Layer(name=name.text.strip() or f"层{i+1}",
+                                thickness=float(thick.text) / 1000.0,
+                                k_coef=k_coef, Rc=float(rc.text),
+                                conductivity_model=conductivity_model))
         p = self._fields
         params = KilnParams(
             N_total=int(p["N_total"].text),
@@ -843,7 +1027,120 @@ class InputScreen(Screen):
             v_amb=float(p["v_amb"].text),
             eps_shell=float(p["eps_shell"].text),
         )
+        validate_kiln_params(vars(params))
         return layers, params
+
+    def _import_config_text(self):
+        """Parse legacy JSON/YAML, migrate to schema v2, then populate mobile controls."""
+        raw_text = self.config_text.text.strip()
+        if not raw_text:
+            self._flash_error("请先粘贴 JSON/YAML 配置")
+            return
+        try:
+            try:
+                raw = json.loads(raw_text)
+            except json.JSONDecodeError:
+                try:
+                    import yaml
+                except ImportError as exc:
+                    raise ValueError("YAML 导入需要 PyYAML；请改用 JSON 或安装 YAML 支持") from exc
+                raw = yaml.safe_load(raw_text)
+            cfg = normalize_config(raw)
+            p = cfg["params"]
+            defaults = {
+                "N_total": 100, "T_gas": 1523.15, "T_env": 298.15,
+                "v_gas": 3.0, "L_char": 4.0, "L_kiln": 60.0,
+                "P_total": 1.01325, "CO2": 0.20, "H2O": 0.08,
+                "eps_wall": 0.85, "v_amb": 2.0, "eps_shell": 0.85,
+            }
+            defaults.update(p)
+            display_values = {
+                "N_total": str(int(defaults["N_total"])),
+                "T_gas": str(float(defaults["T_gas"]) - 273.15),
+                "T_env": str(float(defaults["T_env"]) - 273.15),
+                "v_gas": str(defaults["v_gas"]), "L_char": str(defaults["L_char"]),
+                "L_kiln": str(defaults["L_kiln"]), "P_total": str(defaults["P_total"]),
+                "CO2": str(float(defaults["CO2"]) * 100.0),
+                "H2O": str(float(defaults["H2O"]) * 100.0),
+                "eps_wall": str(defaults["eps_wall"]), "v_amb": str(defaults["v_amb"]),
+                "eps_shell": str(defaults["eps_shell"]),
+            }
+            for key, value in display_values.items():
+                self._fields[key].text = value
+            layer_cfgs = cfg["layers"]
+            if not 1 <= len(layer_cfgs) <= 10:
+                raise ValueError("移动端支持 1–10 层衬里；请调整配置层数")
+            self.stepper._set(len(layer_cfgs))
+            self._rebuild_layers()
+            for row, layer in zip(self._layer_rows, layer_cfgs):
+                name, thick, mat, a_in, b, c, rc, mode_spinner, _save_btn, table_in = row
+                name.text = str(layer.get("name", "层"))
+                thick.text = f"{float(layer['thickness_m']) * 1000.0:g}"
+                rc.text = f"{float(layer.get('contact_resistance_m2_k_w', 0.0)):g}"
+                tc = layer["thermal_conductivity"]
+                mode = tc["mode"]
+                if mode == "constant":
+                    mode_spinner.text = "常数"
+                    a_in.text, b.text, c.text = f"{tc['value']:g}", "0", "0"
+                elif mode == "polynomial":
+                    mode_spinner.text = "多项式"
+                    co = [float(v) for v in tc["coefficients"]]
+                    if tc.get("temperature_unit", "degC") == "K":
+                        # Convert k(T_K) coefficients to the UI's legacy k(T_degC) form.
+                        _c0, _c1, _c2 = co
+                        co = [_c0 + 273.15 * _c1 + 273.15 ** 2 * _c2,
+                              _c1 + 2.0 * 273.15 * _c2, _c2]
+                    a_in.text, b.text, c.text = (f"{v:g}" for v in co)
+                elif mode == "table":
+                    mode_spinner.text = "插值表"
+                    table_in.text = json.dumps(tc["points"], ensure_ascii=False)
+                    a_in.text, b.text, c.text = "1", "0", "0"
+            self.config_status.text = f"✓ 已迁移到 Schema v2：{len(layer_cfgs)} 层；请复核单位与物性数据。"
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            self.config_status.text = f"⚠ 导入失败：{exc}"
+
+    def _export_config(self, fmt):
+        """Normalize current controls and export versioned config to app storage."""
+        try:
+            layers, params = self.collect_params()
+            config_layers = []
+            for layer in layers:
+                model = layer.conductivity_model
+                tc = model.as_dict() if model is not None else {
+                    "mode": "polynomial", "temperature_unit": "degC",
+                    "coefficients": list(layer.k_coef),
+                }
+                config_layers.append({
+                    "name": layer.name, "thickness_m": layer.thickness,
+                    "contact_resistance_m2_k_w": layer.Rc,
+                    "thermal_conductivity": tc,
+                })
+            cfg = normalize_config({
+                "schema_version": 2, "params": vars(params), "layers": config_layers,
+            })
+            if fmt == "yaml":
+                try:
+                    import yaml
+                except ImportError as exc:
+                    raise ValueError("YAML 导出需要 PyYAML；JSON 导出可直接使用") from exc
+                serialized = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
+                extension = "yaml"
+            else:
+                serialized = json.dumps(cfg, ensure_ascii=False, indent=2)
+                extension = "json"
+            out_path = os.path.join(App.get_running_app().user_data_dir,
+                                    f"kiln-config-v2.{extension}")
+            with open(out_path, "w", encoding="utf-8") as stream:
+                stream.write(serialized)
+            try:
+                from kivy.core.clipboard import Clipboard
+                Clipboard.copy(serialized)
+            except Exception:  # noqa: BLE001 — clipboard may be unavailable on some platforms
+                pass
+            self.config_text.text = serialized
+            self.config_status.text = f"✓ 已导出并复制到剪贴板：{out_path}"
+        except (ValueError, TypeError, KeyError) as exc:
+            self.config_status.text = f"⚠ 导出失败：{exc}"
 
     def _on_calc(self):
         self.error_label.text = ""
@@ -929,10 +1226,17 @@ class ResultScreen(Screen):
 
         root.add_widget(tables)
 
-        # ---- 下半区：温度分布大图（填满剩余垂直空间，size_hint_y=1） ----
-        curve_card = MDCard(spacing=dp(6), size_hint_y=1)
-        curve_card.add_widget(make_title("温度分布（内壁 → 外壁）"))
-        self.curve = CurveWidget(size_hint=(1, 1))
+        # ---- 多维曲线区：壁厚温度、轴向温度、辐射热流与 WSGG 权重 ----
+        chart_scroll = ScrollView(bar_width=dp(4), bar_color=GRID,
+                                  bar_inactive_color=GRID, size_hint_y=1)
+        chart_content = BoxLayout(orientation="vertical", spacing=dp(10),
+                                  padding=[dp(14), dp(4), dp(14), dp(14)],
+                                  size_hint_y=None)
+        chart_content.bind(minimum_height=chart_content.setter("height"))
+
+        curve_card = auto_height(MDCard(spacing=dp(6), height=dp(270)))
+        curve_card.add_widget(make_title("壁厚温度分布（内壁 → 外壁）"))
+        self.curve = CurveWidget(size_hint_y=None, height=dp(210))
         self.curve_hint = Label(text="等待计算…", color=TEXT_DIM, font_size=sp(14),
                                 size_hint=(None, None), size=(dp(200), dp(30)))
         self.curve.add_widget(self.curve_hint)
@@ -941,14 +1245,38 @@ class ResultScreen(Screen):
         self.curve_foot = MdLabel(text="", color=TEXT_DIM, font_size=sp(12),
                                   size_hint_y=None, height=dp(20))
         curve_card.add_widget(self.curve_foot)
-        root.add_widget(curve_card)
+        chart_content.add_widget(curve_card)
+
+        axial_card = auto_height(MDCard(spacing=dp(6), height=dp(270)))
+        axial_card.add_widget(make_title("轴向温度 T(z) · 烟气 / 内壁 / 外壁 / 物料（如启用）"))
+        self.axial_curve = MultiCurveWidget(size_hint_y=None, height=dp(220))
+        axial_card.add_widget(self.axial_curve)
+        chart_content.add_widget(axial_card)
+
+        flux_card = auto_height(MDCard(spacing=dp(6), height=dp(230)))
+        flux_card.add_widget(make_title("轴向辐射热流密度 (W/m²)"))
+        self.flux_curve = MultiCurveWidget(size_hint_y=None, height=dp(180))
+        flux_card.add_widget(self.flux_curve)
+        chart_content.add_widget(flux_card)
+
+        weight_card = auto_height(MDCard(spacing=dp(6), height=dp(230)))
+        weight_card.add_widget(make_title("WSGG 暂定权重 a_j(T)"))
+        self.weight_curve = MultiCurveWidget(size_hint_y=None, height=dp(180))
+        weight_card.add_widget(self.weight_curve)
+        weight_card.add_widget(MdLabel(
+            text="当前系数为固定暂定权重，水平线不代表 HITEMP 温度拟合。",
+            color=ACCENT, font_size=sp(10), size_hint_y=None, height=dp(22)))
+        chart_content.add_widget(weight_card)
+
+        chart_scroll.add_widget(chart_content)
+        root.add_widget(chart_scroll)
 
         self.add_widget(root)
 
     def _center_hint(self, *_args):
         self.curve_hint.center = self.curve.center
 
-    def set_result(self, layers, sol, x_mm, T_c):
+    def set_result(self, layers, sol, x_mm, T_c, axial_data=None):
         """用最新计算结果刷新整个结果页。"""
         self._last = (layers, sol, x_mm, T_c)
         self.export_status.text = ""
@@ -985,6 +1313,29 @@ class ResultScreen(Screen):
         self.curve.set_data(x_mm, T_c)
         self.curve_hint.opacity = 0
         self.curve_foot.text = f"距内壁 0 mm  →  {x_mm[-1]:.0f} mm"
+
+        if axial_data:
+            z = axial_data["z_m"]
+            series = [
+                ("烟气 °C", z, [v - 273.15 for v in axial_data["gas_temperature_k"]], PRIMARY),
+                ("内壁 °C", z, [v - 273.15 for v in axial_data["wall_inner_temperature_k"]], ACCENT),
+                ("外壁 °C", z, [v - 273.15 for v in axial_data["wall_outer_temperature_k"]], (0.25, 0.78, 0.55, 1.0)),
+            ]
+            if "material_temperature_k" in axial_data:
+                series.append(("物料 °C", z, [v - 273.15 for v in axial_data["material_temperature_k"]], (0.78, 0.48, 0.92, 1.0)))
+            self.axial_curve.set_series(series)
+            self.flux_curve.set_series([
+                ("q_rad W/m²", z, axial_data["radiative_heat_flux_w_m2"], PRIMARY)
+            ])
+        else:
+            self.axial_curve.set_series([])
+            self.flux_curve.set_series([])
+
+        weights = provisional_wsgg_weight_curves()
+        self.weight_curve.set_series([
+            (name, weights["temperature_k"], values, self.weight_curve.PALETTE[i % len(self.weight_curve.PALETTE)])
+            for i, (name, values) in enumerate(weights["weights"].items())
+        ])
 
     def _export(self):
         """导出/分享计算结果。"""
@@ -1057,7 +1408,31 @@ class KilnApp(BoxLayout):
         except Exception as exc:  # noqa: BLE001 —— UI 层统一捕获并展示错误
             self.input_screen._flash_error(str(exc))
             return False
-        self.result_screen.set_result(layers, sol, x_mm, T_c)
+        axial_data = None
+        try:
+            axial_kwargs = {
+                "n_cells": 20, "mass_flow_kg_s": 20.0, "cp_gas_j_kg_k": 1150.0,
+            }
+            if self.input_screen.axial_bed_enabled.active:
+                p = self.input_screen._fields
+                axial_kwargs.update({
+                    "bed_inlet_temperature_k": float(p["axial_bed_inlet_C"].text) + 273.15,
+                    "bed_mass_flow_kg_s": float(p["axial_bed_mass_flow"].text),
+                    "cp_bed_j_kg_k": float(p["axial_cp_bed"].text),
+                    "gas_bed_h_w_m2_k": float(p["axial_h_gas_bed"].text),
+                    "wall_bed_h_w_m2_k": float(p["axial_h_wall_bed"].text),
+                    "gas_bed_area_per_length_m": float(p["axial_area_gas_bed"].text),
+                    "wall_bed_contact_per_length_m": float(p["axial_contact_wall_bed"].text),
+                    "bed_flow_direction": (
+                        "counter-current" if self.input_screen.axial_bed_direction.text == "逆流"
+                        else "co-current"
+                    ),
+                })
+            axial_solution = solve_kiln(layers, params, **axial_kwargs)
+            axial_data = axial_plot_data(axial_solution)
+        except (ValueError, RuntimeError) as exc:
+            self.input_screen._flash_error(f"壁厚计算已完成；轴向图不可用：{exc}")
+        self.result_screen.set_result(layers, sol, x_mm, T_c, axial_data)
         self._on_nav(1)
         return True
 

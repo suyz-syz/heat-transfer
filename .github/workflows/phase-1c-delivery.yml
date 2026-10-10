@@ -1,0 +1,122 @@
+name: Phase 1C Delivery (Tests, Docker, Android APK)
+
+on:
+  push:
+    branches: [feat/phase-1c-gui-docker-apk]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest numpy pandas scipy 'fastapi>=0.110,<1' 'pydantic>=2.6' 'kivy>=2.3.0' pyyaml
+      - name: Compile sources
+        run: python -m compileall -q kiln_ht app.py main.py server.py
+      - name: Run headless-compatible tests
+        run: >-
+          python -m pytest
+          tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py
+          tests/test_phase1b_wsgg.py tests/test_phase2_architecture.py
+          tests/test_hitemp_wsgg_calibration.py tests/test_phase1c_schema.py
+          tests/test_phase1c_delivery.py tests/test_phase1c_visualization.py -q
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API + Web GUI image
+        run: docker build --tag kiln-heat-transfer:ci .
+      - name: Health and solve smoke tests
+        run: |
+          docker run --detach --rm --name kiln-ht-ci -p 8000:8000 -p 8501:8501 kiln-heat-transfer:ci
+          cleanup() { docker logs kiln-ht-ci || true; docker stop kiln-ht-ci || true; }
+          trap cleanup EXIT
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/health >/tmp/health.json; then break; fi
+            sleep 2
+          done
+          grep -q '"status":"ok"' /tmp/health.json
+          curl --fail --silent http://127.0.0.1:8501/_stcore/health | grep -qi 'ok'
+          curl --fail --silent -X POST http://127.0.0.1:8000/solve \
+            -H 'Content-Type: application/json' \
+            -d '{"layers":[{"name":"test refractory","thickness":0.1,"k":1.5}],"params":{"N_total":50,"T_gas":1200,"v_gas":3,"L_char":4,"L_kiln":60,"P_total":1.01325,"CO2":0.2,"H2O":0.08,"eps_wall":0.85,"T_env":298.15,"v_amb":2,"eps_shell":0.85}}' \
+            -o /tmp/solve.json
+          python -c "import json; d=json.load(open('/tmp/solve.json')); assert d.get('Qprime', d.get('q_prime', 0)) > 0, d"
+      - name: Upload Docker build metadata
+        if: always()
+        run: docker image inspect kiln-heat-transfer:ci --format '{{.Id}}' > docker-image-id.txt || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docker-ci-metadata
+          path: docker-image-id.txt
+          if-no-files-found: ignore
+
+  android-apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk python3-pip python3-venv             autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev             libtinfo5 cmake libffi-dev libssl-dev build-essential ccache
+      - name: Install Buildozer
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user 'buildozer==1.5.0' 'Cython==0.29.36'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build debug APK
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+        run: buildozer -v android debug
+      - name: Verify APK artifact exists
+        run: |
+          apk="$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          file "$apk"
+          # Static package-integrity smoke test: ZIP, manifest, DEX and ARM64 payload.
+          unzip -t "$apk"
+          unzip -Z1 "$apk" | grep -qx "AndroidManifest.xml"
+          unzip -Z1 "$apk" | grep -Eq "classes[0-9]*[.]dex"
+          unzip -Z1 "$apk" | grep -Eq "lib/arm64-v8a/.*[.]so"
+          test "$(stat -c %s "$apk")" -gt 1000000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiln-heat-transfer-android-apk
+          path: bin/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [python-tests, docker-smoke, android-apk]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kiln-heat-transfer-android-apk
+          path: release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.apk
+          generate_release_notes: true

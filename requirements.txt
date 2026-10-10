@@ -23,3 +23,6 @@ kivy>=2.3.0
 
 # ---- 开发与测试 ----
 pytest>=8.0
+
+# Schema v2 YAML configuration import/export
+PyYAML>=6.0,<7

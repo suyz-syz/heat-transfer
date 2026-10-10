@@ -21,6 +21,9 @@ from typing import List, Optional, Tuple
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from kiln_ht.conductivity import ConductivityModel
+from kiln_ht.config_schema import validate_kiln_params
+
 from kiln_ht import (
     KilnParams,
     Layer,
@@ -43,6 +46,7 @@ class LayerIn(BaseModel):
     k_coef: Optional[List[float]] = Field(
         None, min_length=3, max_length=3, description="k(T)=a+bT+cT² 系数 (T 单位 ℃)")
     Rc: float = Field(0.0, ge=0, description="层间接触热阻 (m²·K/W)")
+    thermal_conductivity: Optional[dict] = Field(None, description="v2 导热模型：constant/polynomial/table；插值表温度单位 K")
 
 
 class KilnParamsIn(BaseModel):
@@ -75,9 +79,27 @@ def _to_domain(req: SolveRequest):
             k_coef = (k, 0.0, 0.0)
         else:
             k_coef = (l.k_coef[0], l.k_coef[1], l.k_coef[2])
+        model = None
+        tc = l.thermal_conductivity
+        if tc is not None:
+            mode = str(tc.get("mode", "constant")).lower()
+            if mode == "constant":
+                kval = float(tc.get("value", l.k if l.k is not None else k_coef[0]))
+                model = ConductivityModel.constant(kval)
+                k_coef = (kval, 0.0, 0.0)
+            elif mode == "polynomial":
+                model = ConductivityModel.polynomial(
+                    tc.get("coefficients", l.k_coef or [l.k or 1.0, 0.0, 0.0]),
+                    tc.get("temperature_unit", "degC"))
+                k_coef = tuple(model.coefficients)
+            elif mode == "table":
+                model = ConductivityModel.table(tc.get("points", []))
+            else:
+                raise ValueError(f"不支持的导热系数模式: {mode}")
         layers.append(Layer(name=l.name, thickness=l.thickness,
-                            k_coef=k_coef, Rc=l.Rc))
+                            k_coef=k_coef, Rc=l.Rc, conductivity_model=model))
     params = KilnParams(**req.params.model_dump()) if req.params else KilnParams()
+    validate_kiln_params(vars(params))
     return layers, params
 
 
