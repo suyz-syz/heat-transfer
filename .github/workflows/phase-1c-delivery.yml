@@ -33,7 +33,7 @@ jobs:
           tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py
           tests/test_phase1b_wsgg.py tests/test_phase2_architecture.py
           tests/test_hitemp_wsgg_calibration.py tests/test_phase1c_schema.py
-          tests/test_phase1c_delivery.py -q
+          tests/test_phase1c_delivery.py tests/test_phase1c_visualization.py -q
 
   docker-smoke:
     runs-on: ubuntu-latest
@@ -88,8 +88,64 @@ jobs:
         run: buildozer -v android debug
       - name: Verify APK artifact exists
         run: |
-          test -n "$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          find bin -maxdepth 1 -type f -name '*.apk' -exec file {} \;
+          apk="$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$apk"
+          file "$apk"
+          # Static package-integrity smoke test: valid ZIP, Android manifest,
+          # Dalvik bytecode and native ARM64 payload are present.
+          unzip -t "$apk"
+          unzip -Z1 "$apk" | grep -qx 'AndroidManifest.xml'
+          unzip -Z1 "$apk" | grep -Eq '^classes[0-9]*\.dex
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiln-heat-transfer-android-apk
+          path: bin/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [python-tests, docker-smoke, android-apk]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kiln-heat-transfer-android-apk
+          path: release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.apk
+          generate_release_notes: true
+
+          unzip -Z1 "$apk" | grep -q '^lib/arm64-v8a/.*\.so
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiln-heat-transfer-android-apk
+          path: bin/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [python-tests, docker-smoke, android-apk]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kiln-heat-transfer-android-apk
+          path: release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.apk
+          generate_release_notes: true
+
+          test "$(stat -c %s "$apk")" -gt 1000000
       - uses: actions/upload-artifact@v4
         with:
           name: kiln-heat-transfer-android-apk
