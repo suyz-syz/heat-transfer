@@ -91,11 +91,12 @@ jobs:
           apk="$(find bin -maxdepth 1 -type f -name '*.apk' -print -quit)"
           test -n "$apk"
           file "$apk"
-          # Static package-integrity smoke test: valid ZIP, Android manifest,
-          # Dalvik bytecode and native ARM64 payload are present.
+          # Static package-integrity smoke test: ZIP, manifest, DEX and ARM64 payload.
           unzip -t "$apk"
-          unzip -Z1 "$apk" | grep -qx 'AndroidManifest.xml'
-          unzip -Z1 "$apk" | grep -Eq '^classes[0-9]*\.dex
+          unzip -Z1 "$apk" | grep -qx "AndroidManifest.xml"
+          unzip -Z1 "$apk" | grep -Eq "classes[0-9]*[.]dex"
+          unzip -Z1 "$apk" | grep -Eq "lib/arm64-v8a/.*[.]so"
+          test "$(stat -c %s "$apk")" -gt 1000000
       - uses: actions/upload-artifact@v4
         with:
           name: kiln-heat-transfer-android-apk
