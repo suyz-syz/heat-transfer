@@ -27,10 +27,10 @@ jobs:
         shell: bash
         run: |
           if [[ -f data/hitemp_co2_h2o_1000_4000_sample.csv && -f data/tips_partition_sums_296_2400.csv ]]; then
-            python scripts/calibrate_hitemp_wsgg_global.py
-              --line-csv data/hitemp_co2_h2o_1000_4000_sample.csv
-              --tips-csv data/tips_partition_sums_296_2400.csv
-              --release "user-provisioned HITEMP/TIPS CSV"
+            python scripts/calibrate_hitemp_wsgg_global.py \
+              --line-csv data/hitemp_co2_h2o_1000_4000_sample.csv \
+              --tips-csv data/tips_partition_sums_296_2400.csv \
+              --release "user-provisioned HITEMP/TIPS CSV" \
               --output reports/hitemp_wsgg_calibration.json
           else
             echo "::notice::HITEMP/TIPS source CSVs are not committed; full physical calibration was not run in this CI job."
