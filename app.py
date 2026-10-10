@@ -259,13 +259,14 @@ with st.sidebar:
 
     st.caption("温度以 ℃ 输入，后台自动换算为 K")
 
-    st.subheader("窑体与热工参数")
+    st.subheader("【窑体几何与运行】")
     T_gas_C = st.number_input("烟气温度 (°C)", value=1250.0, step=10.0, key="T_gas_C")
     v_gas = st.number_input("烟气流速 (m/s)", value=3.0, min_value=0.01, step=0.1,
                             key="v_gas")
     L_char = st.number_input("窑内径 (m)", value=4.0, step=0.1, key="L_char")
     L_kiln = st.number_input("窑长 (m)", value=60.0, step=1.0, key="L_kiln")
     P_total = st.number_input("窑内压力 (bar)", value=1.01325, step=0.1, key="P_total")
+    st.subheader("【气相与 WSGG 光谱】")
     CO2 = st.number_input("CO₂ 含量 (%)", value=20.0, min_value=0.0, max_value=100.0,
                           step=0.5, key="CO2")
     H2O = st.number_input("H₂O 含量 (%)", value=8.0, min_value=0.0, max_value=100.0,
@@ -281,6 +282,7 @@ with st.sidebar:
                                 step=0.01, key="eps_shell")
 
     st.divider()
+    st.subheader("【求解控制与输出】")
     N_total = st.slider("温度曲线取点数", min_value=50, max_value=1000, value=100,
                         step=50, key="N_total")
 
@@ -294,7 +296,7 @@ with st.sidebar:
 st.title("水泥窑窑衬传热计算")
 st.caption("多层圆筒壁一维稳态传热 · 计算核心与 APK / FastAPI 完全一致")
 
-st.subheader("🧱 衬层配置")
+st.subheader("【物料与窑壁物性 λ(T)】 · 衬层配置")
 st.caption("可添加、删除、上下移动耐火衬层；厚度单位为 mm，支持 k(T) 温度相关导热系数（a/b/c），自定义材料可保存到材料库")
 
 col_hint = st.columns([0.2, 0.2, 0.28, 0.12, 0.2])
