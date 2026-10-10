@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import streamlit as st
 import pandas as pd
+import json
 
 from kiln_ht import (
     KilnParams,
@@ -31,6 +32,8 @@ from kiln_ht import (
     save_user_material,
     compute_temperature_curve,
     solve_wall,
+    ConductivityModel,
+    validate_kiln_params,
 )
 
 # ============ 页面基础配置 ============
@@ -105,14 +108,25 @@ def _solve():
     """
     layers = []
     for i, row in enumerate(_ss.layers):
-        k_coef = row.get("k_coef")
-        if k_coef is None:
-            k_coef = (float(row["k"]), 0.0, 0.0)
+        k_coef = tuple(row.get("k_coef") or (float(row.get("k", 1.0)), 0.0, 0.0))
+        mode = row.get("conductivity_mode", "constant")
+        model = None
+        if mode == "constant":
+            model = ConductivityModel.constant(k_coef[0])
+            k_coef = (k_coef[0], 0.0, 0.0)
+        elif mode == "polynomial":
+            model = ConductivityModel.polynomial(k_coef, "degC")
+        elif mode == "table":
+            points = row.get("conductivity_points", [[300, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
+            model = ConductivityModel.table(points)
+        else:
+            raise ValueError(f"未知导热模型: {mode}")
         layers.append(Layer(
             name=row["name"].strip() or f"层{i+1}",
             thickness=float(row["thickness_mm"]) / 1000.0,
             k_coef=tuple(k_coef),
             Rc=float(row.get("Rc", 0.0)),
+            conductivity_model=model,
         ))
     params = KilnParams(
         N_total=_ss.N_total,
@@ -128,6 +142,7 @@ def _solve():
         v_amb=_ss.v_amb,
         eps_shell=_ss.eps_shell,
     )
+    validate_kiln_params(vars(params))
     sol = solve_wall(layers, params)
     x_mm, T_c = compute_temperature_curve(layers, sol, n_points=params.N_total)
     return layers, sol, x_mm, T_c
@@ -256,34 +271,66 @@ for idx, row in enumerate(_ss.layers):
                 _ss.pop(kk, None)
         st.rerun()
 
-    # 系数显示/编辑：自定义材料显示 a/b/c 编辑框 + 保存按钮，材料库选择只读显示
+    # 统一导热模式：常数 / 多项式 / 温度-导热系数表。
     if row.get("k_coef") is None:
-        row["k_coef"] = [float(row["k"]), 0.0, 0.0]
-    if sel == "自定义":
-        # 导热系数 a/b/c 与「保存到材料库」整合到同一行（跨整行宽度），
-        # 替代原 expander 展开项的多行堆叠布局，界面更紧凑。
-        ka, kb, kc, ks = st.columns([1.0, 1.0, 1.0, 2.2])
-        row["k_coef"] = [
-            ka.number_input("a", value=float(row["k_coef"][0]), key=f"layer_{uid}_a",
-                            format="%.6g"),
-            kb.number_input("b", value=float(row["k_coef"][1]), key=f"layer_{uid}_b",
-                            format="%.6g"),
-            kc.number_input("c", value=float(row["k_coef"][2]), key=f"layer_{uid}_c",
-                            format="%.6g"),
-        ]
-        # 保存当前层为材料库条目：优先使用「层名称」输入框内容，为空时回退默认名
-        save_name = row["name"].strip() or f"层{idx + 1}"
-        if ks.button(f"💾 保存『{save_name}』到材料库",
-                     key=f"layer_{uid}_save"):
-            try:
-                save_user_material(save_name, row["k_coef"])
-                st.success(f"已保存到材料库：{save_name}")
-            except ValueError as exc:
-                st.error(f"保存失败：{exc}")
+        row["k_coef"] = [float(row.get("k", 1.0)), 0.0, 0.0]
+    row.setdefault("conductivity_mode", "constant" if cur_material == "自定义" else "polynomial")
+    mode = st.selectbox(
+        "导热系数模式",
+        ["constant", "polynomial", "table"],
+        index=["constant", "polynomial", "table"].index(row["conductivity_mode"]),
+        format_func=lambda v: {"constant": "常数 λ₀", "polynomial": "多项式 c₀+c₁T+c₂T²（T 为 ℃）", "table": "温度-导热系数插值表（温度 K）"}[v],
+        key=f"layer_{uid}_conductivity_mode",
+    )
+    row["conductivity_mode"] = mode
+    if mode in ("constant", "polynomial"):
+        if mode == "constant":
+            row["k_coef"][0] = c3.number_input(
+                "λ₀ (W/m·K)", value=float(row["k_coef"][0]), min_value=0.000001,
+                format="%.6g", key=f"layer_{uid}_lambda0")
+            row["k_coef"][1:] = [0.0, 0.0]
+        else:
+            ka, kb, kc, ks = st.columns([1.0, 1.0, 1.0, 2.2])
+            row["k_coef"] = [
+                ka.number_input("c₀", value=float(row["k_coef"][0]), format="%.6g", key=f"layer_{uid}_a"),
+                kb.number_input("c₁", value=float(row["k_coef"][1]), format="%.6g", key=f"layer_{uid}_b"),
+                kc.number_input("c₂", value=float(row["k_coef"][2]), format="%.6g", key=f"layer_{uid}_c"),
+            ]
+            save_name = row["name"].strip() or f"层{idx + 1}"
+            if ks.button(f"💾 保存多项式材料「{save_name}」", key=f"layer_{uid}_save"):
+                try:
+                    save_user_material(save_name, row["k_coef"])
+                    st.success(f"已保存到材料库：{save_name}")
+                except ValueError as exc:
+                    st.error(f"保存失败：{exc}")
     else:
-        a, b, c = row["k_coef"]
-        c3.markdown(f"λ={a:g}+{b:g}T+{c:g}T²")
-
+        default_points = row.get("conductivity_points", [[300, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
+        raw_points = st.text_area(
+            "插值点 JSON：[[温度 K, λ W/(m·K)], ...]",
+            value=json.dumps(default_points, ensure_ascii=False),
+            key=f"layer_{uid}_conductivity_points",
+            height=80,
+        )
+        try:
+            points = json.loads(raw_points)
+            preview_model = ConductivityModel.table(points)
+            row["conductivity_points"] = points
+            temps = list(range(300, 2001, 25))
+            vals = [preview_model.conductivity(t) for t in temps]
+            st.line_chart(pd.DataFrame({"λ (W/m·K)": vals}, index=temps))
+            st.caption("插值采用分段线性方式；超出表格温度范围时禁止外推。示例点仅用于 UI 演示，请替换为材料实测数据。")
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            st.error(f"插值表无效：{exc}")
+            row["conductivity_points"] = points if "points" in locals() else default_points
+    if mode == "polynomial":
+        try:
+            model_preview = ConductivityModel.polynomial(row["k_coef"], "degC")
+            temps = list(range(300, 2001, 25))
+            vals = [model_preview.conductivity(t) for t in temps]
+            st.line_chart(pd.DataFrame({"λ (W/m·K)": vals}, index=temps))
+            st.caption("多项式温度变量按旧配置约定使用 ℃；图表横轴为 K。")
+        except ValueError as exc:
+            st.error(f"物性曲线无效：{exc}")
     row["Rc"] = c5.number_input(
         "Rc", value=float(row.get("Rc", 0.0)), min_value=0.0, step=0.001,
         key=f"layer_{uid}_rc", label_visibility="collapsed")
