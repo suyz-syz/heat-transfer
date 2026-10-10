@@ -781,7 +781,7 @@ class InputScreen(Screen):
                         model_ = ConductivityModel.polynomial(
                             (float(a_.text), float(b_.text), float(c_.text)), "degC")
                         temps_ = [250.0 + j * 50.0 for j in range(36)]
-                        pts = tuple((t, model_.evaluate(t)) for t in temps_)
+                        pts = tuple((t, model_.conductivity(t)) for t in temps_)
                     else:
                         kval = float(a_.text)
                         pts = ((250.0, kval), (2000.0, kval))
