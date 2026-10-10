@@ -1,0 +1,31 @@
+name: Phase 1C Schema and UI Tests
+
+on:
+  push:
+    branches:
+      - feat/phase-1c-gui-docker-apk
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest "fastapi>=0.110,<1" "pydantic>=2.6"
+      - name: Compile Python sources
+        run: python -m compileall -q kiln_ht app.py main.py server.py
+      - name: Run test suite
+        run: python -m pytest tests/ -q
