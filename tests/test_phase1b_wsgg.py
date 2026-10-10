@@ -30,6 +30,26 @@ def test_lbl_spectrum_and_planck_weighted_emissivity():
     assert 0 <= eps <= 1
 
 
+def test_planck_weight_uses_cm_inverse_with_cm_kelvin_constant():
+    # For a constant absorption coefficient the emissivity is constant; use
+    # a piecewise spectrum to verify the Planck weights are evaluated with
+    # C2 in cm K and wavenumber in cm^-1 (not an extra factor of 100).
+    grid = [2000.0, 2100.0, 2200.0, 2300.0, 2400.0]
+    alpha = [0.0, 0.0, 1.0, 1.0, 1.0]
+    temperature = 1200.0
+    path = 1.0
+    actual = gas_emissivity_from_spectrum(alpha, grid, temperature, path)
+    c2 = 1.438776877
+    weights = []
+    absorptances = [0.0, 1.0 - math.exp(-0.5), 1.0 - math.exp(-1.0),
+                    1.0 - math.exp(-1.0)]
+    for left, right in zip(grid, grid[1:]):
+        wn = 0.5 * (left + right)
+        weights.append(wn**3 / math.expm1(c2 * wn / temperature))
+    expected = sum(w * a for w, a in zip(weights, absorptances)) / sum(weights)
+    assert actual == pytest.approx(expected, rel=1e-12)
+
+
 def test_wsgg_fit_recovers_synthetic_emissivity_curve():
     lengths = [0.05 + i*0.05 for i in range(30)]
     target = [wsgg_emissivity((0.25, 0.35, 0.2), (0.2, 2.0, 20.0), l)
