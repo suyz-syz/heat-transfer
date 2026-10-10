@@ -612,7 +612,7 @@ class InputScreen(Screen):
 
         # ---- 卡片 1：窑体几何 ----
         geom = auto_height(MDCard())
-        geom.add_widget(make_title("窑体几何"))
+        geom.add_widget(make_title("【窑体几何与运行】"))
         self._add_field(geom, "L_char", "窑内径", "m", "4")
         self._add_field(geom, "L_kiln", "窑长", "m", "60")
         row = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
@@ -623,19 +623,21 @@ class InputScreen(Screen):
         self.layer_grid = BoxLayout(orientation="vertical", spacing=dp(6),
                                     size_hint_y=None)
         self.layer_grid.bind(minimum_height=self.layer_grid.setter("height"))
+        geom.add_widget(make_title("【物料与窑壁物性 λ(T)】"))
         geom.add_widget(self.layer_grid)
         content.add_widget(geom)
         self._rebuild_layers()
 
         # ---- 卡片 2：热工与烟气 ----
         thermal = auto_height(MDCard())
-        thermal.add_widget(make_title("热工与烟气"))
+        thermal.add_widget(make_title("【气相与 WSGG 光谱】"))
         self._add_field(thermal, "T_gas", "烟气温度", "°C", "1250")
         self._add_field(thermal, "v_gas", "烟气流速", "m/s", "3")
         self._add_field(thermal, "P_total", "窑内压力", "bar", "1.01325")
         self._add_field(thermal, "CO2", "CO2 含量", "%", "20")
         self._add_field(thermal, "H2O", "H2O 含量", "%", "8")
         self._add_field(thermal, "eps_wall", "内壁发射率", "", "0.85")
+        thermal.add_widget(make_title("【求解控制与输出】"))
         self._add_field(thermal, "N_total", "温度曲线取点数", "点", "100",
                         input_cls=IntInput)
         content.add_widget(thermal)
