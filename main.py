@@ -720,6 +720,33 @@ class InputScreen(Screen):
         self._add_field(env, "eps_shell", "外壳发射率", "", "0.85")
         content.add_widget(env)
 
+        # ---- 轴向模型边界：可选启用气-物料-窑壁三相耦合 ----
+        axial_card = auto_height(MDCard(spacing=dp(8)))
+        axial_card.add_widget(make_title("轴向模型控制（可选物料三相耦合）"))
+        axial_toggle = BoxLayout(orientation="horizontal", spacing=dp(8),
+                                 size_hint_y=None, height=dp(40))
+        self.axial_bed_enabled = CheckBox(active=False, size_hint=(None, 1), width=dp(36))
+        axial_toggle.add_widget(self.axial_bed_enabled)
+        axial_toggle.add_widget(MdLabel(
+            text="启用物料温度与气-物料 / 壁-物料换热",
+            color=TEXT_DIM, font_size=sp(12)))
+        self.axial_bed_direction = Spinner(
+            text="逆流", values=["逆流", "顺流"], size_hint_x=None, width=dp(76),
+            font_size=sp(11), background_color=CARD_ELEV)
+        axial_toggle.add_widget(self.axial_bed_direction)
+        axial_card.add_widget(axial_toggle)
+        self._add_field(axial_card, "axial_bed_inlet_C", "物料入口温度", "°C", "800")
+        self._add_field(axial_card, "axial_bed_mass_flow", "物料质量流量", "kg/s", "2")
+        self._add_field(axial_card, "axial_cp_bed", "物料定压比热", "J/kg·K", "1000")
+        self._add_field(axial_card, "axial_h_gas_bed", "气-物料换热系数", "W/m²·K", "20")
+        self._add_field(axial_card, "axial_h_wall_bed", "壁-物料换热系数", "W/m²·K", "50")
+        self._add_field(axial_card, "axial_area_gas_bed", "气-物料有效面积/长度", "m", "1")
+        self._add_field(axial_card, "axial_contact_wall_bed", "壁-物料接触长度/长度", "m", "0.2")
+        axial_card.add_widget(MdLabel(
+            text="默认关闭；启用后必须核对流量、比热、换热系数及有效面积，当前为可编辑边界参数。",
+            color=ACCENT, font_size=sp(10), size_hint_y=None, height=dp(34)))
+        content.add_widget(axial_card)
+
         # ---- 配置文件：移动端粘贴/导入与 JSON/YAML 导出 ----
         config_card = auto_height(MDCard(spacing=dp(8)))
         config_card.add_widget(make_title("历史配置导入 / 导出 · Schema v2"))
@@ -1383,10 +1410,25 @@ class KilnApp(BoxLayout):
             return False
         axial_data = None
         try:
-            axial_solution = solve_kiln(
-                layers, params, n_cells=20, mass_flow_kg_s=20.0,
-                cp_gas_j_kg_k=1150.0,
-            )
+            axial_kwargs = {
+                "n_cells": 20, "mass_flow_kg_s": 20.0, "cp_gas_j_kg_k": 1150.0,
+            }
+            if self.input_screen.axial_bed_enabled.active:
+                p = self.input_screen._fields
+                axial_kwargs.update({
+                    "bed_inlet_temperature_k": float(p["axial_bed_inlet_C"].text) + 273.15,
+                    "bed_mass_flow_kg_s": float(p["axial_bed_mass_flow"].text),
+                    "cp_bed_j_kg_k": float(p["axial_cp_bed"].text),
+                    "gas_bed_h_w_m2_k": float(p["axial_h_gas_bed"].text),
+                    "wall_bed_h_w_m2_k": float(p["axial_h_wall_bed"].text),
+                    "gas_bed_area_per_length_m": float(p["axial_area_gas_bed"].text),
+                    "wall_bed_contact_per_length_m": float(p["axial_contact_wall_bed"].text),
+                    "bed_flow_direction": (
+                        "counter-current" if self.input_screen.axial_bed_direction.text == "逆流"
+                        else "co-current"
+                    ),
+                })
+            axial_solution = solve_kiln(layers, params, **axial_kwargs)
             axial_data = axial_plot_data(axial_solution)
         except (ValueError, RuntimeError) as exc:
             self.input_screen._flash_error(f"壁厚计算已完成；轴向图不可用：{exc}")
