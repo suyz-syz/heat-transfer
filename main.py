@@ -751,7 +751,7 @@ class InputScreen(Screen):
             table_row = BoxLayout(orientation="horizontal", spacing=dp(6),
                                   size_hint_y=None, height=dp(44))
             table_in = TextInput(
-                text="[[300,1.5],[800,1.2],[1300,1.0],[2000,0.8]]",
+                text="[[250,1.5],[800,1.2],[1300,1.0],[2000,0.8]]",
                 multiline=False, font_size=sp(11), size_hint_x=1,
                 background_color=CARD_ELEV, foreground_color=TEXT,
                 cursor_color=PRIMARY, padding=[dp(8), dp(10), dp(8), dp(8)])
