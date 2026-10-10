@@ -760,6 +760,37 @@ class InputScreen(Screen):
             table_row.add_widget(table_in)
             card.add_widget(table_row)
 
+            # λ(T) 动态预览：复用纯 Kivy Canvas 曲线控件，Android 不依赖 matplotlib。
+            preview_title = MdLabel(text="λ(T) 预览 · 温度 K / 导热系数 W/(m·K)",
+                                    color=TEXT_DIM, font_size=sp(10),
+                                    size_hint_y=None, height=dp(20))
+            preview = CurveWidget(size_hint_y=None, height=dp(104))
+            preview_warning = MdLabel(text="", color=ACCENT, font_size=sp(10),
+                                      size_hint_y=None, height=dp(18))
+            card.add_widget(preview_title)
+            card.add_widget(preview)
+            card.add_widget(preview_warning)
+
+            def _refresh_conductivity_preview(*_args, mode_=mode_spinner, a_=a_in,
+                                              b_=b, c_=c, table_=table_in,
+                                              plot_=preview, warning_=preview_warning):
+                try:
+                    if mode_.text == "插值表":
+                        pts = ConductivityModel.table(json.loads(table_.text)).points
+                    elif mode_.text == "多项式":
+                        model_ = ConductivityModel.polynomial(
+                            (float(a_.text), float(b_.text), float(c_.text)), "degC")
+                        temps_ = [250.0 + j * 50.0 for j in range(36)]
+                        pts = tuple((t, model_.evaluate(t)) for t in temps_)
+                    else:
+                        kval = float(a_.text)
+                        pts = ((250.0, kval), (2000.0, kval))
+                    plot_.set_data([p[0] for p in pts], [p[1] for p in pts])
+                    warning_.text = ""
+                except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                    plot_.set_data([], [])
+                    warning_.text = f"⚠ λ(T) 输入无效：{exc}"
+
             # 第二行下方小注：a/b/c 组上方为弹性「导热系数」公式说明；
             # Rc 输入框内不显示单位后缀，其说明「接触热阻 Rc」作为固定宽度
             # （与 rc 输入框等宽 dp(64)）标签，右端与输入框精确对齐。
@@ -790,6 +821,10 @@ class InputScreen(Screen):
                 table_.opacity = 1.0 if mode_.text == "插值表" else 0.55
             mode_spinner.bind(text=_mode_changed)
             _mode_changed()
+            for _control in (a_in, b, c, table_in):
+                _control.bind(text=_refresh_conductivity_preview)
+            mode_spinner.bind(text=_refresh_conductivity_preview)
+            _refresh_conductivity_preview()
 
             # 选择材料时自动填充 a/b/c（并勾选温度相关）
             def _on_mat(*_a, idx_=i, a_=a_in, b_=b, c_=c, mode_=mode_spinner):
