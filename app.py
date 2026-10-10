@@ -117,7 +117,7 @@ def _solve():
         elif mode == "polynomial":
             model = ConductivityModel.polynomial(k_coef, "degC")
         elif mode == "table":
-            points = row.get("conductivity_points", [[300, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
+            points = row.get("conductivity_points", [[250, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
             model = ConductivityModel.table(points)
         else:
             raise ValueError(f"未知导热模型: {mode}")
@@ -304,7 +304,7 @@ for idx, row in enumerate(_ss.layers):
                 except ValueError as exc:
                     st.error(f"保存失败：{exc}")
     else:
-        default_points = row.get("conductivity_points", [[300, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
+        default_points = row.get("conductivity_points", [[250, 1.5], [800, 1.2], [1300, 1.0], [2000, 0.8]])
         raw_points = st.text_area(
             "插值点 JSON：[[温度 K, λ W/(m·K)], ...]",
             value=json.dumps(default_points, ensure_ascii=False),
