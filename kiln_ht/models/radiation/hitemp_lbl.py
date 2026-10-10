@@ -198,13 +198,16 @@ def gas_emissivity_from_spectrum(
     weighted_abs, weighted_planck = 0.0, 0.0
     # Planck spectral exitance per wavenumber; constants cancel in the ratio.
     for i in range(len(wavenumbers)-1):
-        nu_m = 100.0 * 0.5 * (wavenumbers[i] + wavenumbers[i+1])
-        if nu_m <= 0:
+        # Use wavenumber in cm^-1 with C2 in cm K. The factor 100 belongs
+        # only in the SI spectral-flux routine below; applying it here
+        # suppresses Planck weights by exp(-O(100)) and corrupts emissivity.
+        nu_cm = 0.5 * (wavenumbers[i] + wavenumbers[i+1])
+        if nu_cm <= 0:
             continue
-        z = 1.438776877 * 100.0 * 0.5 * (wavenumbers[i] + wavenumbers[i+1]) / temperature
+        z = C2_CM_K * nu_cm / temperature
         if z > 700:
             continue
-        planck = nu_m**3 / math.expm1(z)
+        planck = nu_cm**3 / math.expm1(z)
         a = 1.0 - math.exp(-max(0.0, 0.5*(absorption[i]+absorption[i+1]))*path_length_m)
         dnu = abs(wavenumbers[i+1]-wavenumbers[i])
         weighted_abs += planck*a*dnu
