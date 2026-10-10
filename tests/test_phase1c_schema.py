@@ -3,6 +3,7 @@ import pytest
 
 from kiln_ht.config_schema import normalize_config, normalize_layer, validate_kiln_params
 from kiln_ht.conductivity import ConductivityModel
+from kiln_ht import KilnParams, Layer, compute_temperature_curve, solve_wall
 
 
 def test_legacy_k_config_migrates_to_constant():
@@ -54,3 +55,23 @@ def test_json_legacy_roundtrip(tmp_path):
     p.write_text(json.dumps({"layers": [{"thickness": .1, "k": 2.0}]}), encoding="utf-8")
     cfg = normalize_config(json.loads(p.read_text(encoding="utf-8")))
     assert cfg["layers"][0]["thermal_conductivity"]["value"] == 2.0
+
+
+def test_tabulated_conductivity_runs_through_radial_solver():
+    model = ConductivityModel.table([(250, 1.5), (800, 1.2), (1300, 1.0), (1800, 0.85)])
+    layers = [Layer(name="test table", thickness=0.08, k_coef=(1.0, 0.0, 0.0),
+                    conductivity_model=model)]
+    params = KilnParams(T_gas=1200.0, T_env=298.15, N_total=50)
+    solution = solve_wall(layers, params)
+    assert solution.Qprime > 0
+    assert solution.T_w1 > solution.T_wN > params.T_env
+    x, t = compute_temperature_curve(layers, solution, n_points=50)
+    assert len(x) == len(t) == 50
+    assert all(t[i+1] <= t[i] + 1e-8 for i in range(len(t)-1))
+
+
+def test_table_config_requires_strictly_increasing_temperature():
+    with pytest.raises(ValueError, match="严格递增"):
+        normalize_layer({"thickness": 0.1, "thermal_conductivity": {
+            "mode": "table", "points": [[300, 1.2], [300, 1.0]]
+        }})
