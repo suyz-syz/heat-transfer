@@ -34,6 +34,7 @@ from kiln_ht import (
     compute_temperature_curve,
     ConductivityModel,
     validate_kiln_params,
+    normalize_config,
 )
 from kiln_ht.export import build_report, export_result
 
@@ -650,6 +651,36 @@ class InputScreen(Screen):
         self._add_field(env, "eps_shell", "外壳发射率", "", "0.85")
         content.add_widget(env)
 
+        # ---- 配置文件：移动端粘贴/导入与 JSON/YAML 导出 ----
+        config_card = auto_height(MDCard(spacing=dp(8)))
+        config_card.add_widget(make_title("历史配置导入 / 导出 · Schema v2"))
+        config_card.add_widget(MdLabel(
+            text="粘贴历史 JSON/YAML 后导入；导出文件保存到应用私有目录，同时复制到剪贴板。",
+            color=TEXT_DIM, font_size=sp(11), size_hint_y=None, height=dp(32)))
+        self.config_text = TextInput(
+            text="", hint_text="在此粘贴 JSON 或 YAML 配置",
+            multiline=True, size_hint_y=None, height=dp(132),
+            font_size=sp(11), background_color=CARD_ELEV,
+            foreground_color=TEXT, cursor_color=PRIMARY,
+            padding=[dp(8), dp(8), dp(8), dp(8)])
+        config_card.add_widget(self.config_text)
+        config_actions = BoxLayout(orientation="horizontal", spacing=dp(8),
+                                   size_hint_y=None, height=dp(42))
+        import_btn = AccentButton(text="导入并迁移", size_hint_x=1)
+        import_btn.bind(on_press=lambda *_a: self._import_config_text())
+        export_json_btn = AccentButton(text="导出 JSON", bg=CARD_ELEV, size_hint_x=1)
+        export_json_btn.bind(on_press=lambda *_a: self._export_config("json"))
+        export_yaml_btn = AccentButton(text="导出 YAML", bg=CARD_ELEV, size_hint_x=1)
+        export_yaml_btn.bind(on_press=lambda *_a: self._export_config("yaml"))
+        config_actions.add_widget(import_btn)
+        config_actions.add_widget(export_json_btn)
+        config_actions.add_widget(export_yaml_btn)
+        config_card.add_widget(config_actions)
+        self.config_status = MdLabel(text="", color=TEXT_DIM, font_size=sp(11),
+                                     size_hint_y=None, height=dp(32))
+        config_card.add_widget(self.config_status)
+        content.add_widget(config_card)
+
         # ---- 底部操作区（固定在页面底部，不随卡片滚动，避免遮挡输入框） ----
         bottom = BoxLayout(orientation="vertical", spacing=dp(6),
                            size_hint_y=None, height=dp(110),
@@ -902,6 +933,113 @@ class InputScreen(Screen):
         )
         validate_kiln_params(vars(params))
         return layers, params
+
+    def _import_config_text(self):
+        """Parse legacy JSON/YAML, migrate to schema v2, then populate mobile controls."""
+        raw_text = self.config_text.text.strip()
+        if not raw_text:
+            self._flash_error("请先粘贴 JSON/YAML 配置")
+            return
+        try:
+            try:
+                raw = json.loads(raw_text)
+            except json.JSONDecodeError:
+                try:
+                    import yaml
+                except ImportError as exc:
+                    raise ValueError("YAML 导入需要 PyYAML；请改用 JSON 或安装 YAML 支持") from exc
+                raw = yaml.safe_load(raw_text)
+            cfg = normalize_config(raw)
+            p = cfg["params"]
+            defaults = {
+                "N_total": 100, "T_gas": 1523.15, "T_env": 298.15,
+                "v_gas": 3.0, "L_char": 4.0, "L_kiln": 60.0,
+                "P_total": 1.01325, "CO2": 0.20, "H2O": 0.08,
+                "eps_wall": 0.85, "v_amb": 2.0, "eps_shell": 0.85,
+            }
+            defaults.update(p)
+            display_values = {
+                "N_total": str(int(defaults["N_total"])),
+                "T_gas": str(float(defaults["T_gas"]) - 273.15),
+                "T_env": str(float(defaults["T_env"]) - 273.15),
+                "v_gas": str(defaults["v_gas"]), "L_char": str(defaults["L_char"]),
+                "L_kiln": str(defaults["L_kiln"]), "P_total": str(defaults["P_total"]),
+                "CO2": str(float(defaults["CO2"]) * 100.0),
+                "H2O": str(float(defaults["H2O"]) * 100.0),
+                "eps_wall": str(defaults["eps_wall"]), "v_amb": str(defaults["v_amb"]),
+                "eps_shell": str(defaults["eps_shell"]),
+            }
+            for key, value in display_values.items():
+                self._fields[key].text = value
+            layer_cfgs = cfg["layers"]
+            if not 1 <= len(layer_cfgs) <= 10:
+                raise ValueError("移动端支持 1–10 层衬里；请调整配置层数")
+            self.stepper._set(len(layer_cfgs))
+            self._rebuild_layers()
+            for row, layer in zip(self._layer_rows, layer_cfgs):
+                name, thick, mat, a_in, b, c, rc, mode_spinner, _save_btn, table_in = row
+                name.text = str(layer.get("name", "层"))
+                thick.text = f"{float(layer['thickness_m']) * 1000.0:g}"
+                rc.text = f"{float(layer.get('contact_resistance_m2_k_w', 0.0)):g}"
+                tc = layer["thermal_conductivity"]
+                mode = tc["mode"]
+                if mode == "constant":
+                    mode_spinner.text = "常数"
+                    a_in.text, b.text, c.text = f"{tc['value']:g}", "0", "0"
+                elif mode == "polynomial":
+                    mode_spinner.text = "多项式"
+                    co = tc["coefficients"]
+                    a_in.text, b.text, c.text = (f"{v:g}" for v in co)
+                elif mode == "table":
+                    mode_spinner.text = "插值表"
+                    table_in.text = json.dumps(tc["points"], ensure_ascii=False)
+                    a_in.text, b.text, c.text = "1", "0", "0"
+            self.config_status.text = f"✓ 已迁移到 Schema v2：{len(layer_cfgs)} 层；请复核单位与物性数据。"
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            self.config_status.text = f"⚠ 导入失败：{exc}"
+
+    def _export_config(self, fmt):
+        """Normalize current controls and export versioned config to app storage."""
+        try:
+            layers, params = self.collect_params()
+            config_layers = []
+            for layer in layers:
+                model = layer.conductivity_model
+                tc = model.as_dict() if model is not None else {
+                    "mode": "polynomial", "temperature_unit": "degC",
+                    "coefficients": list(layer.k_coef),
+                }
+                config_layers.append({
+                    "name": layer.name, "thickness_m": layer.thickness,
+                    "contact_resistance_m2_k_w": layer.Rc,
+                    "thermal_conductivity": tc,
+                })
+            cfg = normalize_config({
+                "schema_version": 2, "params": vars(params), "layers": config_layers,
+            })
+            if fmt == "yaml":
+                try:
+                    import yaml
+                except ImportError as exc:
+                    raise ValueError("YAML 导出需要 PyYAML；JSON 导出可直接使用") from exc
+                serialized = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
+                extension = "yaml"
+            else:
+                serialized = json.dumps(cfg, ensure_ascii=False, indent=2)
+                extension = "json"
+            out_path = os.path.join(App.get_running_app().user_data_dir,
+                                    f"kiln-config-v2.{extension}")
+            with open(out_path, "w", encoding="utf-8") as stream:
+                stream.write(serialized)
+            try:
+                from kivy.core.clipboard import Clipboard
+                Clipboard.copy(serialized)
+            except Exception:  # noqa: BLE001 — clipboard may be unavailable on some platforms
+                pass
+            self.config_text.text = serialized
+            self.config_status.text = f"✓ 已导出并复制到剪贴板：{out_path}"
+        except (ValueError, TypeError, KeyError) as exc:
+            self.config_status.text = f"⚠ 导出失败：{exc}"
 
     def _on_calc(self):
         self.error_label.text = ""
