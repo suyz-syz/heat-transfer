@@ -1057,7 +1057,12 @@ class InputScreen(Screen):
                     a_in.text, b.text, c.text = f"{tc['value']:g}", "0", "0"
                 elif mode == "polynomial":
                     mode_spinner.text = "多项式"
-                    co = tc["coefficients"]
+                    co = [float(v) for v in tc["coefficients"]]
+                    if tc.get("temperature_unit", "degC") == "K":
+                        # Convert k(T_K) coefficients to the UI's legacy k(T_degC) form.
+                        _c0, _c1, _c2 = co
+                        co = [_c0 + 273.15 * _c1 + 273.15 ** 2 * _c2,
+                              _c1 + 2.0 * 273.15 * _c2, _c2]
                     a_in.text, b.text, c.text = (f"{v:g}" for v in co)
                 elif mode == "table":
                     mode_spinner.text = "插值表"
