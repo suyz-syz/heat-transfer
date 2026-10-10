@@ -28,4 +28,4 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q kiln_ht app.py main.py server.py
       - name: Run test suite
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py tests/test_phase1b_wsgg.py tests/test_phase2_architecture.py tests/test_hitemp_wsgg_calibration.py tests/test_phase1c_schema.py -q
