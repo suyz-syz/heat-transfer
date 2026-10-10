@@ -32,10 +32,12 @@ from kiln_ht import (
     save_user_material,
     compute_temperature_curve,
     solve_wall,
+    solve_kiln,
     ConductivityModel,
     validate_kiln_params,
     normalize_config,
 )
+from kiln_ht.visualization import axial_plot_data, provisional_wsgg_weight_curves
 
 # ============ 页面基础配置 ============
 st.set_page_config(
@@ -146,7 +148,7 @@ def _solve():
     validate_kiln_params(vars(params))
     sol = solve_wall(layers, params)
     x_mm, T_c = compute_temperature_curve(layers, sol, n_points=params.N_total)
-    return layers, sol, x_mm, T_c
+    return layers, sol, x_mm, T_c, params
 
 
 # ============ 自定义 CSS：输入框与背景的视觉分割 ============
@@ -285,6 +287,33 @@ with st.sidebar:
     st.subheader("【求解控制与输出】")
     N_total = st.slider("温度曲线取点数", min_value=50, max_value=1000, value=100,
                         step=50, key="N_total")
+    st.caption("轴向模型参数（用于真实 solve_kiln 结果图）")
+    st.number_input("轴向控制体数", min_value=2, max_value=200, value=20,
+                    step=2, key="axial_cells")
+    st.number_input("烟气质量流量 (kg/s)", min_value=0.01, value=20.0,
+                    step=1.0, key="axial_mass_flow")
+    st.number_input("烟气定压比热 (J/kg·K)", min_value=1.0, value=1150.0,
+                    step=25.0, key="axial_cp_gas")
+    st.checkbox("启用物料三相耦合（需填写换热边界）", value=False,
+                key="axial_bed_enabled")
+    if _ss.get("axial_bed_enabled", False):
+        st.number_input("物料入口温度 (°C)", value=800.0, step=25.0,
+                        key="axial_bed_inlet_c")
+        st.number_input("物料质量流量 (kg/s)", min_value=0.01, value=2.0,
+                        step=0.1, key="axial_bed_mass_flow")
+        st.number_input("物料定压比热 (J/kg·K)", min_value=1.0, value=1000.0,
+                        step=25.0, key="axial_cp_bed")
+        st.number_input("气-物料换热系数 (W/m²·K)", min_value=0.01, value=20.0,
+                        step=1.0, key="axial_h_gas_bed")
+        st.number_input("壁-物料换热系数 (W/m²·K)", min_value=0.01, value=50.0,
+                        step=1.0, key="axial_h_wall_bed")
+        st.number_input("气-物料有效换热面积/长度 (m)", min_value=0.001,
+                        value=1.0, step=0.1, key="axial_area_gas_bed")
+        st.number_input("壁-物料接触长度/长度 (m)", min_value=0.001,
+                        value=0.2, step=0.05, key="axial_contact_wall_bed")
+        st.selectbox("物料流向", ["counter-current", "co-current"],
+                     format_func=lambda x: {"counter-current": "逆流", "co-current": "顺流"}[x],
+                     key="axial_bed_direction")
 
     st.divider()
     if st.button("🚀 开始计算", type="primary", width="stretch"):
@@ -470,7 +499,7 @@ st.subheader("📊 计算结果")
 
 if _ss.get("calc_trigger"):
     try:
-        layers, sol, x_mm, T_c = _solve()
+        layers, sol, x_mm, T_c, params = _solve()
     except (ValueError, Exception) as exc:  # noqa: BLE001 —— UI 层统一捕获展示
         st.error(f"计算失败：{exc}")
         st.stop()
@@ -558,6 +587,89 @@ if _ss.get("calc_trigger"):
             st.pyplot(figm)
         except ImportError:
             st.warning("未安装 plotly 或 matplotlib，无法绘制曲线")
+
+    # ---- 轴向多维可视化：直接使用 solve_kiln 返回的控制体数组 ----
+    st.subheader("轴向温度分布 T(x)")
+    try:
+        _axial_kwargs = {
+            "n_cells": int(_ss.get("axial_cells", 20)),
+            "mass_flow_kg_s": float(_ss.get("axial_mass_flow", 20.0)),
+            "cp_gas_j_kg_k": float(_ss.get("axial_cp_gas", 1150.0)),
+        }
+        if _ss.get("axial_bed_enabled", False):
+            _axial_kwargs.update({
+                "bed_inlet_temperature_k": float(_ss.get("axial_bed_inlet_c", 800.0)) + 273.15,
+                "bed_mass_flow_kg_s": float(_ss.get("axial_bed_mass_flow", 2.0)),
+                "cp_bed_j_kg_k": float(_ss.get("axial_cp_bed", 1000.0)),
+                "gas_bed_h_w_m2_k": float(_ss.get("axial_h_gas_bed", 20.0)),
+                "wall_bed_h_w_m2_k": float(_ss.get("axial_h_wall_bed", 50.0)),
+                "gas_bed_area_per_length_m": float(_ss.get("axial_area_gas_bed", 1.0)),
+                "wall_bed_contact_per_length_m": float(_ss.get("axial_contact_wall_bed", 0.2)),
+                "bed_flow_direction": _ss.get("axial_bed_direction", "counter-current"),
+            })
+        _axial = solve_kiln(layers, params, **_axial_kwargs)
+        _axial_data = axial_plot_data(_axial)
+        _axial_x = _axial_data["z_m"]
+        _axial_fig = go.Figure()
+        for _key, _label in [
+            ("gas_temperature_k", "烟气"),
+            ("wall_inner_temperature_k", "内壁"),
+            ("wall_outer_temperature_k", "外壁"),
+            ("material_temperature_k", "物料"),
+        ]:
+            if _key in _axial_data:
+                _axial_fig.add_trace(go.Scatter(
+                    x=_axial_x, y=[v - 273.15 for v in _axial_data[_key]],
+                    mode="lines+markers", name=_label,
+                ))
+        _axial_fig.update_layout(
+            xaxis_title="窑轴向位置 z (m)", yaxis_title="温度 (°C)",
+            hovermode="x unified", height=420,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#ECEDEE"), xaxis=dict(gridcolor="#3A3D42"),
+            yaxis=dict(gridcolor="#3A3D42"),
+            margin=dict(l=10, r=10, t=30, b=10),
+        )
+        st.plotly_chart(_axial_fig, width="stretch")
+        st.caption(_axial.as_dict()["model_scope"])
+
+        st.subheader("轴向辐射热流密度")
+        _q_fig = go.Figure()
+        _q_fig.add_trace(go.Scatter(
+            x=_axial_x, y=_axial_data["radiative_heat_flux_w_m2"],
+            mode="lines+markers", name="内侧气体辐射热流",
+        ))
+        _q_fig.update_layout(
+            xaxis_title="窑轴向位置 z (m)", yaxis_title="辐射热流密度 (W/m²)",
+            height=340, hovermode="x unified",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#ECEDEE"), xaxis=dict(gridcolor="#3A3D42"),
+            yaxis=dict(gridcolor="#3A3D42"),
+            margin=dict(l=10, r=10, t=30, b=10),
+        )
+        st.plotly_chart(_q_fig, width="stretch")
+        st.caption("辐射热流由各轴向单元壁解的 h_rad_in 与局部烟气/内壁温差重构；属于当前径向壁模型的局部量。")
+    except (ValueError, RuntimeError, TypeError) as _axial_exc:
+        st.warning(f"轴向模型未能求解，未生成轴向曲线：{_axial_exc}")
+
+    st.subheader("WSGG 灰气体权重 a_j(T)")
+    _weight_data = provisional_wsgg_weight_curves()
+    _weight_fig = go.Figure()
+    for _name, _values in _weight_data["weights"].items():
+        _weight_fig.add_trace(go.Scatter(
+            x=_weight_data["temperature_k"], y=_values,
+            mode="lines", name=_name,
+        ))
+    _weight_fig.update_layout(
+        xaxis_title="气体温度 (K)", yaxis_title="权重 a_j (—)",
+        height=340, hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#ECEDEE"), xaxis=dict(gridcolor="#3A3D42"),
+        yaxis=dict(gridcolor="#3A3D42"),
+        margin=dict(l=10, r=10, t=30, b=10),
+    )
+    st.plotly_chart(_weight_fig, width="stretch")
+    st.warning("当前 WSGG 实现使用固定暂定权重（非 HITEMP 温度拟合系数）；曲线为水平线，不代表真实 a_j(T) 温度依赖。获得并验证温度相关系数库后，才能替换为物理可信的温度变化曲线。")
 
     # ---- 详细工况结果 ----
     with st.expander("查看详细工况结果"):
