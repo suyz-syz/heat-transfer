@@ -1,9 +1,13 @@
 name: Kiln HT Tests
 
+permissions:
+  contents: write
+
 on:
   push:
     branches:
       - 'fix/kiln-heat-transfer-audit'
+      - 'feat/phase-1b-hitemp-wsgg'
   pull_request:
 
 jobs:
@@ -14,5 +18,74 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install --upgrade pip pytest
-      - run: python -m pytest tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py -q
+      - run: python -m pip install --upgrade pip pytest numpy pandas scipy
+      - run: python -m pytest tests/test_calc.py tests/test_gas_radiation.py tests/test_materials.py tests/test_phase1b_wsgg.py tests/test_phase2_architecture.py tests/test_hitemp_wsgg_calibration.py -q
+      - name: Generate built-in WSGG surrogate report
+        run: >-
+          python scripts/benchmark_literature_emissivity.py
+          --builtin
+          --output reports/literature_wsgg_R1.json
+          --wall-temperature-k 800
+      - name: Require and verify HITEMP/TIPS source data
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s data/hitemp_co2_h2o_1000_4000_sample.csv
+          test -s data/tips_partition_sums_296_2400.csv
+          echo "396693efc16958d1c011c74997a64c0a7a0589205de016e7d81baeec2fbaa5b7  data/hitemp_co2_h2o_1000_4000_sample.csv" | sha256sum --check -
+          echo "42a0875b99c16e99829d5e70aac74c33e97ba068663cf62ce182c2e84ef7be3f  data/tips_partition_sums_296_2400.csv" | sha256sum --check -
+      - name: Regenerate HITEMP WSGG report from pinned source data
+        run: >-
+          python scripts/calibrate_hitemp_wsgg_global.py
+          --line-csv data/hitemp_co2_h2o_1000_4000_sample.csv
+          --tips-csv data/tips_partition_sums_296_2400.csv
+          --release "SHA-256-verified HITEMP/TIPS source data"
+          --output reports/hitemp_wsgg_calibration.json
+      - name: Validate dynamically generated calibration report
+        run: |
+          python - <<'PY'
+          import json
+          import numpy as np
+          from pathlib import Path
+          p = Path("reports/hitemp_wsgg_calibration.json")
+          report = json.loads(p.read_text())
+          assert report["provenance"]["line_csv_sha256"] == "396693efc16958d1c011c74997a64c0a7a0589205de016e7d81baeec2fbaa5b7"
+          assert report["provenance"]["tips_csv_sha256"] == "42a0875b99c16e99829d5e70aac74c33e97ba068663cf62ce182c2e84ef7be3f"
+          assert set(report["results_by_n_gray_gases"]) == {"3", "4", "5"}
+          for n, result in report["results_by_n_gray_gases"].items():
+              k = np.asarray(result["global_kappa_atm_inv_m_inv"])
+              c = np.asarray(result["bernstein_weights"]["coefficients_by_gas"])
+              assert len(k) == int(n) and np.all(np.isfinite(k)) and np.all(k > 0)
+              assert c.shape == (int(n), 4) and np.all(np.isfinite(c)) and np.all(c >= 0)
+              for t in np.linspace(*result["bernstein_weights"]["temperature_interval_K"], 31):
+                  x = (t - result["bernstein_weights"]["temperature_interval_K"][0]) / (result["bernstein_weights"]["temperature_interval_K"][1] - result["bernstein_weights"]["temperature_interval_K"][0])
+                  basis = np.array([(1-x)**3, 3*x*(1-x)**2, 3*x*x*(1-x), x**3])
+                  a = c @ basis
+                  a = a / a.sum()
+                  assert np.all(a >= 0) and abs(float(a.sum()) - 1.0) < 1e-10
+          assert report["grid_convergence"]["standard_step_cm-1"] == 0.01
+          assert report["grid_convergence"]["reference_step_cm-1"] == 0.005
+          print("Dynamic HITEMP/TIPS report provenance, positive kappas, Bernstein simplex constraints, and grid-convergence metadata validated.")
+          PY
+      - name: Commit CI-generated calibration report on branch push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/phase-1b-hitemp-wsgg'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/hitemp_wsgg_calibration.json
+          if git diff --cached --quiet; then
+            echo "CI-generated calibration report is unchanged."
+          else
+            git commit -m "ci: refresh HITEMP WSGG calibration report"
+            git push origin HEAD:feat/phase-1b-hitemp-wsgg
+          fi
+      - name: Upload benchmark and calibration reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiln-ht-reports
+          path: |
+            reports/literature_wsgg_R1.json
+            reports/hitemp_wsgg_calibration.json
+          if-no-files-found: warn

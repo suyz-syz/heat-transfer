@@ -1,0 +1,526 @@
+{
+  "report_type": "HITEMP/TIPS-derived band-limited WSGG calibration",
+  "status": "requires independent physical validation before engineering release",
+  "provenance": {
+    "release": "SHA-256-verified HITEMP/TIPS source data",
+    "line_csv": "data/hitemp_co2_h2o_1000_4000_sample.csv",
+    "line_csv_sha256": "396693efc16958d1c011c74997a64c0a7a0589205de016e7d81baeec2fbaa5b7",
+    "line_count_full_file": 40676,
+    "tips_csv": "data/tips_partition_sums_296_2400.csv",
+    "tips_csv_sha256": "42a0875b99c16e99829d5e70aac74c33e97ba068663cf62ce182c2e84ef7be3f",
+    "tips_rows": 1032
+  },
+  "model": {
+    "band_cm-1": [
+      2000.0,
+      2400.0
+    ],
+    "grid_step_cm-1": 0.01,
+    "grid_point_count": 40001,
+    "line_wing_cutoff_cm-1": 25.0,
+    "line_profile": "pseudo-Voigt approximation",
+    "pressure_shift": "nu0=nu+delta_air*P_atm*(1-x_molecule); self-shift unavailable",
+    "temperature_broadening": "gamma=P*(Tref/T)^n_air*(gamma_air*(1-x)+gamma_self*x)",
+    "kappa_unit": "atm^-1 m^-1",
+    "emissivity_model": "sum_j a_j(T)*(1-exp(-kappa_j*P_atm*L_m))"
+  },
+  "training_design": {
+    "temperatures_K": [
+      600.0,
+      1000.0,
+      1200.0,
+      1400.0,
+      1800.0,
+      2400.0
+    ],
+    "pressures_atm": [
+      0.3,
+      1.0,
+      3.0
+    ],
+    "composition_mole_fraction": {
+      "CO2": 0.12,
+      "H2O": 0.08
+    },
+    "path_lengths_m": [
+      0.05,
+      0.07599555414764668,
+      0.11550648500415797,
+      0.17555958671075653,
+      0.26683496156031544,
+      0.4055654153948436,
+      0.6164233697210328,
+      0.9369087114301918,
+      1.4240179342179007,
+      2.1643806405415296,
+      3.289666123287841,
+      5.0
+    ]
+  },
+  "holdout_design": {
+    "temperatures_K": [
+      600.0,
+      1000.0,
+      1200.0,
+      1400.0,
+      1800.0,
+      2400.0
+    ],
+    "pressures_atm": [
+      0.3,
+      1.0,
+      3.0
+    ],
+    "compositions": [
+      {
+        "CO2": 0.08,
+        "H2O": 0.04
+      },
+      {
+        "CO2": 0.2,
+        "H2O": 0.1
+      }
+    ],
+    "path_lengths_m": [
+      0.05,
+      0.07599555414764668,
+      0.11550648500415797,
+      0.17555958671075653,
+      0.26683496156031544,
+      0.4055654153948436,
+      0.6164233697210328,
+      0.9369087114301918,
+      1.4240179342179007,
+      2.1643806405415296,
+      3.289666123287841,
+      5.0
+    ],
+    "holdout_type": "composition holdout within calibrated T/P domain"
+  },
+  "grid_convergence": {
+    "temperature_K": 1200.0,
+    "pressure_atm": 1.0,
+    "standard_step_cm-1": 0.01,
+    "reference_step_cm-1": 0.005,
+    "max_relative_emissivity_difference_percent": 0.25133769285147195,
+    "per_path": [
+      {
+        "path_m": 0.05,
+        "eps_step_0p01": 0.2569318853388506,
+        "eps_step_0p005": 0.2562877376519749,
+        "relative_difference_percent": 0.25133769285147195
+      },
+      {
+        "path_m": 0.07599555414764668,
+        "eps_step_0p01": 0.29790085223943175,
+        "eps_step_0p005": 0.2972921743062651,
+        "relative_difference_percent": 0.20474065104034925
+      },
+      {
+        "path_m": 0.11550648500415797,
+        "eps_step_0p01": 0.33398428472304953,
+        "eps_step_0p005": 0.3334679031508419,
+        "relative_difference_percent": 0.15485195646372094
+      },
+      {
+        "path_m": 0.17555958671075653,
+        "eps_step_0p01": 0.3639526062160966,
+        "eps_step_0p005": 0.3635553724518062,
+        "relative_difference_percent": 0.10926362100262015
+      },
+      {
+        "path_m": 0.26683496156031544,
+        "eps_step_0p01": 0.38826898300892265,
+        "eps_step_0p005": 0.3879840121760385,
+        "relative_difference_percent": 0.07344911747416213
+      },
+      {
+        "path_m": 0.4055654153948436,
+        "eps_step_0p01": 0.40869822872590367,
+        "eps_step_0p005": 0.40849491097426927,
+        "relative_difference_percent": 0.049772407482258404
+      },
+      {
+        "path_m": 0.6164233697210328,
+        "eps_step_0p01": 0.4274304275941011,
+        "eps_step_0p005": 0.42726977984066117,
+        "relative_difference_percent": 0.03759866974440471
+      },
+      {
+        "path_m": 0.9369087114301918,
+        "eps_step_0p01": 0.44628121871979376,
+        "eps_step_0p005": 0.44612616369522234,
+        "relative_difference_percent": 0.034755868897512955
+      },
+      {
+        "path_m": 1.4240179342179007,
+        "eps_step_0p01": 0.4664082892522856,
+        "eps_step_0p005": 0.4662291606446744,
+        "relative_difference_percent": 0.038420721553221474
+      },
+      {
+        "path_m": 2.1643806405415296,
+        "eps_step_0p01": 0.48845201513758557,
+        "eps_step_0p005": 0.48823077764261547,
+        "relative_difference_percent": 0.04531412297240535
+      },
+      {
+        "path_m": 3.289666123287841,
+        "eps_step_0p01": 0.5128139727337778,
+        "eps_step_0p005": 0.5125460502444965,
+        "relative_difference_percent": 0.052272861951332635
+      },
+      {
+        "path_m": 5.0,
+        "eps_step_0p01": 0.5398240161514409,
+        "eps_step_0p005": 0.5395185566940144,
+        "relative_difference_percent": 0.05661704377664048
+      }
+    ]
+  },
+  "results_by_n_gray_gases": {
+    "3": {
+      "global_kappa_atm_inv_m_inv": [
+        0.03204634386881058,
+        2.863473830514838,
+        26.765645655496634
+      ],
+      "weights_by_temperature": {
+        "600": [
+          0.6258181266904246,
+          0.13792060816923193,
+          0.23626126514034346
+        ],
+        "1000": [
+          0.5529363007583695,
+          0.1513588658186384,
+          0.2957048334229922
+        ],
+        "1200": [
+          0.5485540210497165,
+          0.16159035396818858,
+          0.28985562498209494
+        ],
+        "1400": [
+          0.552154283806841,
+          0.17702227024277528,
+          0.27082344595038366
+        ],
+        "1800": [
+          0.5711408483258625,
+          0.21958812543481576,
+          0.20927102623932162
+        ],
+        "2400": [
+          0.6157233693049046,
+          0.2889137897087657,
+          0.09536284098632969
+        ]
+      },
+      "bernstein_weights": {
+        "degree": 3,
+        "temperature_interval_K": [
+          600.0,
+          2400.0
+        ],
+        "coefficients_by_gas": [
+          [
+            0.6249039498676414,
+            0.4651023519656251,
+            0.5954995695363374,
+            0.6153500644125667
+          ],
+          [
+            0.13828177088932103,
+            0.13988749895124472,
+            0.21783773415300162,
+            0.28905979129762743
+          ],
+          [
+            0.2368142792430381,
+            0.3950101490831304,
+            0.186662696310661,
+            0.09559014428980578
+          ]
+        ],
+        "constraint": "coefficients >= 0; normalized across gases at evaluation, so a_j >= 0 and sum(a_j)=1"
+      },
+      "direct_slice_weights": {
+        "training": {
+          "point_count": 216,
+          "mape_percent": 5.599090958787775,
+          "mean_absolute_band_flux_bias_W_m2": 423.5467302942259,
+          "max_absolute_band_flux_bias_W_m2": 3920.462845244684,
+          "signed_mean_band_flux_bias_W_m2": 18.547593930760232
+        },
+        "holdout": {
+          "point_count": 432,
+          "mape_percent": 11.075967735817143,
+          "mean_absolute_band_flux_bias_W_m2": 726.8444472843968,
+          "max_absolute_band_flux_bias_W_m2": 6044.347878522875,
+          "signed_mean_band_flux_bias_W_m2": -0.9817368512689789
+        }
+      },
+      "bernstein_temperature_weights": {
+        "training": {
+          "point_count": 216,
+          "mape_percent": 5.6082924151293225,
+          "mean_absolute_band_flux_bias_W_m2": 424.08164032686994,
+          "max_absolute_band_flux_bias_W_m2": 3933.8800973082334,
+          "signed_mean_band_flux_bias_W_m2": 18.649796916591487
+        },
+        "holdout": {
+          "point_count": 432,
+          "mape_percent": 11.077479961733903,
+          "mean_absolute_band_flux_bias_W_m2": 726.8007106647639,
+          "max_absolute_band_flux_bias_W_m2": 6057.765130586425,
+          "signed_mean_band_flux_bias_W_m2": -0.8795338654376929
+        }
+      }
+    },
+    "4": {
+      "global_kappa_atm_inv_m_inv": [
+        0.013653781275045494,
+        0.28395112808781275,
+        5.179814920884358,
+        30.144772076420335
+      ],
+      "weights_by_temperature": {
+        "600": [
+          0.49871872359976777,
+          0.1769654654807232,
+          0.10222167500307118,
+          0.22209413591643773
+        ],
+        "1000": [
+          0.42790716496091996,
+          0.17966197284999094,
+          0.11429778651182489,
+          0.2781330756772642
+        ],
+        "1200": [
+          0.4313575577992284,
+          0.16759012300217888,
+          0.13714297739457004,
+          0.2639093418040227
+        ],
+        "1400": [
+          0.444028507190382,
+          0.15336105111078527,
+          0.16846479975542872,
+          0.23414564194340412
+        ],
+        "1800": [
+          0.4781999130354652,
+          0.13067766418546384,
+          0.23964115318145893,
+          0.15148126959761202
+        ],
+        "2400": [
+          0.5210906811663133,
+          0.1392517495463115,
+          0.31289815103336016,
+          0.026759418254015066
+        ]
+      },
+      "bernstein_weights": {
+        "degree": 3,
+        "temperature_interval_K": [
+          600.0,
+          2400.0
+        ],
+        "coefficients_by_gas": [
+          [
+            0.4976622512290643,
+            0.3262276299606862,
+            0.5303988342320415,
+            0.5206580646129471
+          ],
+          [
+            0.1773049590278423,
+            0.20829398436911958,
+            0.08016129963953114,
+            0.1393927722750415
+          ],
+          [
+            0.1023419572152245,
+            0.07256114711343001,
+            0.2851629742749451,
+            0.3129419955212434
+          ],
+          [
+            0.222690832527869,
+            0.3929172385567647,
+            0.10427689185348177,
+            0.027007167590767635
+          ]
+        ],
+        "constraint": "coefficients >= 0; normalized across gases at evaluation, so a_j >= 0 and sum(a_j)=1"
+      },
+      "direct_slice_weights": {
+        "training": {
+          "point_count": 216,
+          "mape_percent": 4.532666556598555,
+          "mean_absolute_band_flux_bias_W_m2": 357.8365748113755,
+          "max_absolute_band_flux_bias_W_m2": 3327.593517396855,
+          "signed_mean_band_flux_bias_W_m2": 0.9236444749797746
+        },
+        "holdout": {
+          "point_count": 432,
+          "mape_percent": 10.806660403178682,
+          "mean_absolute_band_flux_bias_W_m2": 715.1599453175875,
+          "max_absolute_band_flux_bias_W_m2": 5376.543177455214,
+          "signed_mean_band_flux_bias_W_m2": -18.605686307049424
+        }
+      },
+      "bernstein_temperature_weights": {
+        "training": {
+          "point_count": 216,
+          "mape_percent": 4.547804754227807,
+          "mean_absolute_band_flux_bias_W_m2": 359.85446225627487,
+          "max_absolute_band_flux_bias_W_m2": 3345.0537491533005,
+          "signed_mean_band_flux_bias_W_m2": 1.0272424789195094
+        },
+        "holdout": {
+          "point_count": 432,
+          "mape_percent": 10.80940126829072,
+          "mean_absolute_band_flux_bias_W_m2": 715.1135748326951,
+          "max_absolute_band_flux_bias_W_m2": 5394.00340921166,
+          "signed_mean_band_flux_bias_W_m2": -18.50208830310971
+        }
+      }
+    },
+    "5": {
+      "global_kappa_atm_inv_m_inv": [
+        0.008287852584541329,
+        0.1539695962184606,
+        1.4609862502544206,
+        9.6057477213378,
+        44.91416486969239
+      ],
+      "weights_by_temperature": {
+        "600": [
+          0.43344598809187224,
+          0.2090062304113253,
+          0.06445474344107353,
+          0.13041856155089293,
+          0.16267447650483594
+        ],
+        "1000": [
+          0.361337688238979,
+          0.21860308568880857,
+          0.05129113985856667,
+          0.17475200756835294,
+          0.19401607864529283
+        ],
+        "1200": [
+          0.36669043339453794,
+          0.2068487693322725,
+          0.052121012697464005,
+          0.19995307017195724,
+          0.17438671440376824
+        ],
+        "1400": [
+          0.38180835538437624,
+          0.19169395339039005,
+          0.056939955592826316,
+          0.2278184125242307,
+          0.14173932310817677
+        ],
+        "1800": [
+          0.4251273738299956,
+          0.15469543531184593,
+          0.08655586503735305,
+          0.2672108064390385,
+          0.06641051938176705
+        ],
+        "2400": [
+          0.49470104169868806,
+          0.09805954351999192,
+          0.18847024371933926,
+          0.2187661315136977,
+          3.0395482831717188e-06
+        ]
+      },
+      "bernstein_weights": {
+        "degree": 3,
+        "temperature_interval_K": [
+          600.0,
+          2400.0
+        ],
+        "coefficients_by_gas": [
+          [
+            0.4323191035649582,
+            0.2564717449795885,
+            0.46924483610745193,
+            0.494243794087068
+          ],
+          [
+            0.2094204031731236,
+            0.2510929081602549,
+            0.13732604929683837,
+            0.09822164229637573
+          ],
+          [
+            0.06440963021235728,
+            0.0343559840883111,
+            0.04662939616072024,
+            0.1884617690434236
+          ],
+          [
+            0.1307910642764388,
+            0.16779429206804763,
+            0.3586426926583758,
+            0.21890267672044877
+          ],
+          [
+            0.16382583163052292,
+            0.28202836785088503,
+            2.6226292371916354e-16,
+            3.2784243648074694e-10
+          ]
+        ],
+        "constraint": "coefficients >= 0; normalized across gases at evaluation, so a_j >= 0 and sum(a_j)=1"
+      },
+      "direct_slice_weights": {
+        "training": {
+          "point_count": 216,
+          "mape_percent": 4.235991844766597,
+          "mean_absolute_band_flux_bias_W_m2": 335.5671003102964,
+          "max_absolute_band_flux_bias_W_m2": 2633.370164776282,
+          "signed_mean_band_flux_bias_W_m2": 2.3833364313124257
+        },
+        "holdout": {
+          "point_count": 432,
+          "mape_percent": 10.787306605453379,
+          "mean_absolute_band_flux_bias_W_m2": 705.2383345776802,
+          "max_absolute_band_flux_bias_W_m2": 5207.076656820509,
+          "signed_mean_band_flux_bias_W_m2": -17.145994350716766
+        }
+      },
+      "bernstein_temperature_weights": {
+        "training": {
+          "point_count": 216,
+          "mape_percent": 4.266951809349354,
+          "mean_absolute_band_flux_bias_W_m2": 335.8476844222706,
+          "max_absolute_band_flux_bias_W_m2": 2646.388505741553,
+          "signed_mean_band_flux_bias_W_m2": 11.79166954572983
+        },
+        "holdout": {
+          "point_count": 432,
+          "mape_percent": 10.810731243217004,
+          "mean_absolute_band_flux_bias_W_m2": 705.4902605357332,
+          "max_absolute_band_flux_bias_W_m2": 5197.576242955237,
+          "signed_mean_band_flux_bias_W_m2": -7.737661236299352
+        }
+      }
+    }
+  },
+  "limitations": [
+    "The supplied line list is a sample; completeness against a specific licensed HITEMP release was not independently authenticated.",
+    "The LBL reference uses pseudo-Voigt profiles and a +/-25 cm-1 line-wing cutoff, not a validated Hartmann-Tran model.",
+    "The 2000-2400 cm-1 band metrics are not total-spectrum emissivity or net wall-flux validation.",
+    "Holdout varies composition but remains inside the calibrated temperature and pressure domain.",
+    "Independent EM2C-SNB/experimental validation is still required before production use."
+  ]
+}

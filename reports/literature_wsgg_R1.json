@@ -1,0 +1,189 @@
+{
+  "benchmark": "built-in physics-inspired multi-gray surrogate; pipeline validation only",
+  "scientific_status": "SYNTHETIC ANALYTIC SURROGATE: not an implementation of Leckner correlation, not an EM2C SNB calculation, and not HITEMP LBL ground truth",
+  "generated_by_commit": "4861eefda578d7cd466786513b8f976e214d8a59",
+  "ci_run": {
+    "id": 37868461261,
+    "url": "https://github.com/suyz-syz/heat-transfer/actions/runs/37868461261",
+    "conclusion": "success"
+  },
+  "domain": {
+    "temperature_K": [
+      300,
+      2500
+    ],
+    "pressure_pathlength_atm_m": [
+      0.01,
+      10
+    ],
+    "temperature_step_K": 100,
+    "pathlength_points": 31,
+    "heldout_points_per_n": 345
+  },
+  "wall_temperature_K": 800,
+  "heat_flux_metric": "gray black-wall equivalent-flux proxy: abs(delta_epsilon)*sigma*abs(Tgas^4-Twall^4); not a general non-gray wall heat-flux solution",
+  "reference_model": {
+    "label": "built-in physics-inspired multi-gray attenuation surrogate",
+    "reference_kappa_per_atm_m_inverse": [
+      0.025,
+      0.25,
+      2.5,
+      25
+    ],
+    "not_a_leckner_or_snb_solver": true,
+    "not_hitemp_lbl": true
+  },
+  "weight_polynomial_basis": "a_j(T) = sum(c[j,k] * (T/1000 K)^k), k=0..4; coefficients low-to-high",
+  "results": [
+    {
+      "n_gases": 3,
+      "shared_kappa_per_atm_m_inverse": [
+        0.15199110829529316,
+        2.848035868435799,
+        53.36699231206302
+      ],
+      "weight_polynomial_coefficients_low_to_high": [
+        [
+          0.38785681139402167,
+          -0.0066698657925291045,
+          7.967568892589679e-13,
+          -4.1681478783530517e-13,
+          7.400847127014382e-14
+        ],
+        [
+          0.34027795641267106,
+          0.0017969806227416602,
+          1.84281459271636e-13,
+          -8.753161973768058e-14,
+          1.4335105182345614e-14
+        ],
+        [
+          0.10232425634256317,
+          -0.0032773218252558642,
+          2.948854611615323e-13,
+          -1.5396572752922166e-13,
+          2.7304182340267063e-14
+        ]
+      ],
+      "holdout": {
+        "MAPE_percent": 4.964854177590897,
+        "max_abs_emissivity_error": 0.015096695305083785,
+        "max_equivalent_gray_flux_deviation_W_m2": 30592.702245575525,
+        "worst_case": {
+          "temperature_K": 300,
+          "pressure_pathlength_atm_m": 0.12589254117941673
+        }
+      }
+    },
+    {
+      "n_gases": 4,
+      "shared_kappa_per_atm_m_inverse": [
+        0.15199110829529316,
+        2.848035868435799,
+        12.328467394420647,
+        53.36699231206302
+      ],
+      "weight_polynomial_coefficients_low_to_high": [
+        [
+          0.4034001123971919,
+          -0.007344817640616896,
+          -2.547175874637595e-11,
+          1.3358998237029528e-11,
+          -2.4272146578392577e-12
+        ],
+        [
+          0.2982019464575507,
+          0.003624088048809589,
+          5.286822232181692e-11,
+          -2.772994355936966e-11,
+          5.041996062119394e-12
+        ],
+        [
+          0.061518321936676286,
+          -0.002671369812584156,
+          -6.71817429004335e-11,
+          3.5255381353034325e-11,
+          -6.413601282908818e-12
+        ],
+        [
+          0.07398504796562101,
+          -0.002046720869638794,
+          2.8568311669959475e-11,
+          -1.498703212163845e-11,
+          2.72506931644547e-12
+        ]
+      ],
+      "holdout": {
+        "MAPE_percent": 2.89809826051978,
+        "max_abs_emissivity_error": 0.011065217943778793,
+        "max_equivalent_gray_flux_deviation_W_m2": 22416.491451953585,
+        "worst_case": {
+          "temperature_K": 300,
+          "pressure_pathlength_atm_m": 3.1622776601683813
+        }
+      }
+    },
+    {
+      "n_gases": 5,
+      "shared_kappa_per_atm_m_inverse": [
+        0.15199110829529316,
+        0.6579332246575675,
+        2.848035868435799,
+        12.328467394420647,
+        53.36699231206302
+      ],
+      "weight_polynomial_coefficients_low_to_high": [
+        [
+          0.2989362258940019,
+          -0.003900841108676967,
+          2.854893986741746e-11,
+          -1.8015364506667527e-11,
+          3.740931843773068e-12
+        ],
+        [
+          0.13120461816771656,
+          -0.004325567836728542,
+          -3.91679571482092e-11,
+          2.4691968751024794e-11,
+          -5.123618069221946e-12
+        ],
+        [
+          0.1997482023694305,
+          0.00686992160604145,
+          3.504766290306966e-11,
+          -2.2152995570856294e-11,
+          4.6052790772113295e-12
+        ],
+        [
+          0.11261651611446144,
+          -0.004355980560127162,
+          -2.3023973441795156e-11,
+          1.4550577165537297e-11,
+          -3.0244345327775036e-12
+        ],
+        [
+          0.05973137824412061,
+          -0.001576804352009831,
+          7.699715066982448e-12,
+          -4.844900198647014e-12,
+          1.0040920853998327e-12
+        ]
+      ],
+      "holdout": {
+        "MAPE_percent": 1.5899198218085269,
+        "max_abs_emissivity_error": 0.005339689254086344,
+        "max_equivalent_gray_flux_deviation_W_m2": 11156.712900746166,
+        "worst_case": {
+          "temperature_K": 300,
+          "pressure_pathlength_atm_m": 0.07943282347242818
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Synthetic analytic surrogate only; not physical validation against Leckner, SNB, or HITEMP-LBL.",
+    "Pathlength products are not independent total-pressure cases.",
+    "Equivalent gray-wall flux proxy is not a general non-gray wall heat-flux solution.",
+    "Coefficients must be regenerated from published SNB or HITEMP/TIPS-derived LBL targets before engineering use."
+  ]
+}

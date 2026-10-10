@@ -8,6 +8,8 @@ from .calc import (
     SIGMA,
     WALL_TOL,
     KilnParams,
+    KilnAxialSolution,
+    KilnState,
     Layer,
     WallSolution,
     air_properties,
@@ -20,6 +22,7 @@ from .calc import (
     outer_natural_h,
     outer_radiation_h,
     solve_wall,
+    solve_kiln,
     validate_params,
 )
 from .materials import (
@@ -36,3 +39,13 @@ from .gas import GasMixture, DEFAULT_GAS
 from .properties import get_gas_properties
 from .radiation import get_gas_radiation, GasRadiationResult
 from .validation import default_benchmark_cases, run_radiation_benchmark, benchmark_table, run_wall_benchmark
+
+from .models.convection import (
+    ConvectionEvaluation,
+    ConvectionModel,
+    GnielinskiPipeModel,
+    RotaryKilnCorrelationAdapter,
+    TschengWatkinsonCorrelation,
+    TschengWatkinsonGasBed,
+    TschengWatkinsonGasWall,
+)
