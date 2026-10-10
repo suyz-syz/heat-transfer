@@ -72,6 +72,51 @@ class ConductivityModel:
             raise ValueError(f"导热系数在 {t_k:g} K 下必须为正有限值")
         return result
 
+    def integral_k(self, t0_k: float, t1_k: float) -> float:
+        """Return integral of lambda(T) dT between Kelvin bounds (W/m)."""
+        if t0_k == t1_k:
+            return 0.0
+        sign = 1.0
+        if t1_k < t0_k:
+            t0_k, t1_k, sign = t1_k, t0_k, -1.0
+        if self.mode == "constant":
+            self.conductivity(t0_k)
+            self.conductivity(t1_k)
+            return sign * self.value * (t1_k - t0_k)
+        if self.mode == "polynomial":
+            def primitive(tk):
+                t = tk - 273.15 if self.temperature_unit == "degC" else tk
+                a, b, c = self.coefficients
+                return a*t + 0.5*b*t*t + (c/3.0)*t*t*t
+            self.conductivity(t0_k)
+            self.conductivity(t1_k)
+            return sign * (primitive(t1_k) - primitive(t0_k))
+        if self.mode == "table":
+            if t0_k < self.points[0][0] or t1_k > self.points[-1][0]:
+                raise ValueError("温度超出导热系数插值表范围；不允许静默外推")
+            cursor = t0_k
+            total = 0.0
+            for (ta, ka), (tb, kb) in zip(self.points, self.points[1:]):
+                lo, hi = max(cursor, ta), min(t1_k, tb)
+                if hi <= lo:
+                    continue
+                def kval(t):
+                    return ka + (kb-ka)*(t-ta)/(tb-ta)
+                total += 0.5*(kval(lo)+kval(hi))*(hi-lo)
+                cursor = hi
+                if cursor >= t1_k:
+                    break
+            return sign * total
+        raise ValueError(f"不支持的导热系数模式: {self.mode}")
+
+    def mean_k(self, t0_k: float, t1_k: float) -> float:
+        if t0_k == t1_k:
+            return self.conductivity(t0_k)
+        value = self.integral_k(t0_k, t1_k) / (t1_k - t0_k)
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("区间平均导热系数必须为正有限值")
+        return value
+
     def as_dict(self) -> dict:
         if self.mode == "constant":
             return {"mode": "constant", "value": self.value}
