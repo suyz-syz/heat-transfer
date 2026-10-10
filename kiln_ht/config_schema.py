@@ -34,10 +34,13 @@ def normalize_layer(raw: Mapping[str, Any]) -> Dict[str, Any]:
     result = dict(raw)
     result["name"] = str(result.get("name") or "层")
     # Legacy thickness is already metres in Layer/API; explicit v2 key wins.
-    result["thickness_m"] = _finite_number(
-        result.get("thickness_m", result.get("thickness", result.get("thickness_mm", 50.0) / 1000.0)),
-        "thickness_m",
-    )
+    if "thickness_m" in result:
+        thickness_m = result["thickness_m"]
+    elif "thickness" in result:
+        thickness_m = result["thickness"]
+    else:
+        thickness_m = _finite_number(result.get("thickness_mm", 50.0), "thickness_mm") / 1000.0
+    result["thickness_m"] = _finite_number(thickness_m, "thickness_m")
     result["contact_resistance_m2_k_w"] = _finite_number(
         result.get("contact_resistance_m2_k_w", result.get("Rc", 0.0)), "Rc"
     )
