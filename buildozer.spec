@@ -47,7 +47,7 @@ version.code = 1
 #  在 Android 上无预编译 wheel、p4a 本地交叉编译后安装会被 pip 拒绝
 #  （"not a supported wheel on this platform"）。固定 3.3.2（纯 Python 通用 wheel）
 #  可避免该问题；requests 固定 2.32.3 保证解析确定性。
-requirements = hostpython3==3.14.2,python3==3.14.2,kivy==2.3.1,requests==2.32.3,charset_normalizer==3.3.2
+requirements = hostpython3==3.14.2,python3==3.14.2,kivy==2.3.1,requests==2.32.3,charset_normalizer==3.3.2,pyyaml==6.0.2
 
 # (str) 屏幕方向：portrait / landscape
 orientation = portrait
