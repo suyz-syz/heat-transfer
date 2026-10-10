@@ -437,7 +437,7 @@ with st.expander("📦 配置导出（JSON / YAML，Schema v2）", expanded=Fals
         _export_layers.append({
             "name": _ss.get(f"layer_{_uid}_name", _row.get("name", "")),
             "thickness_m": float(_ss.get(f"layer_{_uid}_thick", _row.get("thickness_mm", 50.0))) / 1000.0,
-            "contact_resistance_m2_k_w": float(_ss.get(f"layer_{_uid}_Rc", _row.get("Rc", 0.0))),
+            "contact_resistance_m2_k_w": float(_ss.get(f"layer_{_uid}_rc", _row.get("Rc", 0.0))),
             "thermal_conductivity": _tc_out,
         })
     _export_cfg = normalize_config({
