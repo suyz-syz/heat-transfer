@@ -44,6 +44,19 @@ def test_axial_plot_data_includes_material_only_for_three_phase_solution():
     assert data["material_temperature_k"] == pytest.approx(
         [state.T_bed_k for state in result.states]
     )
+    # Three-phase wall temperatures must come from the coupled states, not the
+    # independent per-cell radial wall_solutions retained for diagnostics.
+    assert data["wall_inner_temperature_k"] == pytest.approx(
+        [state.T_wall_inner_k for state in result.states]
+    )
+    assert data["wall_outer_temperature_k"] == pytest.approx(
+        [state.T_wall_outer_k for state in result.states]
+    )
+    assert data["radiative_heat_flux_w_m2"] == pytest.approx([
+        result.wall_solutions[i].h_rad_in
+        * (result.gas_temperature_mean_k[i] - result.states[i].T_wall_inner_k)
+        for i in range(3)
+    ])
 
 
 def test_wsgg_plot_labels_current_fixed_weights_without_fabricating_temperature_dependence():
