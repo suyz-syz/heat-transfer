@@ -437,6 +437,8 @@ class CurveWidget(Widget):
         iw = self.width - pad_l - pad_r
         ih = self.height - pad_b - pad_t
 
+        # Canvas 的 Line / Rectangle 使用窗口坐标；映射函数返回控件局部坐标，
+        # 在绘制时统一加 self.x / self.y，避免 ScrollView 内控件偏移后画到原点。
         def px(xi):
             return pad_l + (xi - x0) / span_x * iw
 
@@ -447,34 +449,36 @@ class CurveWidget(Widget):
             # 网格线
             Color(*GRID)
             for k in range(1, 5):
-                gx = pad_l + iw * k / 5
-                Line(points=[gx, pad_b, gx, pad_b + ih], width=dp(1))
-                gy = pad_b + ih * k / 5
-                Line(points=[pad_l, gy, pad_l + iw, gy], width=dp(1))
+                gx = self.x + pad_l + iw * k / 5
+                Line(points=[gx, self.y + pad_b, gx, self.y + pad_b + ih], width=dp(1))
+                gy = self.y + pad_b + ih * k / 5
+                Line(points=[self.x + pad_l, gy, self.x + pad_l + iw, gy], width=dp(1))
             # 坐标轴
             Color(*AXIS)
-            Line(points=[pad_l, pad_b, pad_l + iw, pad_b], width=dp(1))
-            Line(points=[pad_l, pad_b, pad_l, pad_b + ih], width=dp(1))
+            Line(points=[self.x + pad_l, self.y + pad_b,
+                         self.x + pad_l + iw, self.y + pad_b], width=dp(1))
+            Line(points=[self.x + pad_l, self.y + pad_b,
+                         self.x + pad_l, self.y + pad_b + ih], width=dp(1))
             # 温度曲线
             Color(*PRIMARY)
             pts = []
             for xi, ti in zip(self._x, self._T):
-                pts.extend((px(xi), py(ti)))
+                pts.extend((self.x + px(xi), self.y + py(ti)))
             Line(points=pts, width=dp(2))
             # 节点圆点标记（抽稀）：主色外圈 + 白色内芯
             stride = max(1, len(self._T) // self.MAX_MARKERS)
             for i in range(0, len(self._T), stride):
-                cx, cy = px(self._x[i]), py(self._T[i])
+                cx, cy = self.x + px(self._x[i]), self.y + py(self._T[i])
                 Color(*PRIMARY)
                 Line(circle=(cx, cy, dp(3)), width=dp(1.6))
                 Color(1.0, 1.0, 1.0, 1.0)
                 Line(circle=(cx, cy, dp(1.2)), width=dp(1))
             # 刻度文字（Y：温度上下限/中点；X：距内壁 0 与总厚度）
-            self._draw_text(f"{t_hi:.0f}", pad_l - dp(6), py(t_hi), TEXT_DIM, anchor_right=True)
-            self._draw_text(f"{(t_lo + t_hi) / 2:.0f}", pad_l - dp(6), py((t_lo + t_hi) / 2), TEXT_DIM, anchor_right=True)
-            self._draw_text(f"{t_lo:.0f}", pad_l - dp(6), py(t_lo), TEXT_DIM, anchor_right=True)
-            self._draw_text(f"{x0:.0f}", pad_l, pad_b - dp(18), TEXT_DIM)
-            self._draw_text(f"{x1:.0f}", pad_l + iw, pad_b - dp(18), TEXT_DIM, anchor_right=True)
+            self._draw_text(f"{t_hi:.0f}", self.x + pad_l - dp(6), self.y + py(t_hi), TEXT_DIM, anchor_right=True)
+            self._draw_text(f"{(t_lo + t_hi) / 2:.0f}", self.x + pad_l - dp(6), self.y + py((t_lo + t_hi) / 2), TEXT_DIM, anchor_right=True)
+            self._draw_text(f"{t_lo:.0f}", self.x + pad_l - dp(6), self.y + py(t_lo), TEXT_DIM, anchor_right=True)
+            self._draw_text(f"{x0:.0f}", self.x + pad_l, self.y + pad_b - dp(18), TEXT_DIM)
+            self._draw_text(f"{x1:.0f}", self.x + pad_l + iw, self.y + pad_b - dp(18), TEXT_DIM, anchor_right=True)
 
     def _draw_text(self, text, x, y, color, font_size=sp(10), anchor_right=False):
         """将文字渲染为纹理后绘制到画布；字体渲染失败时静默跳过。"""
@@ -522,28 +526,31 @@ class MultiCurveWidget(Widget):
         sy = (y1 - y0) or 1.0
         left, right, bottom, top = dp(42), dp(12), dp(24), dp(24)
         iw, ih = self.width - left - right, self.height - bottom - top
+        # 与 CurveWidget 一样，映射坐标为局部坐标，所有 Canvas 图元统一平移。
         def px(v): return left + (v - x0) / sx * iw
         def py(v): return bottom + (v - y0) / sy * ih
         with self.canvas:
             Color(*GRID)
             for i in range(1, 5):
-                gy = bottom + ih * i / 5
-                Line(points=[left, gy, left + iw, gy], width=dp(1))
-                gx = left + iw * i / 5
-                Line(points=[gx, bottom, gx, bottom + ih], width=dp(1))
+                gy = self.y + bottom + ih * i / 5
+                Line(points=[self.x + left, gy, self.x + left + iw, gy], width=dp(1))
+                gx = self.x + left + iw * i / 5
+                Line(points=[gx, self.y + bottom, gx, self.y + bottom + ih], width=dp(1))
             Color(*AXIS)
-            Line(points=[left, bottom, left + iw, bottom], width=dp(1))
-            Line(points=[left, bottom, left, bottom + ih], width=dp(1))
+            Line(points=[self.x + left, self.y + bottom,
+                         self.x + left + iw, self.y + bottom], width=dp(1))
+            Line(points=[self.x + left, self.y + bottom,
+                         self.x + left, self.y + bottom + ih], width=dp(1))
             for idx, (label, x, y, color) in enumerate(self._series):
                 Color(*color)
                 pts = []
                 for xv, yv in zip(x, y):
-                    pts.extend((px(xv), py(yv)))
+                    pts.extend((self.x + px(xv), self.y + py(yv)))
                 Line(points=pts, width=dp(2))
                 self._draw_label(label, left + dp(4) + (idx % 2) * self.width * 0.47,
-                                 self.y + self.height - dp(10), color)
-            self._draw_label(f"{y1:.0f}", dp(2), self.y + py(y1), TEXT_DIM)
-            self._draw_label(f"{y0:.0f}", dp(2), self.y + py(y0), TEXT_DIM)
+                                 self.height - dp(10), color)
+            self._draw_label(f"{y1:.0f}", dp(2), py(y1), TEXT_DIM)
+            self._draw_label(f"{y0:.0f}", dp(2), py(y0), TEXT_DIM)
 
     def _draw_label(self, text, x, y, color):
         try:
@@ -552,7 +559,7 @@ class MultiCurveWidget(Widget):
             tex = label.texture
             with self.canvas:
                 Color(1, 1, 1, 1)
-                Rectangle(texture=tex, pos=(self.x + x, y - tex.height / 2),
+                Rectangle(texture=tex, pos=(self.x + x, self.y + y - tex.height / 2),
                           size=tex.size)
         except Exception:  # noqa: BLE001 — a missing glyph must not break charting
             pass
