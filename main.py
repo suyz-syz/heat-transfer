@@ -42,6 +42,7 @@ from kiln_ht.visualization import axial_plot_data, provisional_wsgg_weight_curve
 
 import os
 import json
+import math
 
 import kivy
 
@@ -108,6 +109,45 @@ DANGER      = (0.937, 0.325, 0.314, 1.0)     # #EF5350  错误提示
 
 
 # ============ 工具 ============
+def _get_display_wall_temperature(sol, axial_data=None, use_three_phase=False):
+    """选择顶部外壁温度 KPI 的数据源（支持三相轴向平均值与径向基线回退）。"""
+    if use_three_phase and isinstance(axial_data, dict):
+        outer = axial_data.get("wall_outer_temperature_k")
+        material = axial_data.get("material_temperature_k")
+
+        if (
+            isinstance(outer, (list, tuple))
+            and isinstance(material, (list, tuple))
+            and len(outer) > 0
+            and len(outer) == len(material)
+        ):
+            try:
+                values = [float(value) for value in outer]
+                material_values = [float(value) for value in material]
+
+                if (
+                    all(math.isfinite(value) and value > 0 for value in values)
+                    and all(math.isfinite(value) and value > 0 for value in material_values)
+                ):
+                    return (
+                        sum(values) / len(values),
+                        "当前显示：三相轴向耦合外壁温（轴向平均值）",
+                    )
+            except (TypeError, ValueError):
+                pass
+
+    if use_three_phase:
+        return (
+            float(sol.T_wN),
+            "当前显示：径向稳态基线外壁温（三相耦合结果不可用）",
+        )
+
+    return (
+        float(sol.T_wN),
+        "当前显示：径向稳态基线外壁温",
+    )
+
+
 def auto_height(widget):
     """使控件在纵向滚动容器内按自身内容自适应高度。
 
@@ -1288,8 +1328,13 @@ class ResultScreen(Screen):
     def set_result(self, layers, sol, x_mm, T_c, axial_data=None):
         """用最新计算结果刷新整个结果页。"""
         self._last = (layers, sol, x_mm, T_c)
-        self.export_status.text = ""
-        self.m_outer.set_value(f"{sol.T_wN - 273.15:.1f}")
+        display_wall_temperature_k, wall_temperature_source = _get_display_wall_temperature(
+            sol,
+            axial_data=axial_data,
+            use_three_phase=bool(self.manager and self.manager.get_screen("inputs").axial_bed_enabled.active),
+        )
+        self.export_status.text = wall_temperature_source
+        self.m_outer.set_value(f"{display_wall_temperature_k - 273.15:.1f}")
         self.m_inner.set_value(f"{sol.T_w1 - 273.15:.1f}")
         self.m_eg.set_value(f"{sol.eg:.3f}")
 
