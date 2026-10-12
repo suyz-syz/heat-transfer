@@ -950,7 +950,9 @@ class InputScreen(Screen):
                 table_.opacity = 1.0 if mode_.text == "插值表" else 0.55
             mode_spinner.bind(text=_mode_changed)
             _mode_changed()
-            for _control in (a_in, b, c, table_in):
+            # UnitInput is a BoxLayout wrapper with a Python text proxy, not a Kivy
+            # StringProperty. Bind to its underlying TextInput to avoid KeyError: 'text'.
+            for _control in (a_in.textinput, b.textinput, c.textinput, table_in):
                 _control.bind(text=_refresh_conductivity_preview)
             mode_spinner.bind(text=_refresh_conductivity_preview)
             _refresh_conductivity_preview()
