@@ -23,10 +23,24 @@ def axial_plot_data(solution) -> Dict[str, List[float]]:
     if n < 1 or len(faces) != n + 1 or len(gas) != n:
         raise ValueError("轴向求解结果数组长度不一致")
     x = [(faces[i] + faces[i + 1]) / 2.0 for i in range(n)]
-    inner = [float(w.T_w1) for w in walls]
-    outer = [float(w.T_wN) for w in walls]
+    states = list(getattr(solution, "states", []) or [])
+    if states:
+        if len(states) != n:
+            raise ValueError("三相状态数组长度与轴向控制体数不一致")
+        # 三相求解器将耦合后的局部壁温保存在 states 中；wall_solutions
+        # 是原始局部径向解，不能覆盖耦合结果的可视化数据。
+        inner = [float(state.T_wall_inner_k) for state in states]
+        outer = [float(state.T_wall_outer_k) for state in states]
+        material = [float(state.T_bed_k) for state in states]
+    else:
+        inner = [float(w.T_w1) for w in walls]
+        outer = [float(w.T_wN) for w in walls]
+        material = None
     q_rad = [float(w.h_rad_in) * (gas[i] - inner[i]) for i, w in enumerate(walls)]
-    if not all(math.isfinite(v) for arr in (x, gas, inner, outer, q_rad) for v in arr):
+    finite_arrays = [x, gas, inner, outer, q_rad]
+    if material is not None:
+        finite_arrays.append(material)
+    if not all(math.isfinite(v) for arr in finite_arrays for v in arr):
         raise ValueError("轴向图表数据包含非有限数值")
     data = {
         "z_m": x,
@@ -35,11 +49,8 @@ def axial_plot_data(solution) -> Dict[str, List[float]]:
         "wall_outer_temperature_k": outer,
         "radiative_heat_flux_w_m2": q_rad,
     }
-    states = list(getattr(solution, "states", []) or [])
-    if states:
-        if len(states) != n:
-            raise ValueError("三相状态数组长度与轴向控制体数不一致")
-        data["material_temperature_k"] = [float(s.T_bed_k) for s in states]
+    if material is not None:
+        data["material_temperature_k"] = material
     return data
 
 
