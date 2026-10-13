@@ -208,5 +208,16 @@
     "Observed isotope IDs describe this sample only and do not establish completeness for either species.",
     "The sample covers a narrow calibration band and cannot support full-spectrum claims.",
     "The offline pseudo-Voigt LBL approximation is not an independently validated reference standard."
-  ]
+  ],
+  "calibration_trial": {
+    "band_cm-1": [
+      2000,
+      2400
+    ],
+    "line_center_filter_cm-1": [
+      1975,
+      2425
+    ],
+    "interpretation": "narrow-band pipeline trial; not total-spectrum coverage"
+  }
 }
