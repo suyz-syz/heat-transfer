@@ -6,7 +6,7 @@
           (1/eps_g + 1/eps_w - 1)
     h_rad = q''/(Tg-Tw)
 
-分压 吸收率采用壁温下的 Hottel 修正；eps_wall 限定为 > 0.7。
+吸收率采用壁温下的 Hottel 修正；eps_wall 限定为 > 0.7。
 pCO2/pH2O：Pa；光程 L：m；温度：K；热流：W/m²。
 """
 from __future__ import annotations
