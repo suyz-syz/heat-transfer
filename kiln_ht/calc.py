@@ -36,6 +36,8 @@ GRAVITY = 9.81              # 重力加速度 m/s²
 MAX_WALL_ITER = 300         # 壁温耦合迭代上限
 WALL_TOL = 1.0e-3           # 壁温收敛容差 (K)
 ENERGY_REL_TOL = 1.0e-7     # 能量平衡相对残差
+MIN_COUPLED_WALL_TEMPERATURE_K = 200.0
+MAX_COUPLED_WALL_TEMPERATURE_K = 3500.0
 DEFAULT_P_TOTAL = 1.01325   # 系统默认总压 (bar，1 atm)
 LOGGER = logging.getLogger(__name__)
 
@@ -737,6 +739,10 @@ class KilnAxialSolution:
                 "wall_energy_residuals_w": list(self.wall_energy_residuals_w),
                 "axial_relaxation_factor": self.axial_relaxation_factor,
                 "local_wall_relaxation_factor": self.local_wall_relaxation_factor,
+                "wall_temperature_bounds_k": [
+                    MIN_COUPLED_WALL_TEMPERATURE_K,
+                    MAX_COUPLED_WALL_TEMPERATURE_K,
+                ],
             },
             "model_scope": (
                 "steady 1-D gas-bed-wall energy network; radial wall conductances "
@@ -981,17 +987,25 @@ def _solve_local_wall_state(
     wall_bed_conductance_w_m_k: float,
     tolerance_k: float,
     max_iterations: int,
-) -> Tuple[float, float, float, float, float, float, int, float]:
+) -> Tuple[float, float, float, float, float, float, int, float, int, float]:
     """Nested bounded solve of inner/outer wall temperatures and local balances."""
     if max_iterations < 1 or tolerance_k <= 0.0:
         raise ValueError("local wall solver tolerances and iteration limit must be positive")
     D_out = 2.0 * radii[-1]
     T_sur = params.T_env if params.T_env_rad is None else params.T_env_rad
-    lo_t = min(T_gas_k, T_bed_k, params.T_env, T_sur)
-    hi_t = max(T_gas_k, T_bed_k, params.T_env, T_sur)
+    source_lo = min(T_gas_k, T_bed_k, params.T_env, T_sur)
+    source_hi = max(T_gas_k, T_bed_k, params.T_env, T_sur)
+    if source_lo < MIN_COUPLED_WALL_TEMPERATURE_K or source_hi > MAX_COUPLED_WALL_TEMPERATURE_K:
+        raise RuntimeError(
+            f"wall temperature sources exceed configured bounds at cell {cell} z={z_m:.6g} m: "
+            f"source_range=[{source_lo:.6g},{source_hi:.6g}] K, "
+            f"allowed=[{MIN_COUPLED_WALL_TEMPERATURE_K:.6g},{MAX_COUPLED_WALL_TEMPERATURE_K:.6g}] K"
+        )
+    lo_t, hi_t = source_lo, source_hi
     if not (math.isfinite(lo_t) and math.isfinite(hi_t) and lo_t > 0.0 and hi_t > lo_t):
         raise RuntimeError(
-            f"local wall solve has invalid temperature bracket at cell {cell} z={z_m:.6g} m"
+            f"local wall solve has invalid temperature bracket at cell {cell} z={z_m:.6g} m: "
+            f"[{lo_t:.6g},{hi_t:.6g}] K"
         )
     beam = 0.95 * params.L_char
     rin, rout = radii[0], radii[-1]
@@ -1035,7 +1049,7 @@ def _solve_local_wall_state(
         fa, fb = residual(a), residual(b)
         if abs(fa) <= 1.0e-7 or abs(fb) <= 1.0e-7:
             return (a if abs(fa) <= abs(fb) else b), residual(a if abs(fa) <= abs(fb) else b)
-        if fa * fb > 0.0:
+        if not all(math.isfinite(v) for v in (fa, fb)) or fa * fb > 0.0:
             raise RuntimeError(
                 f"outer wall balance is not bracketed at cell {cell} z={z_m:.6g} m: "
                 f"F2(lo)={fa:.6g} W/m, F2(hi)={fb:.6g} W/m, Twi={Twi:.6g} K"
@@ -1083,7 +1097,7 @@ def _solve_local_wall_state(
         Twi = a
     elif abs(fb) <= 1.0e-7:
         Twi = b
-    elif fa * fb > 0.0:
+    elif not all(math.isfinite(v) for v in (fa, fb)) or fa * fb > 0.0:
         raise RuntimeError(
             f"inner wall balance is not bracketed at cell {cell} z={z_m:.6g} m: "
             f"F1(lo)={fa:.6g} W/m, F1(hi)={fb:.6g} W/m, "
@@ -1336,10 +1350,15 @@ def _solve_kiln_three_phase(
             else:
                 stagnation_count = 0
             if stagnation_count >= 10:
+                failed_cell = max(
+                    range(n_cells),
+                    key=lambda j: wall_residual_values[j] if j < len(wall_residual_values) else 0.0,
+                )
                 raise RuntimeError(
-                    f"three-phase axial iteration stagnated at iteration {iteration}, "
+                    f"three-phase axial iteration stagnated at cell {failed_cell} "
+                    f"z={z_centres[failed_cell]:.6g} m, iteration={iteration}, "
                     f"max_dT={delta:.6g} K, lambda_axial={relax:.4g}, "
-                    f"max_wall_residual={max(wall_residual_values + [0.0]):.6g} W"
+                    f"wall_residual={wall_residual_values[failed_cell]:.6g} W"
                 )
         previous_delta = delta
         previous_wall_twi, previous_wall_two = list(twi_values), list(two_values)
@@ -1393,9 +1412,21 @@ def _solve_kiln_three_phase(
         abs(q) * dz for q in final_qgas + final_qbed + final_qout
     ] + [wall.Qprime * dz for wall in final_walls] + [1.0])
     if not math.isfinite(max_residual) or max_residual > 1.0e-3 * energy_scale:
+        residual_parts = [
+            (gas_residuals[i], bed_residuals[i], final_wall_residuals[i])
+            for i in range(n_cells)
+        ]
+        failed_cell = max(
+            range(n_cells),
+            key=lambda i: max(residual_parts[i]),
+        )
+        gas_r, bed_r, wall_r = residual_parts[failed_cell]
         raise RuntimeError(
-            f"three-phase energy balance failed: max_residual={max_residual:.6g} W, "
-            f"allowed={1.0e-3 * energy_scale:.6g} W"
+            f"three-phase energy balance failed at cell {failed_cell} "
+            f"z={z_centres[failed_cell]:.6g} m: "
+            f"gas_residual={gas_r:.6g} W, bed_residual={bed_r:.6g} W, "
+            f"wall_residual={wall_r:.6g} W, max_residual={max_residual:.6g} W, "
+            f"allowed={1.0e-3 * energy_scale:.6g} W, iterations={converged_iteration}"
         )
     LOGGER.info(
         "solve_kiln completed: mode=three_phase iterations=%d "
