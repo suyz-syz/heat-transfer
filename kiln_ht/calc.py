@@ -143,6 +143,7 @@ class WallSolution:
     k_avg: List[float] = field(default_factory=list)   # 各层积分平均导热系数 (W/m·K)
     max_temperature_change_k: Optional[float] = None
     max_energy_residual_relative: Optional[float] = None
+    max_energy_residual_w: Optional[float] = None
 
     def as_dict(self) -> Dict:
         """转为纯 dict，便于 JSON 序列化。"""
@@ -172,6 +173,7 @@ class WallSolution:
                 "iteration_count": self.iterations,
                 "max_temperature_change_k": self.max_temperature_change_k,
                 "max_energy_residual_relative": self.max_energy_residual_relative,
+                "max_energy_residual_w": self.max_energy_residual_w,
                 "converged": True,
             },
             "model_scope": "radial 1-D steady wall baseline; not the coupled axial wall state",
@@ -527,8 +529,8 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
 
     LOGGER.info(
         "solve_wall converged: iterations=%d max_temperature_change_k=%.6g "
-        "max_energy_residual_relative=%.6g",
-        it + 1, max(abs(corr1), abs(corrN)), energy_rel,
+        "max_energy_residual_relative=%.6g max_energy_residual_w=%.6g",
+        it + 1, max(abs(corr1), abs(corrN)), energy_rel, abs(Q_in - Q_out),
     )
     return WallSolution(
         Qprime=Qprime, q_in=q_in, q_out=q_out,
@@ -542,6 +544,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         k_avg=k_avg,
         max_temperature_change_k=max(abs(corr1), abs(corrN)),
         max_energy_residual_relative=energy_rel,
+        max_energy_residual_w=abs(Q_in - Q_out),
     )
 
 
