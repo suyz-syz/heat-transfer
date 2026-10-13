@@ -34,6 +34,7 @@ from kiln_ht import (
     solve_wall,
     solve_kiln,
     ConductivityModel,
+    gas_fractions_for_mode,
     validate_kiln_params,
     normalize_config,
 )
@@ -138,8 +139,11 @@ def _solve():
         L_char=_ss.L_char,
         L_kiln=_ss.L_kiln,
         P_total=_ss.P_total,
-        CO2=_ss.CO2 / 100.0,                        # % -> 体积分数
-        H2O=_ss.H2O / 100.0,
+        **gas_fractions_for_mode(
+            float(_ss.CO2) / 100.0,
+            float(_ss.H2O) / 100.0,
+            mode="hot_air" if _ss.get("hot_air_mode", False) else "combustion",
+        ),
         eps_wall=_ss.eps_wall,
         T_env=float(_ss.T_env_C) + 273.15,          # ℃ -> K
         v_amb=_ss.v_amb,
@@ -274,10 +278,15 @@ with st.sidebar:
     L_kiln = st.number_input("窑长 (m)", value=60.0, step=1.0, key="L_kiln")
     P_total = st.number_input("窑内压力 (bar)", value=1.01325, step=0.1, key="P_total")
     st.subheader("【气相与 WSGG 光谱】")
+    hot_air_mode = st.checkbox(
+        "热空气模式（洁净空气：N₂ 79% / O₂ 21%）",
+        value=False, key="hot_air_mode",
+        help="关闭时按常规燃烧烟气处理；CO₂/H₂O 为输入值，其余组分按默认烟气 N₂:O₂ 比例自动补齐。",
+    )
     CO2 = st.number_input("CO₂ 含量 (%)", value=20.0, min_value=0.0, max_value=100.0,
-                          step=0.5, key="CO2")
+                          step=0.5, key="CO2", disabled=hot_air_mode)
     H2O = st.number_input("H₂O 含量 (%)", value=8.0, min_value=0.0, max_value=100.0,
-                          step=0.5, key="H2O")
+                          step=0.5, key="H2O", disabled=hot_air_mode)
     eps_wall = st.number_input("内壁发射率", value=0.85, min_value=0.05, max_value=1.0,
                                step=0.01, key="eps_wall")
 
@@ -333,7 +342,7 @@ st.caption("多层圆筒壁一维稳态传热 · 计算核心与 APK / FastAPI �
 st.subheader("【物料与窑壁物性 λ(T)】 · 衬层配置")
 st.caption("可添加、删除、上下移动耐火衬层；厚度单位为 mm，支持 k(T) 温度相关导热系数（a/b/c），自定义材料可保存到材料库")
 
-col_hint = st.columns([0.2, 0.2, 0.28, 0.12, 0.2])
+col_hint = st.columns([0.18, 0.17, 0.25, 0.20, 0.20])
 col_hint[0].markdown("**层名称**")
 col_hint[1].markdown("**厚度 (mm)**")
 col_hint[2].markdown("**导热系数 k=a+b·T+c·T²**")
@@ -429,24 +438,24 @@ for idx, row in enumerate(_ss.layers):
         "Rc", value=float(row.get("Rc", 0.0)), min_value=0.0, step=0.001,
         key=f"layer_{uid}_rc", label_visibility="collapsed")
 
-    # 操作按钮列（首层 ⬆ / 末层 ⬇ 自动禁用，避免越界）
+    # Visible text labels avoid missing emoji glyphs in Docker/browser fonts.
     btn_container = c4.container()
-    bcols = btn_container.columns(4)
+    bcols = btn_container.columns(3)
     with bcols[0]:
-        if st.button("⬆", key=f"layer_{uid}_up", disabled=(idx == 0)):
+        if st.button("↑ 上移", key=f"layer_{uid}_up", disabled=(idx == 0),
+                     width="stretch"):
             _move_layer(idx, -1)
             st.rerun()
     with bcols[1]:
-        if st.button("⬇", key=f"layer_{uid}_down",
-                     disabled=(idx == len(_ss.layers) - 1)):
+        if st.button("↓ 下移", key=f"layer_{uid}_down",
+                     disabled=(idx == len(_ss.layers) - 1), width="stretch"):
             _move_layer(idx, +1)
             st.rerun()
     with bcols[2]:
-        if st.button("🗑", key=f"layer_{uid}_del", disabled=(len(_ss.layers) <= 1)):
+        if st.button("删除", key=f"layer_{uid}_del",
+                     disabled=(len(_ss.layers) <= 1), width="stretch"):
             _remove_layer(idx)
             st.rerun()
-    with bcols[3]:
-        st.write("")
 
 if st.button("➕ 添加衬层", width="stretch"):
     _add_layer()
