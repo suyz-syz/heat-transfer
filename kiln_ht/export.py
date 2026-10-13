@@ -21,6 +21,7 @@ def build_report(
     sol,
     x_mm: Optional[List[float]] = None,
     T_c: Optional[List[float]] = None,
+    axial_data: Optional[dict] = None,
 ) -> str:
     """生成完整结果的纯文本报告。"""
     lines = []
@@ -30,6 +31,14 @@ def build_report(
     lines.append("模型范围：本报告的径向壁温为稳态基线解；三相壁温（若另行计算）")
     lines.append("采用线性化网络近似，WSGG 状态为 provisional（暂定、未标定）。")
     lines.append("结果用于工程估算，不构成工业定型或热应力绝对保证值。")
+    if axial_data:
+        semantics = axial_data.get("model_semantics", {})
+        lines.append("【轴向结果语义】")
+        lines.append(f"  states          : {semantics.get('states') or 'n/a'}")
+        lines.append(f"  wall_solutions  : {semantics.get('wall_solutions', 'n/a')}")
+        lines.append(f"  三相壁模型      : {semantics.get('three_phase_wall_model') or 'n/a'}")
+        lines.append("  轴向诊断        : " + __import__("json").dumps(
+            axial_data.get("diagnostics", {}), ensure_ascii=False, sort_keys=True))
 
     lines.append("")
     lines.append("【工况参数】")
@@ -101,6 +110,7 @@ def export_result(
     x_mm: Optional[List[float]] = None,
     T_c: Optional[List[float]] = None,
     filename: str = "kiln_heat_result.txt",
+    axial_data: Optional[dict] = None,
 ) -> Tuple[bool, str]:
     """导出结果。
 
@@ -109,7 +119,7 @@ def export_result(
 
     返回 (是否成功, 说明/路径)。
     """
-    report = build_report(layers, params, sol, x_mm, T_c)
+    report = build_report(layers, params, sol, x_mm, T_c, axial_data=axial_data)
 
     # Android：尝试 plyer 分享
     try:
