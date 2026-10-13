@@ -122,6 +122,8 @@ def resolve_bed_geometry(
     Disabled/missing config leaves legacy area inputs untouched and returns
     metadata with explicit n/a values.
     """
+    if config is not None and not isinstance(config, dict):
+        raise ValueError("bed_geometry must be an object")
     if config is None or not config.get("enabled", False):
         return gas_bed_area_per_length_m, wall_bed_contact_per_length_m, {
             "enabled": False,
@@ -140,8 +142,6 @@ def resolve_bed_geometry(
             "wall_bed_area_source": "manual" if wall_bed_contact_per_length_m is not None else "n/a",
             "assumptions": "geometry helper disabled; legacy/manual areas are used",
         }
-    if not isinstance(config, dict):
-        raise ValueError("bed_geometry must be an object")
     mode = config.get("input_mode", "filling_fraction")
     if mode == "filling_fraction":
         geometry = calculate_bed_geometry(
