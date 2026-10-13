@@ -83,7 +83,7 @@ def test_tips_partition_table_overrides_power_law_approximation():
 
 
 def test_absorption_coefficient_unit_conversion_has_no_extra_factor_100():
-    from kiln_ht.models.radiation import hitemp_lbl
+    from scripts.hitemp_calibration import hitemp_lbl
 
     line = SpectralLine("CO2", 2200.0, 1e-22, 100.0, 0.07, 0.1,
                         0.7, 1.0, 0.0)
@@ -104,7 +104,7 @@ def test_absorption_coefficient_unit_conversion_has_no_extra_factor_100():
 
 
 def test_spectral_net_flux_is_finite_and_positive_for_hot_gas():
-    from kiln_ht.models.radiation.hitemp_lbl import spectral_net_radiative_flux
+    from scripts.hitemp_calibration.hitemp_lbl import spectral_net_radiative_flux
 
     q = spectral_net_radiative_flux(
         [0.2] * 5, [500.0, 1000.0, 1500.0, 2000.0, 2500.0],
@@ -122,16 +122,17 @@ def test_hitemp_benchmark_builder_parses_standard_molecule_ids():
     raw = (
         f"{2:2d}{1:1d}{2200.123456:12.6f}{1.0e-22:10.3E}"
         f"{1.0:10.3E}{0.070:5.3f}{0.100:5.3f}{100.0000:10.4f}"
-        f"{0.70:4.2f}" + " " * 101
+        f"{0.70:4.2f}{-0.001:8.4f}" + " " * 93
     )
     parsed = parse_hitemp_line(raw, Path("fixture.par"))
     assert parsed is not None
-    assert parsed["molecule"] == "CO2"
-    assert parsed["isotope"] == "1"
+    assert parsed["molec_id"] == 2
+    assert parsed["local_iso_id"] == 1
     assert parsed["nu"] == pytest.approx(2200.123456)
-    assert parsed["strength_ref"] == pytest.approx(1.0e-22)
-    assert parsed["lower_energy"] == pytest.approx(100.0)
-    assert parsed["temp_exponent"] == pytest.approx(0.70)
+    assert parsed["sw"] == pytest.approx(1.0e-22)
+    assert parsed["elower"] == pytest.approx(100.0)
+    assert parsed["n_air"] == pytest.approx(0.70)
+    assert parsed["delta_air"] == pytest.approx(-0.001)
 
 
 def test_literature_emissivity_parser_and_fit_smoke(tmp_path):
@@ -190,16 +191,14 @@ def test_hitemp_calibration_runner_generates_n345_provenance_report(tmp_path):
     line_csv = tmp_path / "lines.csv"
     with line_csv.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=[
-            "molecule", "nu", "strength_ref", "lower_energy", "air_gamma",
-            "self_gamma", "temp_exponent", "partition_ref",
-            "partition_exponent", "isotope",
+            "molec_id", "local_iso_id", "nu", "sw", "a", "gamma_air",
+            "gamma_self", "elower", "n_air", "delta_air",
         ])
         writer.writeheader()
         writer.writerow({
-            "molecule": "CO2", "nu": 2200.0, "strength_ref": 1e-20,
-            "lower_energy": 100.0, "air_gamma": 0.07, "self_gamma": 0.1,
-            "temp_exponent": 0.7, "partition_ref": 1.0,
-            "partition_exponent": 0.0, "isotope": "1",
+            "molec_id": 2, "local_iso_id": 1, "nu": 2200.0, "sw": 1e-20,
+            "a": 1.0, "gamma_air": 0.07, "gamma_self": 0.1,
+            "elower": 100.0, "n_air": 0.7, "delta_air": 0.0,
         })
     tips_csv = tmp_path / "tips.csv"
     with tips_csv.open("w", newline="", encoding="utf-8") as stream:
@@ -209,7 +208,7 @@ def test_hitemp_calibration_runner_generates_n345_provenance_report(tmp_path):
         writer.writeheader()
         for temp, q_value in ((296.0, 100.0), (500.0, 200.0), (800.0, 400.0)):
             writer.writerow({
-                "molecule": "CO2", "isotope": "1",
+                "molecule": 2, "isotope": 1,
                 "temperature_K": temp, "Q": q_value,
             })
     output = tmp_path / "report.json"
