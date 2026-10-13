@@ -810,8 +810,32 @@ class InputScreen(Screen):
         self._add_field(axial_card, "axial_cp_bed", "物料定压比热", "J/kg·K", "1000")
         self._add_field(axial_card, "axial_h_gas_bed", "气-物料换热系数", "W/m²·K", "20")
         self._add_field(axial_card, "axial_h_wall_bed", "壁-物料换热系数", "W/m²·K", "50")
-        self._add_field(axial_card, "axial_area_gas_bed", "气-物料有效面积/长度", "m", "1")
-        self._add_field(axial_card, "axial_contact_wall_bed", "壁-物料接触长度/长度", "m", "0.2")
+        geometry_row = BoxLayout(orientation="horizontal", spacing=dp(8),
+                                 size_hint_y=None, height=dp(40))
+        self.bed_geometry_enabled = CheckBox(active=False, size_hint=(None, 1), width=dp(36))
+        geometry_row.add_widget(self.bed_geometry_enabled)
+        geometry_row.add_widget(MdLabel(text="启用圆形截面床层几何估算", color=TEXT_DIM, font_size=sp(12)))
+        self.bed_geometry_mode = Spinner(text="填充率", values=["填充率", "填充角"],
+                                         size_hint_x=None, width=dp(100), font_size=sp(11),
+                                         background_color=CARD_ELEV)
+        geometry_row.add_widget(self.bed_geometry_mode)
+        axial_card.add_widget(geometry_row)
+        self._add_field(axial_card, "axial_filling_fraction", "床层填充率 f", "", "0.25")
+        self._add_field(axial_card, "axial_filling_angle_deg", "床层填充角 β", "°", "120")
+        self._add_field(axial_card, "axial_area_gas_bed", "气-物料有效面积/长度（手动覆盖）", "m", "1")
+        self._add_field(axial_card, "axial_contact_wall_bed", "壁-物料接触长度/长度（手动覆盖）", "m", "0.2")
+        self.bed_override_gas = CheckBox(active=False, size_hint=(None, None), size=(dp(28), dp(30)))
+        self.bed_override_wall = CheckBox(active=False, size_hint=(None, None), size=(dp(28), dp(30)))
+        axial_card.add_widget(MdLabel(text="几何启用时可分别勾选上述面积输入作为手动覆盖；关闭几何时仍沿用原手动面积。",
+                                      color=TEXT_DIM, font_size=sp(10), size_hint_y=None, height=dp(34)))
+        gas_override_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
+        gas_override_row.add_widget(self.bed_override_gas)
+        gas_override_row.add_widget(MdLabel(text="覆盖气-物料面积", color=TEXT_DIM, font_size=sp(11)))
+        axial_card.add_widget(gas_override_row)
+        wall_override_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(32))
+        wall_override_row.add_widget(self.bed_override_wall)
+        wall_override_row.add_widget(MdLabel(text="覆盖壁-物料接触长度", color=TEXT_DIM, font_size=sp(11)))
+        axial_card.add_widget(wall_override_row)
         axial_card.add_widget(MdLabel(
             text="默认关闭；启用后必须核对流量、比热、换热系数及有效面积，当前为可编辑边界参数。",
             color=ACCENT, font_size=sp(10), size_hint_y=None, height=dp(34)))
@@ -1408,7 +1432,8 @@ class ResultScreen(Screen):
             self.model_notice.text = (
                 "三相壁温来自 states；wall_solutions 是径向稳态基线参考。"
                 "轴向壁面采用半非线性局部迭代；WSGG 为 provisional（暂定、未标定）。\n"
-                "轴向诊断：" + json.dumps(axial_data.get("diagnostics", {}), ensure_ascii=False)
+                "轴向诊断：" + json.dumps(axial_data.get("diagnostics", {}), ensure_ascii=False) + "\n"
+                "床层几何：" + json.dumps(axial_data.get("bed_geometry", {}), ensure_ascii=False)
             )
             z = axial_data["z_m"]
             series = [
@@ -1516,13 +1541,26 @@ class KilnApp(BoxLayout):
                     "cp_bed_j_kg_k": float(p["axial_cp_bed"].text),
                     "gas_bed_h_w_m2_k": float(p["axial_h_gas_bed"].text),
                     "wall_bed_h_w_m2_k": float(p["axial_h_wall_bed"].text),
-                    "gas_bed_area_per_length_m": float(p["axial_area_gas_bed"].text),
-                    "wall_bed_contact_per_length_m": float(p["axial_contact_wall_bed"].text),
                     "bed_flow_direction": (
                         "counter-current" if self.input_screen.axial_bed_direction.text == "逆流"
                         else "co-current"
                     ),
                 })
+                if self.input_screen.bed_geometry_enabled.active:
+                    mode = self.input_screen.bed_geometry_mode.text
+                    axial_kwargs["bed_geometry"] = {
+                        "enabled": True,
+                        "input_mode": "filling_fraction" if mode == "填充率" else "filling_angle",
+                        "filling_fraction": float(p["axial_filling_fraction"].text) if mode == "填充率" else None,
+                        "filling_angle_deg": float(p["axial_filling_angle_deg"].text) if mode == "填充角" else None,
+                    }
+                    if self.input_screen.bed_override_gas.active:
+                        axial_kwargs["gas_bed_area_per_length_m"] = float(p["axial_area_gas_bed"].text)
+                    if self.input_screen.bed_override_wall.active:
+                        axial_kwargs["wall_bed_contact_per_length_m"] = float(p["axial_contact_wall_bed"].text)
+                else:
+                    axial_kwargs["gas_bed_area_per_length_m"] = float(p["axial_area_gas_bed"].text)
+                    axial_kwargs["wall_bed_contact_per_length_m"] = float(p["axial_contact_wall_bed"].text)
             axial_solution = solve_kiln(layers, params, **axial_kwargs)
             axial_data = axial_plot_data(axial_solution)
         except (ValueError, RuntimeError) as exc:
