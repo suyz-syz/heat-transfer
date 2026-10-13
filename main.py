@@ -1406,8 +1406,8 @@ class ResultScreen(Screen):
 
         if axial_data:
             self.model_notice.text = (
-                "三相壁温来自 states；wall_solutions 是线性化导纳用径向基线。"
-                " WSGG 为 provisional（暂定、未标定）。\n"
+                "三相壁温来自 states；wall_solutions 是径向稳态基线参考。"
+                "轴向壁面采用半非线性局部迭代；WSGG 为 provisional（暂定、未标定）。\n"
                 "轴向诊断：" + json.dumps(axial_data.get("diagnostics", {}), ensure_ascii=False)
             )
             z = axial_data["z_m"]
