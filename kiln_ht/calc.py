@@ -139,6 +139,8 @@ class WallSolution:
     R_tot: float             # 总热阻 (m·K/W)
     iterations: int = 0      # 实际迭代步数
     k_avg: List[float] = field(default_factory=list)   # 各层积分平均导热系数 (W/m·K)
+    max_temperature_change_k: Optional[float] = None
+    max_energy_residual_relative: Optional[float] = None
 
     def as_dict(self) -> Dict:
         """转为纯 dict，便于 JSON 序列化。"""
@@ -164,6 +166,14 @@ class WallSolution:
             "R_tot": self.R_tot,
             "iterations": self.iterations,
             "k_avg": list(self.k_avg),
+            "diagnostics": {
+                "iteration_count": self.iterations,
+                "max_temperature_change_k": self.max_temperature_change_k,
+                "max_energy_residual_relative": self.max_energy_residual_relative,
+                "converged": True,
+            },
+            "model_scope": "radial 1-D steady wall baseline; not the coupled axial wall state",
+            "wsgg_status": "provisional",
         }
 
 
@@ -523,6 +533,8 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
         R_wall=R_wall, R_in=R_in, R_out=R_out, R_tot=R_tot,
         iterations=it + 1,
         k_avg=k_avg,
+        max_temperature_change_k=max(abs(corr1), abs(corrN)),
+        max_energy_residual_relative=energy_rel,
     )
 
 
@@ -664,6 +676,7 @@ class KilnAxialSolution:
     bed_flow_direction: Optional[str] = None
     coupling_iterations: int = 0
     max_energy_residual_w: float = 0.0
+    max_temperature_change_k: Optional[float] = None
 
     @property
     def gas_temperature_mean_k(self) -> List[float]:
@@ -692,6 +705,29 @@ class KilnAxialSolution:
             "bed_flow_direction": self.bed_flow_direction,
             "coupling_iterations": self.coupling_iterations,
             "max_energy_residual_w": self.max_energy_residual_w,
+            "diagnostics": {
+                "iteration_count": self.coupling_iterations or None,
+                "max_temperature_change_k": self.max_temperature_change_k,
+                "max_energy_residual_w": self.max_energy_residual_w,
+                "energy_residual_status": "checked" if self.states else "exact plug-flow update",
+                "converged": True,
+            },
+            "model_scope": (
+                "steady 1-D gas-bed-wall energy network; radial wall conductances "
+                "are linearized from solve_wall; states contain coupled wall temperatures; "
+                "axial solid conduction, pressure drop, reactions and phase change are excluded"
+                if self.states else
+                "steady 1-D plug-flow gas energy balance coupled to independent "
+                "radial wall solves; axial solid conduction, pressure drop and "
+                "gas mixing are not included"
+            ),
+            "model_semantics": {
+                "wall_solutions": "radial steady-state baseline used for conductances",
+                "states": "authoritative coupled gas-bed-wall axial states" if self.states else None,
+                "three_phase_wall_model": "linearized network approximation" if self.states else None,
+                "wsgg_status": "provisional",
+                "industrial_design_or_absolute_thermal_stress_guarantee": False,
+            },
             "model_scope": (
                 "steady 1-D gas-bed-wall energy network; radial wall conductances "
                 "are linearized from solve_wall; states contain coupled wall temperatures; "
@@ -889,10 +925,13 @@ def _solve_kiln_three_phase(
     final_qbed: List[float] = []
     final_qout: List[float] = []
     converged_iteration = 0
+    final_delta: Optional[float] = None
+    final_wall_residuals: List[float] = []
 
     for iteration in range(1, coupling_max_iterations + 1):
         walls: List[WallSolution] = []
         twi_values, two_values, qgas_values, qbed_values, qout_values = [], [], [], [], []
+        wall_residual_values = []
         for i in range(n_cells):
             tgm = 0.5 * (gas_in[i] + gas_out[i])
             tbm = 0.5 * (bed_in[i] + bed_out[i])
@@ -924,6 +963,7 @@ def _solve_kiln_three_phase(
             qcond = gcond * (twi - two)
             wall_residual = abs(qgw - qcond - qwb)
             outer_residual = abs(qcond - qout)
+            wall_residual_values.append(max(wall_residual, outer_residual) * dz)
             if max(wall_residual, outer_residual) > 1.0e-3 * max(abs(qgw), abs(qout), 1.0):
                 raise RuntimeError("local wall-bed energy balance failed to close")
             walls.append(base)
@@ -976,6 +1016,8 @@ def _solve_kiln_three_phase(
             bed_in[-1] = bed_inlet_temperature_k
         final_walls, final_twi, final_two = walls, twi_values, two_values
         final_qgas, final_qbed, final_qout = qgas_values, qbed_values, qout_values
+        final_wall_residuals = wall_residual_values
+        final_delta = delta
         converged_iteration = iteration
         if delta <= coupling_tolerance_k:
             gas_in, gas_out = next_gas_in, next_gas_out
@@ -1004,7 +1046,7 @@ def _solve_kiln_three_phase(
         abs(bed_capacity * (bed_out[i] - bed_in[i]) - final_qbed[i] * dz)
         for i in range(n_cells)
     ]
-    max_residual = max(gas_residuals + bed_residuals + [0.0])
+    max_residual = max(gas_residuals + bed_residuals + final_wall_residuals + [0.0])
     return KilnAxialSolution(
         z_faces_m=z_faces,
         gas_temperature_in_k=gas_in,
@@ -1019,4 +1061,5 @@ def _solve_kiln_three_phase(
         bed_flow_direction=bed_flow_direction,
         coupling_iterations=converged_iteration,
         max_energy_residual_w=max_residual,
+        max_temperature_change_k=final_delta,
     )
