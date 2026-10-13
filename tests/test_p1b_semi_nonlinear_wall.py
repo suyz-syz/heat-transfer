@@ -50,8 +50,8 @@ def test_local_conduction_recomputes_temperature_dependent_k():
     polynomial = Layer(
         name="polynomial", thickness=0.1, k_coef=(1.2, 5.0e-4, 0.0)
     )
-    q_constant, _, _ = _conductive_wall_rate(900.0, 500.0, [constant], radii)
-    q_polynomial, _, _ = _conductive_wall_rate(900.0, 500.0, [polynomial], radii)
+    q_constant, _, _, _ = _conductive_wall_rate(900.0, 500.0, [constant], radii)
+    q_polynomial, _, _, _ = _conductive_wall_rate(900.0, 500.0, [polynomial], radii)
     assert math.isfinite(q_constant)
     assert math.isfinite(q_polynomial)
     assert q_polynomial != pytest.approx(q_constant, rel=1e-4)
