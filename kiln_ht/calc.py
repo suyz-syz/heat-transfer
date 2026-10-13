@@ -719,7 +719,7 @@ class KilnAxialSolution:
                 "iteration_count": self.coupling_iterations or None,
                 "max_temperature_change_k": self.max_temperature_change_k,
                 "max_energy_residual_w": self.max_energy_residual_w,
-                "energy_residual_status": "checked" if self.states else "exact plug-flow update",
+                "energy_residual_status": "checked",
                 "converged": True,
             },
             "model_scope": (
@@ -841,9 +841,21 @@ def solve_kiln(
         cell_heat.append(q_cell)
         t_gas = t_next
 
+    energy_residuals = [
+        abs(heat_capacity_rate * (tin - tout) - q)
+        for tin, tout, q in zip(gas_in, gas_out, cell_heat)
+    ]
+    max_energy_residual = max(energy_residuals + [0.0])
+    energy_scale = max([abs(q) for q in cell_heat] + [1.0])
+    if not math.isfinite(max_energy_residual) or max_energy_residual > 1.0e-9 * energy_scale:
+        raise RuntimeError(
+            f"plug-flow gas energy balance failed: max_residual={max_energy_residual:.6g} W, "
+            f"allowed={1.0e-9 * energy_scale:.6g} W"
+        )
     LOGGER.info(
         "solve_kiln completed: mode=two_phase iterations=n/a "
-        "max_temperature_change_k=n/a max_energy_residual_w=0 (plug-flow update)",
+        "max_temperature_change_k=n/a max_energy_residual_w=%.6g",
+        max_energy_residual,
     )
     return KilnAxialSolution(
         z_faces_m=z_faces,
@@ -853,6 +865,7 @@ def solve_kiln(
         heat_transfer_w=cell_heat,
         mass_flow_kg_s=mass_flow_kg_s,
         cp_gas_j_kg_k=cp_gas_j_kg_k,
+        max_energy_residual_w=max_energy_residual,
     )
 
 
