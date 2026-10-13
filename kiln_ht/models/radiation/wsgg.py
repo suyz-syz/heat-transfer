@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """可插拔 WSGG 灰气体模型基础实现。
 
+Status: provisional（暂定，未使用 HITEMP/LBL 标定系数）。
+
 重要说明：
 本文件第一阶段提供的是“WSGG 接口 + 四灰气体数值骨架”，不是声称已经
 内置经过 HITEMP LBL 回归验证的最终系数库。默认系数采用当前 Leckner
