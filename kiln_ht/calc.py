@@ -728,15 +728,6 @@ class KilnAxialSolution:
                 "wsgg_status": "provisional",
                 "industrial_design_or_absolute_thermal_stress_guarantee": False,
             },
-            "model_scope": (
-                "steady 1-D gas-bed-wall energy network; radial wall conductances "
-                "are linearized from solve_wall; states contain coupled wall temperatures; "
-                "axial solid conduction, pressure drop, reactions and phase change are excluded"
-                if self.states else
-                "steady 1-D plug-flow gas energy balance coupled to independent "
-                "radial wall solves; axial solid conduction, pressure drop and "
-                "gas mixing are not included"
-            ),
         }
 
 
