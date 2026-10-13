@@ -16,7 +16,7 @@ Docker 运行：见 Dockerfile 与 README。
               "params": {"T_gas": 1523.15}}'
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -29,6 +29,7 @@ from kiln_ht import (
     Layer,
     compute_temperature_curve,
     solve_wall,
+    gas_fractions_for_mode,
 )
 
 app = FastAPI(
@@ -56,12 +57,14 @@ class KilnParamsIn(BaseModel):
     L_char: float = Field(4.0, gt=0, description="窑内径 (m)")
     L_kiln: float = Field(60.0, gt=0, description="窑长 (m)")
     P_total: float = Field(1.01325, gt=0, description="窑内压力 (bar)")
-    CO2: float = Field(0.20, gt=0, lt=1, description="CO2 体积分数")
-    H2O: float = Field(0.08, gt=0, lt=1, description="H2O 体积分数")
+    CO2: float = Field(0.20, ge=0, lt=1, description="CO2 体积分数")
+    H2O: float = Field(0.08, ge=0, lt=1, description="H2O 体积分数")
     eps_wall: float = Field(0.85, gt=0, le=1, description="内壁发射率")
     T_env: float = Field(298.15, gt=0, description="环境温度 (K)")
     v_amb: float = Field(2.0, ge=0, description="环境风速 (m/s)")
     eps_shell: float = Field(0.85, gt=0, le=1, description="外壳发射率")
+    gas_mode: Literal["combustion", "hot_air"] = Field(
+        "combustion", description="气相模式：常规燃烧烟气或洁净热空气")
 
 
 class SolveRequest(BaseModel):
@@ -98,7 +101,14 @@ def _to_domain(req: SolveRequest):
                 raise ValueError(f"不支持的导热系数模式: {mode}")
         layers.append(Layer(name=l.name, thickness=l.thickness,
                             k_coef=k_coef, Rc=l.Rc, conductivity_model=model))
-    params = KilnParams(**req.params.model_dump()) if req.params else KilnParams()
+    if req.params:
+        values = req.params.model_dump(exclude={"gas_mode"})
+        values.update(gas_fractions_for_mode(
+            values["CO2"], values["H2O"], mode=req.params.gas_mode
+        ))
+        params = KilnParams(**values)
+    else:
+        params = KilnParams()
     validate_kiln_params(vars(params))
     return layers, params
 
