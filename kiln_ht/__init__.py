@@ -51,3 +51,11 @@ from .models.convection import (
     TschengWatkinsonGasBed,
     TschengWatkinsonGasWall,
 )
+
+from .bed_geometry import (
+    ASSUMPTIONS as BED_GEOMETRY_ASSUMPTIONS,
+    calculate_bed_geometry,
+    filling_angle_from_fraction,
+    filling_fraction_from_angle,
+    resolve_bed_geometry,
+)
