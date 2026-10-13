@@ -1042,7 +1042,9 @@ def _solve_kiln_three_phase(
         for i in range(n_cells)
     ]
     max_residual = max(gas_residuals + bed_residuals + final_wall_residuals + [0.0])
-    energy_scale = max([abs(q) * dz for q in final_qgas + final_qbed] + [1.0])
+    energy_scale = max([
+        abs(q) * dz for q in final_qgas + final_qbed + final_qout
+    ] + [wall.Qprime * dz for wall in final_walls] + [1.0])
     if not math.isfinite(max_residual) or max_residual > 1.0e-3 * energy_scale:
         raise RuntimeError(
             f"three-phase energy balance failed: max_residual={max_residual:.6g} W, "
