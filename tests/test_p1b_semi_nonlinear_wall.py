@@ -109,6 +109,20 @@ def test_sensitivity_cases_match_linearized_reference_without_silent_fallback(
     )
 
 
+
+def test_wall_to_bed_heat_flow_warms_bed_in_semi_nonlinear_mode():
+    result = solve_kiln(
+        LAYERS,
+        KilnParams(L_kiln=4.0, T_gas=1000.0),
+        **_kwargs(
+            bed_inlet_temperature_k=320.0,
+            gas_bed_h_w_m2_k=0.01,
+            wall_bed_h_w_m2_k=80.0,
+            wall_iteration_mode="semi_nonlinear",
+        ),
+    )
+    assert result.bed_temperature_out_k[0] > result.bed_temperature_in_k[0]
+
 def test_axial_wall_iteration_is_repeatable_and_energy_closed():
     params = KilnParams(L_kiln=6.0, T_gas=800.0)
     first = solve_kiln(LAYERS, params, **_kwargs())
