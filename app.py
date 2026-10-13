@@ -518,7 +518,13 @@ if _ss.get("calc_trigger"):
         st.error(f"计算失败：{exc}")
         st.stop()
 
-    # ---- 核心指标 Dashboard ----
+    st.warning(
+        "模型范围声明：三相壁温采用由径向稳态解导出的线性化网络近似；"
+        "WSGG 处于 provisional（暂定、未标定）状态。结果用于工程估算，"
+        "不构成工业定型或热应力绝对保证值。"
+    )
+
+    # ---- 核心指标 Dashboard（径向稳态基线结果）----
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("外壁面温度", f"{sol.T_wN - 273.15:.1f} °C",
               delta=f"外壁温升 {(sol.T_wN - 273.15) - float(_ss.T_env_C):.1f} °C")
@@ -646,6 +652,13 @@ if _ss.get("calc_trigger"):
         )
         st.plotly_chart(_axial_fig, width="stretch")
         st.caption(_axial.as_dict()["model_scope"])
+        st.caption(
+            "壁温语义：states（轴向图中的耦合状态）为三相壁温来源；"
+            "wall_solutions 是用于线性化导纳的径向稳态基线解。"
+        )
+        st.caption(
+            "求解诊断：" + json.dumps(_axial.as_dict()["diagnostics"], ensure_ascii=False)
+        )
 
         st.subheader("轴向辐射热流密度")
         _q_fig = go.Figure()
