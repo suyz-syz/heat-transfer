@@ -687,6 +687,13 @@ class KilnAxialSolution:
     coupling_iterations: int = 0
     max_energy_residual_w: float = 0.0
     max_temperature_change_k: Optional[float] = None
+    wall_iteration_mode: str = "not_applicable"
+    local_wall_iteration_count: int = 0
+    local_wall_evaluation_count: int = 0
+    max_wall_temperature_change_k: Optional[float] = None
+    max_wall_energy_residual_w: float = 0.0
+    wall_energy_residuals_w: List[float] = field(default_factory=list)
+    axial_relaxation_factor: Optional[float] = None
 
     @property
     def gas_temperature_mean_k(self) -> List[float]:
@@ -721,10 +728,17 @@ class KilnAxialSolution:
                 "max_energy_residual_w": self.max_energy_residual_w,
                 "energy_residual_status": "checked",
                 "converged": True,
+                "wall_iteration_mode": self.wall_iteration_mode,
+                "local_wall_iteration_count": self.local_wall_iteration_count,
+                "local_wall_evaluation_count": self.local_wall_evaluation_count,
+                "max_wall_temperature_change_k": self.max_wall_temperature_change_k,
+                "max_wall_energy_residual_w": self.max_wall_energy_residual_w,
+                "wall_energy_residuals_w": list(self.wall_energy_residuals_w),
+                "axial_relaxation_factor": self.axial_relaxation_factor,
             },
             "model_scope": (
                 "steady 1-D gas-bed-wall energy network; radial wall conductances "
-                "are linearized from solve_wall; states contain coupled wall temperatures; "
+                "are computed per cell; states contain coupled wall temperatures; "
                 "axial solid conduction, pressure drop, reactions and phase change are excluded"
                 if self.states else
                 "steady 1-D plug-flow gas energy balance coupled to independent "
@@ -734,7 +748,7 @@ class KilnAxialSolution:
             "model_semantics": {
                 "wall_solutions": "radial steady-state baseline used for conductances",
                 "states": "authoritative coupled gas-bed-wall axial states" if self.states else None,
-                "three_phase_wall_model": "linearized network approximation" if self.states else None,
+                "three_phase_wall_model": (\n                    "semi-nonlinear local wall solve" if self.wall_iteration_mode == "semi_nonlinear" else "linearized network approximation"\n                ) if self.states else None,
                 "wsgg_status": "provisional",
                 "industrial_design_or_absolute_thermal_stress_guarantee": False,
             },
@@ -759,6 +773,9 @@ def solve_kiln(
     bed_flow_direction: str = "counter-current",
     coupling_max_iterations: int = 100,
     coupling_tolerance_k: float = 1.0e-5,
+    wall_iteration_mode: str = "semi_nonlinear",
+    local_wall_tolerance_k: float = 1.0e-5,
+    local_wall_max_iterations: int = 48,
 ) -> KilnAxialSolution:
     """按轴向控制体积耦合烟气降温与局部径向壁体传热。
 
@@ -773,6 +790,8 @@ def solve_kiln(
         inlet_gas_temperature_k: 可选入口温度；缺省沿用 params.T_gas。
     """
     validate_params(params)
+    if wall_iteration_mode not in ("semi_nonlinear", "linearized"):
+        raise ValueError("wall_iteration_mode must be 'semi_nonlinear' or 'linearized'")
     if bed_inlet_temperature_k is not None:
         required_bed = {
             "bed_mass_flow_kg_s": bed_mass_flow_kg_s,
@@ -799,6 +818,9 @@ def solve_kiln(
             bed_flow_direction=bed_flow_direction,
             coupling_max_iterations=coupling_max_iterations,
             coupling_tolerance_k=coupling_tolerance_k,
+            wall_iteration_mode=wall_iteration_mode,
+            local_wall_tolerance_k=local_wall_tolerance_k,
+            local_wall_max_iterations=local_wall_max_iterations,
         )
     if not layers:
         raise ValueError("至少需要 1 层衬里结构")
@@ -870,6 +892,220 @@ def solve_kiln(
 
 
 
+def _conductive_wall_rate(
+    T_inner_k: float,
+    T_outer_k: float,
+    layers: List[Layer],
+    radii: List[float],
+    *,
+    tolerance_k: float = 1.0e-6,
+    max_iterations: int = 40,
+) -> Tuple[float, int, float]:
+    """Return signed cylindrical wall heat rate (W/m), reevaluating k(T).
+
+    Layer interface temperatures are iterated with a damped resistance network.
+    Each iterate recomputes the integral-mean conductivity of every layer.
+    """
+    if not all(math.isfinite(t) and t > 0.0 for t in (T_inner_k, T_outer_k)):
+        raise ValueError("wall surface temperatures must be finite and positive")
+    if abs(T_inner_k - T_outer_k) <= tolerance_k:
+        return 0.0, 0, abs(T_inner_k - T_outer_k)
+    n = len(layers)
+    interfaces = [
+        T_inner_k + (T_outer_k - T_inner_k) * (r - radii[0]) / (radii[-1] - radii[0])
+        for r in radii
+    ]
+    relaxation = 0.5
+    previous_delta = None
+    max_delta = math.inf
+    for iteration in range(1, max_iterations + 1):
+        k_values = [
+            layer.mean_k_between_k(interfaces[i], interfaces[i + 1])
+            for i, layer in enumerate(layers)
+        ]
+        if not all(math.isfinite(k) and k > 0.0 for k in k_values):
+            raise ValueError("non-positive or non-finite k(T) in local wall iteration")
+        r_wall = [
+            math.log(radii[i + 1] / radii[i]) / (2.0 * math.pi * k_values[i])
+            for i in range(n)
+        ]
+        r_contact = [
+            layers[i].Rc / (2.0 * math.pi * radii[i + 1])
+            for i in range(n)
+        ]
+        total_r = sum(r_wall) + sum(r_contact)
+        if not math.isfinite(total_r) or total_r <= 0.0:
+            raise ValueError("local wall conduction resistance is non-positive")
+        qprime = (T_inner_k - T_outer_k) / total_r
+        target = [T_inner_k]
+        for i in range(n):
+            target.append(target[-1] - qprime * (r_wall[i] + r_contact[i]))
+        max_delta = max(abs(a - b) for a, b in zip(target, interfaces))
+        if max_delta <= tolerance_k:
+            # Recompute from the converged interface temperatures.
+            return qprime, iteration, max_delta
+        if previous_delta is not None:
+            if max_delta > previous_delta * 1.05:
+                relaxation = max(0.05, relaxation * 0.5)
+            elif max_delta < previous_delta * 0.7:
+                relaxation = min(0.7, relaxation * 1.15)
+        interfaces = [
+            old + relaxation * (new - old)
+            for old, new in zip(interfaces, target)
+        ]
+        previous_delta = max_delta
+    raise RuntimeError(
+        f"conductivity/interface iteration stalled: iterations={max_iterations}, "
+        f"max_temperature_change_k={max_delta:.6g}"
+    )
+
+
+def _solve_local_wall_state(
+    *,
+    cell: int,
+    z_m: float,
+    T_gas_k: float,
+    T_bed_k: float,
+    params: KilnParams,
+    layers: List[Layer],
+    radii: List[float],
+    wall_bed_conductance_w_m_k: float,
+    tolerance_k: float,
+    max_iterations: int,
+) -> Tuple[float, float, float, float, float, float, int, float]:
+    """Nested bounded solve of inner/outer wall temperatures and local balances."""
+    if max_iterations < 1 or tolerance_k <= 0.0:
+        raise ValueError("local wall solver tolerances and iteration limit must be positive")
+    D_out = 2.0 * radii[-1]
+    T_sur = params.T_env if params.T_env_rad is None else params.T_env_rad
+    lo_t = min(T_gas_k, T_bed_k, params.T_env, T_sur)
+    hi_t = max(T_gas_k, T_bed_k, params.T_env, T_sur)
+    if not (math.isfinite(lo_t) and math.isfinite(hi_t) and lo_t > 0.0 and hi_t > lo_t):
+        raise RuntimeError(
+            f"local wall solve has invalid temperature bracket at cell {cell} z={z_m:.6g} m"
+        )
+    beam = 0.95 * params.L_char
+    rin, rout = radii[0], radii[-1]
+    local_evaluations = 0
+    max_k_delta = 0.0
+
+    def q_out(Two):
+        h_nat = outer_natural_h(Two, params.T_env, D_out)
+        h_for = outer_forced_h(params.v_amb, Two, params.T_env, D_out)
+        h_conv = (h_nat ** 3.5 + h_for ** 3.5) ** (1.0 / 3.5)
+        h_rad = outer_radiation_h(Two, T_sur, params.eps_shell)
+        return (
+            h_conv * (Two - params.T_env) + h_rad * (Two - T_sur)
+        ) * 2.0 * math.pi * rout
+
+    def solve_outer(Twi):
+        nonlocal local_evaluations, max_k_delta
+
+        def residual(Two):
+            nonlocal local_evaluations, max_k_delta
+            qcond, count, k_delta = _conductive_wall_rate(
+                Twi, Two, layers, radii, tolerance_k=min(tolerance_k, 1.0e-5)
+            )
+            local_evaluations += count
+            max_k_delta = max(max_k_delta, k_delta)
+            return qcond - q_out(Two)
+
+        a, b = lo_t, hi_t
+        fa, fb = residual(a), residual(b)
+        if abs(fa) <= 1.0e-7 or abs(fb) <= 1.0e-7:
+            return (a if abs(fa) <= abs(fb) else b), residual(a if abs(fa) <= abs(fb) else b)
+        if fa * fb > 0.0:
+            raise RuntimeError(
+                f"outer wall balance is not bracketed at cell {cell} z={z_m:.6g} m: "
+                f"F2(lo)={fa:.6g} W/m, F2(hi)={fb:.6g} W/m, Twi={Twi:.6g} K"
+            )
+        for _ in range(max_iterations):
+            mid = 0.5 * (a + b)
+            fm = residual(mid)
+            if abs(fm) <= 1.0e-7 or b - a <= tolerance_k:
+                return mid, fm
+            if fa * fm > 0.0:
+                a, fa = mid, fm
+            else:
+                b, fb = mid, fm
+        raise RuntimeError(
+            f"outer wall root failed at cell {cell} z={z_m:.6g} m: "
+            f"iterations={max_iterations}, bracket=[{a:.6g},{b:.6g}] K, "
+            f"residuals=[{fa:.6g},{fb:.6g}] W/m"
+        )
+
+    def inner_residual(Twi, return_terms=False):
+        nonlocal local_evaluations, max_k_delta
+        Two, outer_residual = solve_outer(Twi)
+        qcond, count, k_delta = _conductive_wall_rate(
+            Twi, Two, layers, radii, tolerance_k=min(tolerance_k, 1.0e-5)
+        )
+        local_evaluations += count
+        max_k_delta = max(max_k_delta, k_delta)
+        h_conv = inner_convection_h(
+            params.v_gas, params.L_char, params.L_kiln,
+            0.5 * (T_gas_k + Twi), P_pa=params.P_total * 1.0e5,
+            gas=params.gas_mixture, use_air=(params.property_model.lower() == "air"),
+        )
+        h_rad, _ = inner_radiation_h(
+            T_gas_k, Twi, params.eps_wall, beam, params.CO2, params.H2O,
+            params.P_total, model=params.radiation_model,
+        )
+        q_gw = (h_conv + h_rad) * (T_gas_k - Twi) * 2.0 * math.pi * rin
+        q_wb = wall_bed_conductance_w_m_k * (Twi - T_bed_k)
+        residual = q_gw - qcond - q_wb
+        local_evaluations += 1
+        if return_terms:
+            return residual, Two, q_gw, q_wb, qcond, outer_residual
+        return residual
+
+    a, b = lo_t, hi_t
+    fa, fb = inner_residual(a), inner_residual(b)
+    if abs(fa) <= 1.0e-7:
+        Twi = a
+    elif abs(fb) <= 1.0e-7:
+        Twi = b
+    elif fa * fb > 0.0:
+        raise RuntimeError(
+            f"inner wall balance is not bracketed at cell {cell} z={z_m:.6g} m: "
+            f"F1(lo)={fa:.6g} W/m, F1(hi)={fb:.6g} W/m, "
+            f"temperature_bounds=[{lo_t:.6g},{hi_t:.6g}] K"
+        )
+    else:
+        Twi = None
+        for _ in range(max_iterations):
+            mid = 0.5 * (a + b)
+            fm = inner_residual(mid)
+            if abs(fm) <= 1.0e-7 or b - a <= tolerance_k:
+                Twi = mid
+                break
+            if fa * fm > 0.0:
+                a, fa = mid, fm
+            else:
+                b, fb = mid, fm
+        if Twi is None:
+            raise RuntimeError(
+                f"inner wall root failed at cell {cell} z={z_m:.6g} m: "
+                f"iterations={max_iterations}, bracket=[{a:.6g},{b:.6g}] K, "
+                f"residuals=[{fa:.6g},{fb:.6g}] W/m"
+            )
+    final = inner_residual(Twi, return_terms=True)
+    f1, Two, q_gw, q_wb, qcond, f2 = final
+    energy_scale = max(abs(q_gw), abs(q_wb), abs(qcond), abs(q_out(Two)), 1.0)
+    max_residual = max(abs(f1), abs(f2))
+    if not math.isfinite(max_residual) or max_residual > 1.0e-5 * energy_scale:
+        raise RuntimeError(
+            f"local wall energy closure failed at cell {cell} z={z_m:.6g} m: "
+            f"iterations<={max_iterations}, Twi={Twi:.6g} K, Two={Two:.6g} K, "
+            f"R_inner={f1:.6g} W/m, R_outer={f2:.6g} W/m, "
+            f"scale={energy_scale:.6g} W/m"
+        )
+    return (
+        Twi, Two, q_gw, q_wb, q_out(Two), max_residual,
+        local_evaluations, max_k_delta,
+    )
+
+
 def _solve_kiln_three_phase(
     layers: List[Layer],
     params: KilnParams,
@@ -888,6 +1124,9 @@ def _solve_kiln_three_phase(
     bed_flow_direction: str,
     coupling_max_iterations: int,
     coupling_tolerance_k: float,
+    wall_iteration_mode: str,
+    local_wall_tolerance_k: float,
+    local_wall_max_iterations: int,
 ) -> KilnAxialSolution:
     """Conservative fixed-point coupling of gas, bed and radial wall nodes.
 
@@ -935,7 +1174,15 @@ def _solve_kiln_three_phase(
     gwb = wall_bed_h_w_m2_k * wall_bed_contact_per_length_m
     gas_capacity = mass_flow_kg_s * cp_gas_j_kg_k
     bed_capacity = bed_mass_flow_kg_s * cp_bed_j_kg_k
-    relax = 0.5
+    relax = 0.25
+    previous_delta = None
+    stagnation_count = 0
+    previous_wall_twi: Optional[List[float]] = None
+    previous_wall_two: Optional[List[float]] = None
+    local_iteration_total = 0
+    local_evaluation_total = 0
+    max_wall_delta = 0.0
+    final_relax = relax
     final_walls: List[WallSolution] = []
     final_twi: List[float] = []
     final_two: List[float] = []
@@ -950,6 +1197,10 @@ def _solve_kiln_three_phase(
         walls: List[WallSolution] = []
         twi_values, two_values, qgas_values, qbed_values, qout_values = [], [], [], [], []
         wall_residual_values = []
+        base_radii = [params.L_char / 2.0]
+        for layer in layers:
+            base_radii.append(base_radii[-1] + layer.thickness)
+        max_wall_delta = 0.0
         for i in range(n_cells):
             tgm = 0.5 * (gas_in[i] + gas_out[i])
             tbm = 0.5 * (bed_in[i] + bed_out[i])
@@ -964,35 +1215,57 @@ def _solve_kiln_three_phase(
             ):
                 raise RuntimeError("could not form positive local wall conductances")
 
-            twi = min(tgm, max(params.T_env, base.T_w1))
-            two = min(twi, max(params.T_env, base.T_wN))
-            local_converged = False
-            for _ in range(100):
-                two_new = (gcond * twi + gout * params.T_env) / (gcond + gout)
-                twi_new = (ggw * tgm + gcond * two_new + gwb * tbm) / (ggw + gcond + gwb)
-                if max(abs(two_new - two), abs(twi_new - twi)) < 1.0e-8:
-                    two, twi = two_new, twi_new
-                    local_converged = True
-                    break
-                two = 0.5 * two + 0.5 * two_new
-                twi = 0.5 * twi + 0.5 * twi_new
-            if not local_converged:
-                raise RuntimeError(f"local wall-bed network did not converge at cell {i} in 100 iterations")
-            qgw = ggw * (tgm - twi)
+            if wall_iteration_mode == "semi_nonlinear":
+                twi, two, qgw, qwb_into_wall, qout, local_residual, local_evals, k_delta = (
+                    _solve_local_wall_state(
+                        cell=i, z_m=z_centres[i], T_gas_k=tgm, T_bed_k=tbm,
+                        params=params, layers=layers, radii=base_radii,
+                        wall_bed_conductance_w_m_k=gwb,
+                        tolerance_k=local_wall_tolerance_k,
+                        max_iterations=local_wall_max_iterations,
+                    )
+                )
+                local_iteration_total += local_wall_max_iterations
+                local_evaluation_total += local_evals
+                max_wall_delta = max(max_wall_delta, k_delta)
+                wall_residual_values.append(local_residual * dz)
+            else:
+                twi = min(tgm, max(params.T_env, base.T_w1))
+                two = min(twi, max(params.T_env, base.T_wN))
+                local_converged = False
+                for _ in range(100):
+                    two_new = (gcond * twi + gout * params.T_env) / (gcond + gout)
+                    twi_new = (ggw * tgm + gcond * two_new + gwb * tbm) / (ggw + gcond + gwb)
+                    if max(abs(two_new - two), abs(twi_new - twi)) < 1.0e-8:
+                        two, twi = two_new, twi_new
+                        local_converged = True
+                        break
+                    two = 0.5 * two + 0.5 * two_new
+                    twi = 0.5 * twi + 0.5 * twi_new
+                if not local_converged:
+                    raise RuntimeError(
+                        f"linearized local wall-bed solve did not converge at cell {i} z={z_centres[i]:.6g} m"
+                    )
+                qgw = ggw * (tgm - twi)
+                qwb_into_wall = gwb * (tbm - twi)
+                qout = gout * (two - params.T_env)
+                qcond = gcond * (twi - two)
+                residual_local = max(abs(qgw + qwb_into_wall - qcond), abs(qcond - qout))
+                scale_local = max(abs(qgw), abs(qwb_into_wall), abs(qcond), abs(qout), 1.0)
+                if residual_local > 1.0e-5 * scale_local:
+                    raise RuntimeError(
+                        f"linearized wall energy closure failed at cell {i} z={z_centres[i]:.6g} m: "
+                        f"residual={residual_local:.6g} W/m"
+                    )
+                wall_residual_values.append(residual_local * dz)
+                local_iteration_total += 1
             qgb = ggb * (tgm - tbm)
-            qwb = gwb * (twi - tbm)
-            qout = gout * (two - params.T_env)
-            qcond = gcond * (twi - two)
-            wall_residual = abs(qgw - qcond - qwb)
-            outer_residual = abs(qcond - qout)
-            wall_residual_values.append(max(wall_residual, outer_residual) * dz)
-            if max(wall_residual, outer_residual) > 1.0e-3 * max(abs(qgw), abs(qout), 1.0):
-                raise RuntimeError("local wall-bed energy balance failed to close")
+            qbed_wall = -qwb_into_wall
             walls.append(base)
             twi_values.append(twi)
             two_values.append(two)
             qgas_values.append(qgw + qgb)
-            qbed_values.append(qgb + qwb)
+            qbed_values.append(qgb + qbed_wall)
             qout_values.append(qout)
 
         next_gas_in = [0.0] * n_cells
@@ -1025,7 +1298,27 @@ def _solve_kiln_three_phase(
             max(abs(a - b) for a, b in zip(next_gas_out, gas_out)),
             max(abs(a - b) for a, b in zip(next_bed_in, bed_in)),
             max(abs(a - b) for a, b in zip(next_bed_out, bed_out)),
+            max((abs(a - b) for a, b in zip(twi_values, previous_wall_twi or twi_values)), default=0.0),
+            max((abs(a - b) for a, b in zip(two_values, previous_wall_two or two_values)), default=0.0),
         )
+        if previous_delta is not None:
+            if delta > previous_delta * 1.05:
+                relax = max(0.05, relax * 0.5)
+            elif delta < previous_delta * 0.7:
+                relax = min(0.7, relax * 1.15)
+            if delta >= previous_delta * (1.0 - 1e-4):
+                stagnation_count += 1
+            else:
+                stagnation_count = 0
+            if stagnation_count >= 10:
+                raise RuntimeError(
+                    f"three-phase axial iteration stagnated at iteration {iteration}, "
+                    f"max_dT={delta:.6g} K, lambda_axial={relax:.4g}, "
+                    f"max_wall_residual={max(wall_residual_values + [0.0]):.6g} W"
+                )
+        previous_delta = delta
+        previous_wall_twi, previous_wall_two = list(twi_values), list(two_values)
+        final_relax = relax
         gas_in = [relax * new + (1.0 - relax) * old for new, old in zip(next_gas_in, gas_in)]
         gas_out = [relax * new + (1.0 - relax) * old for new, old in zip(next_gas_out, gas_out)]
         bed_in = [relax * new + (1.0 - relax) * old for new, old in zip(next_bed_in, bed_in)]
@@ -1047,7 +1340,9 @@ def _solve_kiln_three_phase(
             break
     else:
         raise RuntimeError(
-            f"three-phase coupling did not converge in {coupling_max_iterations} iterations"
+            f"three-phase axial coupling did not converge: iterations={coupling_max_iterations}, "
+            f"max_temperature_change_k={final_delta}, lambda_axial={relax:.6g}, "
+            f"max_wall_energy_residual_w={max(final_wall_residuals + [0.0]):.6g}"
         )
 
     states = [
@@ -1097,4 +1392,11 @@ def _solve_kiln_three_phase(
         coupling_iterations=converged_iteration,
         max_energy_residual_w=max_residual,
         max_temperature_change_k=final_delta,
+        wall_iteration_mode=wall_iteration_mode,
+        local_wall_iteration_count=local_iteration_total,
+        local_wall_evaluation_count=local_evaluation_total,
+        max_wall_temperature_change_k=max_wall_delta,
+        max_wall_energy_residual_w=max(final_wall_residuals + [0.0]),
+        wall_energy_residuals_w=final_wall_residuals,
+        axial_relaxation_factor=final_relax,
     )
