@@ -1146,6 +1146,20 @@ class InputScreen(Screen):
                     raise ValueError("YAML 导入需要 PyYAML；请改用 JSON 或安装 YAML 支持") from exc
                 raw = yaml.safe_load(raw_text)
             cfg = normalize_config(raw)
+            bed_cfg = cfg.get("bed_geometry", {})
+            self.bed_geometry_enabled.active = bool(bed_cfg.get("enabled", False))
+            if bed_cfg.get("input_mode") == "filling_angle":
+                self.bed_geometry_mode.text = "填充角"
+                self._fields["axial_filling_angle_deg"].text = str(bed_cfg.get("filling_angle_deg", 120.0))
+            else:
+                self.bed_geometry_mode.text = "填充率"
+                self._fields["axial_filling_fraction"].text = str(bed_cfg.get("filling_fraction", 0.25))
+            if bed_cfg.get("gas_bed_area_per_length_m") is not None:
+                self.bed_override_gas.active = True
+                self._fields["axial_area_gas_bed"].text = str(bed_cfg["gas_bed_area_per_length_m"])
+            if bed_cfg.get("wall_bed_contact_per_length_m") is not None:
+                self.bed_override_wall.active = True
+                self._fields["axial_contact_wall_bed"].text = str(bed_cfg["wall_bed_contact_per_length_m"])
             p = cfg["params"]
             defaults = {
                 "N_total": 100, "T_gas": 1523.15, "T_env": 298.15,
@@ -1215,8 +1229,20 @@ class InputScreen(Screen):
                     "contact_resistance_m2_k_w": layer.Rc,
                     "thermal_conductivity": tc,
                 })
+            bed_cfg = {"enabled": bool(self.bed_geometry_enabled.active)}
+            if bed_cfg["enabled"]:
+                bed_cfg["input_mode"] = "filling_fraction" if self.bed_geometry_mode.text == "填充率" else "filling_angle"
+                if bed_cfg["input_mode"] == "filling_fraction":
+                    bed_cfg["filling_fraction"] = float(self._fields["axial_filling_fraction"].text)
+                else:
+                    bed_cfg["filling_angle_deg"] = float(self._fields["axial_filling_angle_deg"].text)
+                if self.bed_override_gas.active:
+                    bed_cfg["gas_bed_area_per_length_m"] = float(self._fields["axial_area_gas_bed"].text)
+                if self.bed_override_wall.active:
+                    bed_cfg["wall_bed_contact_per_length_m"] = float(self._fields["axial_contact_wall_bed"].text)
             cfg = normalize_config({
                 "schema_version": 2, "params": vars(params), "layers": config_layers,
+                "bed_geometry": bed_cfg,
             })
             if fmt == "yaml":
                 try:
