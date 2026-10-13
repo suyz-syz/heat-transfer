@@ -88,6 +88,10 @@ class AxialSolveRequest(SolveRequest):
     bed_flow_direction: Literal["co-current", "counter-current"] = Field("counter-current")
     coupling_max_iterations: int = Field(100, ge=1)
     coupling_tolerance_k: float = Field(1.0e-5, gt=0)
+    wall_iteration_mode: Literal["semi_nonlinear", "linearized"] = Field(
+        "semi_nonlinear", description="轴向壁面求解：半非线性局部迭代或线性化对照模式")
+    local_wall_tolerance_k: float = Field(1.0e-5, gt=0)
+    local_wall_max_iterations: int = Field(48, ge=1, le=200)
 
 
 def _to_domain(req: SolveRequest):
@@ -185,6 +189,9 @@ def axial_solve(req: AxialSolveRequest):
             bed_flow_direction=req.bed_flow_direction,
             coupling_max_iterations=req.coupling_max_iterations,
             coupling_tolerance_k=req.coupling_tolerance_k,
+            wall_iteration_mode=req.wall_iteration_mode,
+            local_wall_tolerance_k=req.local_wall_tolerance_k,
+            local_wall_max_iterations=req.local_wall_max_iterations,
         )
         return solution.as_dict()
     except ValueError as exc:
