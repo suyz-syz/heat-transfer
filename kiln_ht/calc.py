@@ -746,7 +746,7 @@ class KilnAxialSolution:
                 "gas mixing are not included"
             ),
             "model_semantics": {
-                "wall_solutions": "radial steady-state baseline used for conductances",
+                "wall_solutions": "radial steady-state baseline/reference; coupled wall states are stored separately",
                 "states": "authoritative coupled gas-bed-wall axial states" if self.states else None,
                 "three_phase_wall_model": (\n                    "semi-nonlinear local wall solve" if self.wall_iteration_mode == "semi_nonlinear" else "linearized network approximation"\n                ) if self.states else None,
                 "wsgg_status": "provisional",
@@ -792,6 +792,10 @@ def solve_kiln(
     validate_params(params)
     if wall_iteration_mode not in ("semi_nonlinear", "linearized"):
         raise ValueError("wall_iteration_mode must be 'semi_nonlinear' or 'linearized'")
+    if not math.isfinite(local_wall_tolerance_k) or local_wall_tolerance_k <= 0.0:
+        raise ValueError("local_wall_tolerance_k must be finite and positive")
+    if not isinstance(local_wall_max_iterations, int) or isinstance(local_wall_max_iterations, bool) or local_wall_max_iterations < 1:
+        raise ValueError("local_wall_max_iterations must be a positive integer")
     if bed_inlet_temperature_k is not None:
         required_bed = {
             "bed_mass_flow_kg_s": bed_mass_flow_kg_s,
@@ -987,6 +991,7 @@ def _solve_local_wall_state(
     beam = 0.95 * params.L_char
     rin, rout = radii[0], radii[-1]
     local_evaluations = 0
+    local_root_iterations = 0
     max_k_delta = 0.0
 
     def q_out(Two):
@@ -999,7 +1004,7 @@ def _solve_local_wall_state(
         ) * 2.0 * math.pi * rout
 
     def solve_outer(Twi):
-        nonlocal local_evaluations, max_k_delta
+        nonlocal local_evaluations, local_root_iterations, max_k_delta
 
         def residual(Two):
             nonlocal local_evaluations, max_k_delta
@@ -1020,6 +1025,7 @@ def _solve_local_wall_state(
                 f"F2(lo)={fa:.6g} W/m, F2(hi)={fb:.6g} W/m, Twi={Twi:.6g} K"
             )
         for _ in range(max_iterations):
+            local_root_iterations += 1
             mid = 0.5 * (a + b)
             fm = residual(mid)
             if abs(fm) <= 1.0e-7 or b - a <= tolerance_k:
@@ -1074,6 +1080,7 @@ def _solve_local_wall_state(
     else:
         Twi = None
         for _ in range(max_iterations):
+            local_root_iterations += 1
             mid = 0.5 * (a + b)
             fm = inner_residual(mid)
             if abs(fm) <= 1.0e-7 or b - a <= tolerance_k:
@@ -1102,7 +1109,7 @@ def _solve_local_wall_state(
         )
     return (
         Twi, Two, q_gw, q_wb, q_out(Two), max_residual,
-        local_evaluations, max_k_delta,
+        local_evaluations, max_k_delta, local_root_iterations,
     )
 
 
@@ -1216,7 +1223,7 @@ def _solve_kiln_three_phase(
                 raise RuntimeError("could not form positive local wall conductances")
 
             if wall_iteration_mode == "semi_nonlinear":
-                twi, two, qgw, qwb_into_wall, qout, local_residual, local_evals, k_delta = (
+                twi, two, qgw, qwb_into_wall, qout, local_residual, local_evals, _k_delta, local_iters = (
                     _solve_local_wall_state(
                         cell=i, z_m=z_centres[i], T_gas_k=tgm, T_bed_k=tbm,
                         params=params, layers=layers, radii=base_radii,
@@ -1225,9 +1232,8 @@ def _solve_kiln_three_phase(
                         max_iterations=local_wall_max_iterations,
                     )
                 )
-                local_iteration_total += local_wall_max_iterations
+                local_iteration_total += local_iters
                 local_evaluation_total += local_evals
-                max_wall_delta = max(max_wall_delta, k_delta)
                 wall_residual_values.append(local_residual * dz)
             else:
                 twi = min(tgm, max(params.T_env, base.T_w1))
@@ -1259,6 +1265,12 @@ def _solve_kiln_three_phase(
                     )
                 wall_residual_values.append(residual_local * dz)
                 local_iteration_total += 1
+            if previous_wall_twi is not None:
+                max_wall_delta = max(
+                    max_wall_delta,
+                    abs(twi - previous_wall_twi[i]),
+                    abs(two - previous_wall_two[i]),
+                )
             qgb = ggb * (tgm - tbm)
             qbed_wall = -qwb_into_wall
             walls.append(base)
@@ -1298,8 +1310,7 @@ def _solve_kiln_three_phase(
             max(abs(a - b) for a, b in zip(next_gas_out, gas_out)),
             max(abs(a - b) for a, b in zip(next_bed_in, bed_in)),
             max(abs(a - b) for a, b in zip(next_bed_out, bed_out)),
-            max((abs(a - b) for a, b in zip(twi_values, previous_wall_twi or twi_values)), default=0.0),
-            max((abs(a - b) for a, b in zip(two_values, previous_wall_two or two_values)), default=0.0),
+            max_wall_delta,
         )
         if previous_delta is not None:
             if delta > previous_delta * 1.05:
