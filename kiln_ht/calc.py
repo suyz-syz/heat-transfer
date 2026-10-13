@@ -1006,18 +1006,26 @@ def _solve_local_wall_state(
             h_conv * (Two - params.T_env) + h_rad * (Two - T_sur)
         ) * 2.0 * math.pi * rout
 
-    def solve_outer(Twi):
-        nonlocal local_evaluations, local_root_iterations, max_k_delta
-
-        def residual(Two):
-            nonlocal local_evaluations, max_k_delta
+    def conductive_rate(Twi, Two):
+        nonlocal local_evaluations, max_k_delta
+        try:
             qcond, count, k_delta = _conductive_wall_rate(
                 Twi, Two, layers, radii, tolerance_k=min(tolerance_k, 1.0e-5)
             )
-            local_evaluations += count
-            max_k_delta = max(max_k_delta, k_delta)
-            return qcond - q_out(Two)
+        except Exception as exc:
+            raise RuntimeError(
+                f"local conductivity solve failed at cell {cell} z={z_m:.6g} m, "
+                f"Twi={Twi:.6g} K, Two={Two:.6g} K: {exc}"
+            ) from exc
+        local_evaluations += 1 + count
+        max_k_delta = max(max_k_delta, k_delta)
+        return qcond
 
+    def solve_outer(Twi):
+        nonlocal local_root_iterations
+
+        def residual(Two):
+            return conductive_rate(Twi, Two) - q_out(Two)
         a, b = lo_t, hi_t
         fa, fb = residual(a), residual(b)
         if abs(fa) <= 1.0e-7 or abs(fb) <= 1.0e-7:
@@ -1046,11 +1054,7 @@ def _solve_local_wall_state(
     def inner_residual(Twi, return_terms=False):
         nonlocal local_evaluations, max_k_delta
         Two, outer_residual = solve_outer(Twi)
-        qcond, count, k_delta = _conductive_wall_rate(
-            Twi, Two, layers, radii, tolerance_k=min(tolerance_k, 1.0e-5)
-        )
-        local_evaluations += count
-        max_k_delta = max(max_k_delta, k_delta)
+        qcond = conductive_rate(Twi, Two)
         h_conv = inner_convection_h(
             params.v_gas, params.L_char, params.L_kiln,
             0.5 * (T_gas_k + Twi), P_pa=params.P_total * 1.0e5,
@@ -1320,7 +1324,7 @@ def _solve_kiln_three_phase(
                 relax = max(0.05, relax * 0.5)
             elif delta < previous_delta * 0.7:
                 relax = min(0.7, relax * 1.15)
-            if delta >= previous_delta * (1.0 - 1e-4):
+            if delta > coupling_tolerance_k and delta >= previous_delta * (1.0 - 1e-4):
                 stagnation_count += 1
             else:
                 stagnation_count = 0
