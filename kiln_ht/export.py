@@ -11,6 +11,7 @@ Android 上优先用 plyer.share 分享（可选择保存 / 发送到其他应�
 失败或非 Android 平台则直接写本地文件。
 """
 
+import json
 import os
 from typing import List, Optional, Tuple
 
@@ -37,8 +38,7 @@ def build_report(
         lines.append(f"  states          : {semantics.get('states') or 'n/a'}")
         lines.append(f"  wall_solutions  : {semantics.get('wall_solutions', 'n/a')}")
         lines.append(f"  三相壁模型      : {semantics.get('three_phase_wall_model') or 'n/a'}")
-        lines.append("  轴向诊断        : " + __import__("json").dumps(
-            axial_data.get("diagnostics", {}), ensure_ascii=False, sort_keys=True))
+        lines.append("  轴向诊断        : " + json.dumps(axial_data.get("diagnostics", {}), ensure_ascii=False, sort_keys=True))
 
     lines.append("")
     lines.append("【工况参数】")
