@@ -83,7 +83,7 @@ class TestUIBuild:
         assert layers[0].name == "Steel shell 1"
 
     def test_layer_rows_have_kt_fields(self, app):
-        """每层模块应包含 材料 Spinner / a,b,c 输入 / 温度相关勾选 / 接触热阻输入。"""
+        """每层模块应包含 材料 Spinner / a,b,c 输入 / 导热模式选择 / 接触热阻输入。"""
         _, root = app
         ins = root.input_screen
         # 每行 10 个元素：名称/厚度/材料/模式/a/b/c/Rc/保存/插值表
@@ -96,7 +96,6 @@ class TestUIBuild:
         assert "硅酸铝纤维" not in mat.values, "不应内置任何材料"
         assert a_in.text == "1.0"
         assert rc.text == "0.0"
-        assert isinstance(temp_enabled, CheckBox)
         assert mode_spinner.text == "常数"
         assert b.disabled is True
         assert c.disabled is True
@@ -128,7 +127,7 @@ class TestUIBuild:
         """自定义层使用输入的 λ 常数 k（a）。"""
         _, root = app
         ins = root.input_screen
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         mat.text = "自定义"      # 重置为自定义（fixture 为 module-scoped，可能被前一测试改过）
         mode_spinner.text = "常数"  # 常数模式忽略 b/c
         a_in.text = "0.6"
@@ -139,17 +138,17 @@ class TestUIBuild:
         """默认温度相关未勾选，b/c 输入不可用。"""
         _, root = app
         ins = root.input_screen
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         mode_spinner.text = "常数"  # 重置（module-scoped fixture 共享状态）
         assert mode_spinner.text == "常数"
         assert b.disabled is True
         assert c.disabled is True
 
     def test_temp_enabled_uses_bc(self, app):
-        """勾选温度相关后，b/c 参与 k_coef。"""
+        """切换到多项式模式后，b/c 参与 k_coef。"""
         _, root = app
         ins = root.input_screen
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         mat.text = "自定义"
         mode_spinner.text = "多项式"
         a_in.text = "1.2"
@@ -162,9 +161,9 @@ class TestUIBuild:
         """b/c 输入框支持科学计数法（如 1.2e-7）。"""
         _, root = app
         ins = root.input_screen
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         mat.text = "自定义"
-        temp_enabled.active = True
+        mode_spinner.text = "多项式"
         a_in.text = "0.08"
         b.text = "1.2e-4"
         c.text = "1.5e-8"
@@ -172,10 +171,10 @@ class TestUIBuild:
         assert layers[0].k_coef == (0.08, 1.2e-4, 1.5e-8)
 
     def test_temp_enabled_off_ignores_bc(self, app):
-        """未勾选温度相关时，即使 b/c 有值也忽略。"""
+        """常数模式下，即使 b/c 有值也忽略。"""
         _, root = app
         ins = root.input_screen
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         mat.text = "自定义"
         mode_spinner.text = "常数"
         a_in.text = "1.5"
@@ -193,12 +192,12 @@ class TestUIBuild:
         _, root = app
         ins = root.input_screen
         ins._rebuild_layers()
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         name.text = "我的砖"
         a_in.text = "2.5"
         b.text = "1e-4"
         c.text = "0"
-        temp_enabled.active = True
+        mode_spinner.text = "多项式"
         ins._save_material(0)
         store = load_user_materials(path)
         assert "我的砖" in store
