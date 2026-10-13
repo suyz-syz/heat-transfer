@@ -117,6 +117,11 @@ def build_manifest(line_path: Path = DEFAULT_LINES, tips_path: Path = DEFAULT_TI
                                   max(float(row["temperature_K"]) for row in tips)],
             },
         },
+        "calibration_trial": {
+            "band_cm-1": [2000.0, 2400.0],
+            "line_center_filter_cm-1": [1975.0, 2425.0],
+            "interpretation": "narrow-band pipeline trial; not total-spectrum coverage",
+        },
         "isotopologue_coverage": isotope_inventory,
         "conversion_rules": {
             "line_source": "HITEMP/HITRAN 160-character fixed-width .par record",
