@@ -33,7 +33,7 @@ def emissivity(T: float, pCO2: float, pH2O: float, L: float) -> float:
 
 def evaluate(T_gas: float, T_wall: float, pCO2: float, pH2O: float, L: float, eps_wall: float = 0.85) -> LecknerResult:
     eg = emissivity(T_gas, pCO2, pH2O, L)
-    tau = -math.log(max(1.0e-12, 1.0 - eg))
+    tau = 0.0 if eg <= 0.0 else -math.log(1.0 - eg)
     kappa = tau / L
     # With no radiating species (hot air), eg is exactly zero. Avoid 1 / eg
     # even though q is only retained here for compatibility with the model path.
