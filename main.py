@@ -1360,7 +1360,7 @@ class ResultScreen(Screen):
 
     def set_result(self, layers, sol, x_mm, T_c, axial_data=None):
         """用最新计算结果刷新整个结果页。"""
-        self._last = (layers, sol, x_mm, T_c)
+        self._last = (layers, sol, x_mm, T_c, axial_data)
         display_wall_temperature_k, wall_temperature_source = _get_display_wall_temperature(
             sol,
             axial_data=axial_data,
@@ -1404,7 +1404,6 @@ class ResultScreen(Screen):
         self.curve_foot.text = f"距内壁 0 mm  →  {x_mm[-1]:.0f} mm"
 
         if axial_data:
-            semantics = axial_data.get("model_semantics", {})
             self.model_notice.text = (
                 "三相壁温来自 states；wall_solutions 是线性化导纳用径向基线。"
                 " WSGG 为 provisional（暂定、未标定）。\n"
@@ -1437,9 +1436,9 @@ class ResultScreen(Screen):
         if self._last is None:
             self.export_status.text = "⚠ 先计算再导出"
             return
-        layers, sol, x_mm, T_c = self._last
+        layers, sol, x_mm, T_c, axial_data = self._last
         params = self._get_params()
-        ok, msg = export_result(layers, params, sol, x_mm, T_c)
+        ok, msg = export_result(layers, params, sol, x_mm, T_c, axial_data=axial_data)
         self.export_status.text = f"✓ {msg}" if ok else f"⚠ {msg}"
 
     def _get_params(self):
