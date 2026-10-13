@@ -2,10 +2,10 @@ import math
 
 import pytest
 
-from kiln_ht.models.radiation.hitemp_lbl import (
+from scripts.hitemp_calibration.hitemp_lbl import (
     SpectralLine, absorption_spectrum, gas_emissivity_from_spectrum, line_strength,
 )
-from kiln_ht.models.radiation.wsgg_fit import fit_wsgg, wsgg_emissivity
+from scripts.hitemp_calibration.wsgg_fit import fit_wsgg, wsgg_emissivity
 
 
 def test_line_strength_temperature_scaling_is_finite():
