@@ -6,7 +6,7 @@ official HITEMP fixed-width .par files and a normalized TIPS CSV obtained from
 HITRANonline. The normalized outputs are intended for the Phase 1B LBL runner.
 
 TIPS CSV schema: molecule,isotope,temperature_K,Q
-Molecule names: CO2 or H2O. Isotope IDs are the numeric HITRAN isotopologue IDs.
+The molecule column is the numeric HITRAN molecule ID (1=H2O, 2=CO2); isotope is the numeric local isotopologue ID.
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ from typing import Iterable
 
 MOLECULE_IDS = {"1": "H2O", "2": "CO2"}
 LINE_FIELDS = [
-    "molecule", "nu", "strength_ref", "lower_energy", "air_gamma",
-    "self_gamma", "temp_exponent", "partition_ref", "partition_exponent", "isotope",
+    "molec_id", "local_iso_id", "nu", "sw", "a", "gamma_air",
+    "gamma_self", "elower", "n_air", "delta_air",
 ]
 
 
@@ -38,31 +38,30 @@ def parse_hitemp_line(raw: str, source: Path) -> dict | None:
     if len(raw.rstrip("\r\n")) < 67:
         return None
     molecule_id = raw[0:2].strip()
-    molecule = MOLECULE_IDS.get(molecule_id)
-    if molecule is None:
+    if molecule_id not in MOLECULE_IDS:
         return None
     try:
         isotope = raw[2:3].strip()
         nu = float(raw[3:15])
         strength = float(raw[15:25])
+        einstein_a = float(raw[25:35])
         gamma_air = float(raw[35:40])
         gamma_self = float(raw[40:45])
         lower_energy = float(raw[45:55])
         temp_exponent = float(raw[55:59])
+        pressure_shift = float(raw[59:67])
     except ValueError as exc:
         raise ValueError(f"invalid fixed-width record in {source}: {raw[:67]!r}") from exc
-    values = (nu, strength, gamma_air, gamma_self, lower_energy, temp_exponent)
+    values = (nu, strength, einstein_a, gamma_air, gamma_self, lower_energy, temp_exponent, pressure_shift)
     if not all(math.isfinite(v) for v in values):
         raise ValueError(f"non-finite fixed-width record in {source}: {raw[:67]!r}")
     if nu <= 0 or strength < 0 or gamma_air < 0 or gamma_self < 0:
         raise ValueError(f"invalid spectroscopic value in {source}: {raw[:67]!r}")
     return {
-        "molecule": molecule, "nu": nu, "strength_ref": strength,
-        "lower_energy": lower_energy, "air_gamma": gamma_air,
-        "self_gamma": gamma_self, "temp_exponent": temp_exponent,
-        # These two fields are required by the current loader but ignored when
-        # the matching tabulated TIPS values are passed to line_strength().
-        "partition_ref": 1.0, "partition_exponent": 0.0, "isotope": isotope,
+        "molec_id": int(molecule_id), "local_iso_id": int(isotope), "nu": nu,
+        "sw": strength, "a": einstein_a, "gamma_air": gamma_air,
+        "gamma_self": gamma_self, "elower": lower_energy,
+        "n_air": temp_exponent, "delta_air": pressure_shift,
     }
 
 
@@ -83,7 +82,7 @@ def extract_lines(
                     row["source_file"] = source.name
                     row["source_line"] = line_number
                     selected.append(row)
-    selected.sort(key=lambda row: (row["molecule"], int(row["isotope"] or 0), row["nu"]))
+    selected.sort(key=lambda row: (row["molec_id"], row["local_iso_id"], row["nu"]))
     if not selected:
         raise ValueError("no CO2/H2O transitions found in the requested band and wing margin")
     return selected
@@ -97,7 +96,9 @@ def load_and_validate_tips(path: Path, isotopologues: set[tuple[str, str]]) -> l
         if not required.issubset(reader.fieldnames or []):
             raise ValueError(f"TIPS CSV must contain columns {sorted(required)}")
         for row in reader:
-            key = (row["molecule"].strip().upper(), row["isotope"].strip())
+            key = (row["molecule"].strip(), row["isotope"].strip())
+            if not key[0].isdigit() or not key[1].isdigit():
+                raise ValueError("TIPS molecule/isotope columns must contain numeric HITRAN IDs")
             try:
                 temperature, q = float(row["temperature_K"]), float(row["Q"])
             except ValueError as exc:
@@ -119,7 +120,7 @@ def load_and_validate_tips(path: Path, isotopologues: set[tuple[str, str]]) -> l
         for temperature, q in points:
             if 296.0 <= temperature <= 2400.0:
                 normalized.append({
-                    "molecule": key[0], "isotope": key[1],
+                    "molecule": int(key[0]), "isotope": int(key[1]),
                     "temperature_K": temperature, "Q": q,
                 })
     return normalized
@@ -130,7 +131,7 @@ def main() -> None:
     parser.add_argument("--line-file", action="append", required=True, type=Path,
                         help="official HITEMP .par file; repeat for CO2/H2O and isotopologues")
     parser.add_argument("--tips-csv", required=True, type=Path,
-                        help="normalized official TIPS CSV: molecule,isotope,temperature_K,Q")
+                        help="official TIPS CSV: numeric molecule,isotope,temperature_K,Q")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--release", required=True,
                         help="exact HITEMP release/version for provenance, e.g. CO2-2024 + H2O-2010")
@@ -147,7 +148,7 @@ def main() -> None:
         parser.error("all source line-list and TIPS files must exist")
 
     lines = extract_lines(args.line_file, args.wn_min, args.wn_max, args.wing_margin)
-    isotopologues = {(row["molecule"], row["isotope"]) for row in lines}
+    isotopologues = {(str(row["molec_id"]), str(row["local_iso_id"])) for row in lines}
     tips = load_and_validate_tips(args.tips_csv, isotopologues)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     line_output = args.output_dir / "hitemp_co2_h2o_1000_4000.csv"
@@ -173,8 +174,8 @@ def main() -> None:
         "wing_margin_cm-1": args.wing_margin,
         "line_count": len(lines),
         "isotopologues": [
-            {"molecule": molecule, "isotope": isotope}
-            for molecule, isotope in sorted(isotopologues)
+            {"molec_id": int(molecule), "local_iso_id": int(isotope)}
+            for molecule, isotope in sorted(isotopologues, key=lambda item: (int(item[0]), int(item[1])))
         ],
         "line_files": [{"path": str(p), "sha256": sha256_file(p)} for p in args.line_file],
         "tips_source": {"path": str(args.tips_csv), "sha256": sha256_file(args.tips_csv)},
