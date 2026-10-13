@@ -673,7 +673,7 @@ class KilnAxialSolution:
 
     z_faces_m 长度 Z+1；各温度/WallSolution/heat_transfer 数组长度 Z。
     当前版本忽略固体轴向导热、气体压降和轴向混合；气体按 plug-flow
-    逐段降温。每段径向换热仍由兼容的 solve_wall() 计算。
+    逐段降温。wall_solutions 保存径向基线，states 保存所选轴向耦合壁温。
     """
     z_faces_m: List[float]
     gas_temperature_in_k: List[float]
@@ -790,9 +790,9 @@ def solve_kiln(
 ) -> KilnAxialSolution:
     """按轴向控制体积耦合烟气降温与局部径向壁体传热。
 
-    保留 solve_wall(layers, params) 原签名和行为。每个控制体使用局部
-    气体入口温度调用 solve_wall；气体焓降由 Q'_wall * dz 估算。
-    这是 Phase 2 的首个可测骨架，不包含轴向固体导热或辐射沿程再分配。
+    三相模式默认对每个轴向单元进行半非线性局部壁面求解，并支持
+    wall_iteration_mode="linearized" 作为敏感性对照。气、料状态按轴向分块
+    松弛更新；不包含轴向固体导热、压降或辐射沿程再分配。
 
     Args:
         n_cells: 轴向控制体积数 Z。
@@ -1166,9 +1166,10 @@ def _solve_kiln_three_phase(
 
     h values are explicit user inputs for gas-bed and wall-bed paths. Areas are
     effective exchange area per axial length (m²/m = m), so each conductance
-    has units W/(m K). Wall conductances are linearized from solve_wall() at
-    the local gas mean temperature. This is a bounded engineering prototype,
-    not a universal kiln correlation or a simultaneous nonlinear radiation solve.
+    has units W/(m K). The default semi_nonlinear mode solves local wall balances
+    with bounded nested roots, reevaluates k(T) and P1a radiation, and retains
+    solve_wall() as a radial baseline/reference. The linearized network remains
+    available explicitly for comparison.
     """
     if not isinstance(n_cells, int) or isinstance(n_cells, bool) or n_cells < 1:
         raise ValueError("n_cells must be a positive integer")
