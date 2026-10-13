@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm -d --name kiln-p0-smoke -p 8000:8000 -p 8501:8501 kiln-p0-smoke:local
+          docker run -d --name kiln-p0-smoke -p 8000:8000 -p 8501:8501 kiln-p0-smoke:local
           cleanup() { docker rm -f kiln-p0-smoke >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           for attempt in $(seq 1 60); do
