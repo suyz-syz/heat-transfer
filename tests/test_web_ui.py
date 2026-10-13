@@ -54,6 +54,11 @@ def test_calculation_produces_metrics(app):
         assert m.value
 
 
+def test_layer_operation_buttons_have_visible_labels(app):
+    labels = {button.label for button in app.button}
+    assert {"↑ 上移", "↓ 下移", "删除"} <= labels
+
+
 def test_calculation_matches_core(app):
     """Web GUI 计算结果应与直接调用核心一致（使用 GUI 默认的 4 层：50mm / k=1.0）。"""
     from kiln_ht import KilnParams, Layer, solve_wall
@@ -222,6 +227,30 @@ def test_api_solve_with_polynomial_conductivity(api_client):
     assert result["T_wN"] != pytest.approx(constant.T_wN, abs=1e-4)
 
 
+def test_api_gas_modes_normalize_composition(api_client):
+    from kiln_ht import KilnParams, gas_fractions_for_mode, solve_wall, Layer
+
+    layer_payload = [{"name": "lining", "thickness": 0.10, "k": 1.8}]
+    for gas_mode, co2, h2o in (
+        ("combustion", 0.18, 0.10),
+        ("hot_air", 0.20, 0.08),
+    ):
+        response = api_client.post("/solve", json={
+            "layers": layer_payload,
+            "params": {"gas_mode": gas_mode, "CO2": co2, "H2O": h2o},
+        })
+        assert response.status_code == 200, response.text
+        fractions = gas_fractions_for_mode(co2, h2o, mode=gas_mode)
+        expected = solve_wall(
+            [Layer(name="lining", thickness=0.10, k=1.8)],
+            KilnParams(**fractions),
+        )
+        assert response.json()["Qprime"] == pytest.approx(expected.Qprime, rel=1e-9)
+        assert response.json()["T_wN"] == pytest.approx(expected.T_wN, abs=1e-6)
+        if gas_mode == "hot_air":
+            assert response.json()["eg"] == 0.0
+
+
 def test_api_solve_with_k_compat(api_client):
     """/solve 端点接受旧 k 字段（兼容）。"""
     resp = api_client.post("/solve", json={
@@ -302,6 +331,43 @@ def test_web_ui_rc_input(app):
     rc_inputs = [n for n in app.number_input if (n.key or "").endswith("_rc")]
     assert len(rc_inputs) == 4
     assert all(n.value == 0.0 for n in rc_inputs)
+
+
+def test_web_ui_combustion_composition_is_completed(app):
+    from kiln_ht import KilnParams, Layer, gas_fractions_for_mode, solve_wall
+
+    next(item for item in app.number_input if item.key == "CO2").set_value(18.0).run()
+    next(item for item in app.number_input if item.key == "H2O").set_value(10.0).run()
+    _click_calc(app)
+    assert not app.exception
+    assert not app.error, [error.value for error in app.error]
+
+    fractions = gas_fractions_for_mode(0.18, 0.10, mode="combustion")
+    layers = [Layer(name=f"层{i+1}", thickness=0.05, k=1.0) for i in range(4)]
+    expected = solve_wall(layers, KilnParams(**fractions))
+    displayed = float(
+        next(metric.value for metric in app.metric
+             if metric.label == "外壁面温度").split()[0]
+    )
+    assert displayed == pytest.approx(expected.T_wN - 273.15, abs=0.5)
+
+
+def test_web_ui_hot_air_mode_uses_clean_air(app):
+    from kiln_ht import KilnParams, Layer, gas_fractions_for_mode, solve_wall
+
+    next(item for item in app.checkbox if item.key == "hot_air_mode").set_value(True).run()
+    _click_calc(app)
+    assert not app.exception
+    assert not app.error, [error.value for error in app.error]
+
+    fractions = gas_fractions_for_mode(0.20, 0.08, mode="hot_air")
+    layers = [Layer(name=f"层{i+1}", thickness=0.05, k=1.0) for i in range(4)]
+    expected = solve_wall(layers, KilnParams(**fractions))
+    displayed = float(
+        next(metric.value for metric in app.metric
+             if metric.label == "外壁面温度").split()[0]
+    )
+    assert displayed == pytest.approx(expected.T_wN - 273.15, abs=0.5)
 
 
 def test_web_ui_custom_k_coef_fills(app):
