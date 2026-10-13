@@ -1264,9 +1264,15 @@ class ResultScreen(Screen):
         self.export_status = MdLabel(text="", color=TEXT_DIM, font_size=sp(12),
                                      size_hint_y=None, height=dp(20),
                                      halign="center")
+        self.model_notice = MdLabel(
+            text="三相壁温采用线性化网络近似；WSGG 为 provisional（暂定、未标定）。\n"
+                 "结果供工程估算，不构成工业定型或热应力绝对保证值。",
+            color=ACCENT, font_size=sp(10), size_hint_y=None, height=dp(36),
+            halign="center")
         export_bar.add_widget(self.export_btn)
         root.add_widget(export_bar)
         root.add_widget(self.export_status)
+        root.add_widget(self.model_notice)
 
         # ---- 中部：各层界面温度 + 详细结果（固定高度，内部滚动） ----
         tables = ScrollView(bar_width=dp(4), bar_color=GRID,
@@ -1377,6 +1383,8 @@ class ResultScreen(Screen):
         self.detail_body.clear_widgets()
         stats = [
             ("单位长度热功率 Q'", f"{sol.Qprime:.1f} W/m"),
+            ("径向模型最大温度改变量", f"{sol.max_temperature_change_k:.6g} K"),
+            ("径向模型最大相对能量残差", f"{sol.max_energy_residual_relative:.6g}"),
             ("内壁热流密度 q_in", f"{sol.q_in:.1f} W/m²"),
             ("外壁热流密度 q_out", f"{sol.q_out:.1f} W/m²"),
             ("内壁总换热系数 h_in", f"{sol.h_in:.1f} W/m²·K"),
@@ -1396,6 +1404,12 @@ class ResultScreen(Screen):
         self.curve_foot.text = f"距内壁 0 mm  →  {x_mm[-1]:.0f} mm"
 
         if axial_data:
+            semantics = axial_data.get("model_semantics", {})
+            self.model_notice.text = (
+                "三相壁温来自 states；wall_solutions 是线性化导纳用径向基线。"
+                " WSGG 为 provisional（暂定、未标定）。\n"
+                "轴向诊断：" + json.dumps(axial_data.get("diagnostics", {}), ensure_ascii=False)
+            )
             z = axial_data["z_m"]
             series = [
                 ("烟气 °C", z, [v - 273.15 for v in axial_data["gas_temperature_k"]], PRIMARY),
