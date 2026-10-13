@@ -30,9 +30,53 @@ def _load_wall_temperature_helper():
 get_display_wall_temperature = _load_wall_temperature_helper()
 
 
+def _load_conductivity_reader():
+    node = next(
+        item for item in TREE.body
+        if isinstance(item, ast.FunctionDef)
+        and item.name == "_read_conductivity_coefficients"
+    )
+    module = ast.Module(body=[node], type_ignores=[])
+    namespace = {}
+    exec(compile(module, str(MAIN_PATH), "exec"), namespace)
+    return namespace[node.name]
+
+
+read_conductivity_coefficients = _load_conductivity_reader()
+
+
 class DisplayWallTemperatureTests(unittest.TestCase):
     def setUp(self):
         self.sol = SimpleNamespace(T_wN=1200.0)
+
+    def test_conductivity_reader_reads_all_live_textinput_values(self):
+        def unit_input(text):
+            return SimpleNamespace(
+                textinput=SimpleNamespace(text=text)
+            )
+
+        coefficients = read_conductivity_coefficients(
+            unit_input("1.8"),
+            unit_input("0.0000016"),
+            unit_input("-0.00000017"),
+        )
+
+        self.assertEqual(coefficients, (1.8, 0.0000016, -0.00000017))
+
+    def test_collect_params_passes_coefficients_to_polynomial_model(self):
+        input_screen = next(
+            item for item in TREE.body
+            if isinstance(item, ast.ClassDef) and item.name == "InputScreen"
+        )
+        collect_params = next(
+            item for item in input_screen.body
+            if isinstance(item, ast.FunctionDef) and item.name == "collect_params"
+        )
+        source = ast.unparse(collect_params)
+
+        self.assertIn("_read_conductivity_coefficients(a_in, b, c)", source)
+        self.assertIn("ConductivityModel.polynomial(k_coef, \"degC\")", source)
+        self.assertIn("k_coef=k_coef", source)
 
     def test_uses_mean_axial_outer_wall_temperature_for_three_phase(self):
         axial_data = {
