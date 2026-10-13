@@ -2,7 +2,7 @@
   "report_type": "HITEMP/TIPS-derived band-limited WSGG calibration",
   "status": "requires independent physical validation before engineering release",
   "provenance": {
-    "release": "SHA-256-verified HITEMP/TIPS source data",
+    "release": "HITEMP/TIPS release identifiers are not recorded; committed file SHA-256 values are known, but upstream authenticity is not independently verified",
     "line_csv": "data/hitemp_co2_h2o_1000_4000_sample.csv",
     "line_csv_sha256": "396693efc16958d1c011c74997a64c0a7a0589205de016e7d81baeec2fbaa5b7",
     "line_count_full_file": 40676,
@@ -12,12 +12,12 @@
   },
   "model": {
     "band_cm-1": [
-      2000.0,
-      2400.0
+      2000,
+      2400
     ],
     "grid_step_cm-1": 0.01,
     "grid_point_count": 40001,
-    "line_wing_cutoff_cm-1": 25.0,
+    "line_wing_cutoff_cm-1": 25,
     "line_profile": "pseudo-Voigt approximation",
     "pressure_shift": "nu0=nu+delta_air*P_atm*(1-x_molecule); self-shift unavailable",
     "temperature_broadening": "gamma=P*(Tref/T)^n_air*(gamma_air*(1-x)+gamma_self*x)",
@@ -26,17 +26,17 @@
   },
   "training_design": {
     "temperatures_K": [
-      600.0,
-      1000.0,
-      1200.0,
-      1400.0,
-      1800.0,
-      2400.0
+      600,
+      1000,
+      1200,
+      1400,
+      1800,
+      2400
     ],
     "pressures_atm": [
       0.3,
-      1.0,
-      3.0
+      1,
+      3
     ],
     "composition_mole_fraction": {
       "CO2": 0.12,
@@ -54,22 +54,22 @@
       1.4240179342179007,
       2.1643806405415296,
       3.289666123287841,
-      5.0
+      5
     ]
   },
   "holdout_design": {
     "temperatures_K": [
-      600.0,
-      1000.0,
-      1200.0,
-      1400.0,
-      1800.0,
-      2400.0
+      600,
+      1000,
+      1200,
+      1400,
+      1800,
+      2400
     ],
     "pressures_atm": [
       0.3,
-      1.0,
-      3.0
+      1,
+      3
     ],
     "compositions": [
       {
@@ -93,13 +93,13 @@
       1.4240179342179007,
       2.1643806405415296,
       3.289666123287841,
-      5.0
+      5
     ],
     "holdout_type": "composition holdout within calibrated T/P domain"
   },
   "grid_convergence": {
-    "temperature_K": 1200.0,
-    "pressure_atm": 1.0,
+    "temperature_K": 1200,
+    "pressure_atm": 1,
     "standard_step_cm-1": 0.01,
     "reference_step_cm-1": 0.005,
     "max_relative_emissivity_difference_percent": 0.25133769285147195,
@@ -171,7 +171,7 @@
         "relative_difference_percent": 0.052272861951332635
       },
       {
-        "path_m": 5.0,
+        "path_m": 5,
         "eps_step_0p01": 0.5398240161514409,
         "eps_step_0p005": 0.5395185566940144,
         "relative_difference_percent": 0.05661704377664048
@@ -220,8 +220,8 @@
       "bernstein_weights": {
         "degree": 3,
         "temperature_interval_K": [
-          600.0,
-          2400.0
+          600,
+          2400
         ],
         "coefficients_by_gas": [
           [
@@ -326,8 +326,8 @@
       "bernstein_weights": {
         "degree": 3,
         "temperature_interval_K": [
-          600.0,
-          2400.0
+          600,
+          2400
         ],
         "coefficients_by_gas": [
           [
@@ -439,14 +439,14 @@
           0.09805954351999192,
           0.18847024371933926,
           0.2187661315136977,
-          3.0395482831717188e-06
+          0.0000030395482831717188
         ]
       },
       "bernstein_weights": {
         "degree": 3,
         "temperature_interval_K": [
-          600.0,
-          2400.0
+          600,
+          2400
         ],
         "coefficients_by_gas": [
           [
@@ -517,10 +517,10 @@
     }
   },
   "limitations": [
-    "The supplied line list is a sample; completeness against a specific licensed HITEMP release was not independently authenticated.",
     "The LBL reference uses pseudo-Voigt profiles and a +/-25 cm-1 line-wing cutoff, not a validated Hartmann-Tran model.",
     "The 2000-2400 cm-1 band metrics are not total-spectrum emissivity or net wall-flux validation.",
     "Holdout varies composition but remains inside the calibrated temperature and pressure domain.",
-    "Independent EM2C-SNB/experimental validation is still required before production use."
+    "Independent EM2C-SNB/experimental validation is still required before production use.",
+    "The exact upstream HITEMP and TIPS release identifiers and source checksums are not recorded; committed-file hashes establish identity only, not source authenticity or completeness."
   ]
 }
