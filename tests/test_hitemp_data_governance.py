@@ -13,6 +13,8 @@ from scripts.audit_hitemp_manifest import (
     build_manifest,
 )
 from scripts.hitemp_calibration.hitemp_lbl import load_hitemp_csv
+from scripts.hitemp_calibration.hitemp_wsgg_calibration import load_inputs
+from scripts.calibrate_hitemp_wsgg import load_tips
 from scripts.prepare_hitemp_benchmark import LINE_FIELDS, load_and_validate_tips, parse_hitemp_line
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,3 +75,29 @@ def test_calibration_implementation_is_outside_runtime_package():
     assert not (runtime / "hitemp_lbl.py").exists()
     assert not (runtime / "wsgg_fit.py").exists()
     assert not (runtime / "hitemp_wsgg_calibration.py").exists()
+
+def test_both_calibration_entrypoints_accept_same_canonical_csv_contract(tmp_path):
+    line_path = tmp_path / "lines.csv"
+    with line_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=LINE_COLUMNS)
+        writer.writeheader()
+        writer.writerow({
+            "molec_id": 2, "local_iso_id": 1, "nu": 2100.0, "sw": 1e-22,
+            "a": 1.0, "gamma_air": 0.07, "gamma_self": 0.3,
+            "elower": 50.0, "n_air": 0.7, "delta_air": -0.001,
+        })
+    tips_path = tmp_path / "tips.csv"
+    with tips_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=TIPS_COLUMNS)
+        writer.writeheader()
+        writer.writerows([
+            {"molecule": 2, "isotope": 1, "temperature_K": 296, "Q": 100},
+            {"molecule": 2, "isotope": 1, "temperature_K": 2400, "Q": 1000},
+        ])
+
+    global_lines, global_tips = load_inputs(line_path, tips_path)
+    slice_lines = load_hitemp_csv(line_path)
+    slice_tips = load_tips(tips_path)
+    assert len(global_lines) == len(slice_lines) == 1
+    assert set(global_tips) == {"2:1"}
+    assert set(slice_tips) == {"CO2:1"}
