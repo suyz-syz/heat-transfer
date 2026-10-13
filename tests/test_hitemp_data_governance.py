@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_committed_manifest_matches_current_data_and_hashes():
-    manifest = build_manifest(ROOT / DEFAULT_LINES, ROOT / DEFAULT_TIPS)
+    manifest = build_manifest()
     recorded = json.loads((ROOT / DEFAULT_MANIFEST).read_text(encoding="utf-8"))
     assert manifest == recorded
     assert tuple(LINE_FIELDS) == LINE_COLUMNS
