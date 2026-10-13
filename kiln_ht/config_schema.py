@@ -144,6 +144,32 @@ def normalize_config(raw: Mapping[str, Any]) -> Dict[str, Any]:
             raise ValueError(f"第 {i+1} 层导热系数必须为正")
         if tc["mode"] == "polynomial" and tc["temperature_unit"] not in ("degC", "K"):
             raise ValueError("多项式温度单位必须为 degC 或 K")
+    bed_geometry = data.get("bed_geometry")
+    if bed_geometry is not None:
+        if not isinstance(bed_geometry, Mapping):
+            raise ValueError("bed_geometry must be an object")
+        bed_geometry = dict(bed_geometry)
+        if bool(bed_geometry.get("enabled", False)):
+            mode = bed_geometry.get("input_mode", "filling_fraction")
+            if mode == "filling_fraction":
+                value = _finite_number(bed_geometry.get("filling_fraction"), "bed_geometry.filling_fraction")
+                if not 0.0 <= value <= 1.0:
+                    raise ValueError("bed_geometry.filling_fraction must be in [0, 1]")
+                bed_geometry["filling_fraction"] = value
+            elif mode == "filling_angle":
+                value = _finite_number(bed_geometry.get("filling_angle_deg"), "bed_geometry.filling_angle_deg")
+                if not 0.0 <= value <= 360.0:
+                    raise ValueError("bed_geometry.filling_angle_deg must be in [0, 360]")
+                bed_geometry["filling_angle_deg"] = value
+            else:
+                raise ValueError("bed_geometry.input_mode must be filling_fraction or filling_angle")
+            for key in ("gas_bed_area_per_length_m", "wall_bed_contact_per_length_m"):
+                if key in bed_geometry and bed_geometry[key] is not None:
+                    area = _finite_number(bed_geometry[key], "bed_geometry." + key)
+                    if area < 0.0:
+                        raise ValueError("bed_geometry." + key + " must be non-negative")
+                    bed_geometry[key] = area
+        data["bed_geometry"] = bed_geometry
     data["schema_version"] = SCHEMA_VERSION
     data["params"] = params
     data["layers"] = normalized_layers
