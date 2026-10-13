@@ -145,7 +145,7 @@ docker run --rm -p 8000:8000 -p 8501:8501 cement-kiln-heat-transfer
 | 端口 | 服务 | 说明 |
 |---|---|---|
 | `8501` | **Streamlit Web GUI** | 桌面/平板浏览器可视化界面（参数配置 + 衬层编辑 + 指标 Dashboard + 温度曲线） |
-| `8000` | FastAPI RESTful API | `POST /solve`、`POST /temperature-curve`、`GET /health` |
+| `8000` | FastAPI RESTful API | `POST /solve`、`POST /axial-solve`、`POST /temperature-curve`、`GET /health` |
 
 启动后访问：
 - Web GUI：`http://localhost:8501`
