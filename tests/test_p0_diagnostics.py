@@ -108,9 +108,8 @@ def test_three_phase_energy_residual_covers_all_cells_and_is_repeatable(directio
     assert first.as_dict()["diagnostics"]["max_energy_residual_w"] == pytest.approx(
         first.max_energy_residual_w
     )
-    assert [s.as_dict() for s in first.states] == pytest.approx(
-        [s.as_dict() for s in second.states], abs=1.0e-10
-    )
+    for state_a, state_b in zip(first.states, second.states):
+        assert state_a.as_dict() == pytest.approx(state_b.as_dict(), abs=1.0e-10)
 
 
 def test_three_phase_nonconvergence_is_an_explicit_failure():
@@ -149,3 +148,16 @@ def test_p1_sensitivity_matrix_declares_required_dimensions():
         "co-current",
         "counter-current",
     )
+
+
+def test_api_solve_response_has_radial_scope_and_stable_diagnostic_keys():
+    from server import LayerIn, SolveRequest, solve
+
+    response = solve(SolveRequest(layers=[
+        LayerIn(name="fiber", thickness=0.15, k=0.1),
+        LayerIn(name="steel", thickness=0.012, k=45.0),
+    ]))
+    assert response["model_semantics"]["result"] == "radial steady-state wall baseline"
+    assert response["model_semantics"]["wsgg_status"] == "provisional"
+    assert response["diagnostics"]["converged"] is True
+    json.dumps(response, allow_nan=False)
