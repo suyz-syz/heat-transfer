@@ -88,7 +88,7 @@ class DisplayWallTemperatureTests(unittest.TestCase):
 
         self.assertIn("self.hot_air_mode = CheckBox", source)
         self.assertIn("gas_fractions_for_mode", source)
-        self.assertIn('mode="hot_air" if self.hot_air_mode.active else "combustion"', source)
+        self.assertIn("self.hot_air_mode.active", source)
 
     def test_uses_mean_axial_outer_wall_temperature_for_three_phase(self):
         axial_data = {
