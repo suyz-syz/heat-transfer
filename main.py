@@ -1265,7 +1265,7 @@ class ResultScreen(Screen):
                                      size_hint_y=None, height=dp(20),
                                      halign="center")
         self.model_notice = MdLabel(
-            text="三相壁温采用线性化网络近似；WSGG 为 provisional（暂定、未标定）。\n"
+            text="三相壁温默认采用半非线性局部迭代，保留线性化对照模式；WSGG 为 provisional（暂定、未标定）。\n"
                  "结果供工程估算，不构成工业定型或热应力绝对保证值。",
             color=ACCENT, font_size=sp(10), size_hint_y=None, height=dp(36),
             halign="center")
