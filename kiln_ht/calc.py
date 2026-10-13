@@ -1134,7 +1134,7 @@ def _solve_local_wall_state(
             f"scale={energy_scale:.6g} W/m"
         )
     return (
-        Twi, Two, q_gw, q_wb, q_out(Two), max_residual,
+        Twi, Two, q_gw, -q_wb, q_out(Two), max_residual,
         local_evaluations, max_k_delta, local_root_iterations,
         (0.5 if min_local_relaxation == 1.0 else min_local_relaxation),
     )
