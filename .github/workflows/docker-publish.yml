@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   push:
-    branches: [main, master, feat/phase-1c-gui-docker-apk]
+    branches: [main, master, feat/phase-1c-gui-docker-apk, feat/phase-1c-p0-semantics-diagnostics]
     tags: ['v*']
   workflow_dispatch:
 
@@ -55,3 +55,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Docker API and Web UI smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY}:sha-${GITHUB_SHA}"
+          docker pull --platform linux/amd64 "$image"
+          docker run --rm -d --name kiln-p0-smoke -p 8000:8000 -p 8501:8501 "$image"
+          cleanup() { docker rm -f kiln-p0-smoke >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null \\
+              && curl --fail --silent http://127.0.0.1:8501/ >/dev/null; then
+              echo "API health and Streamlit Web UI are reachable."
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs kiln-p0-smoke
+          echo "Container API/Web smoke test timed out." >&2
+          exit 1
