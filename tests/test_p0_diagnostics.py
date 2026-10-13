@@ -55,6 +55,7 @@ def test_success_results_always_have_serializable_diagnostics():
     assert radial_data["diagnostics"]["iteration_count"] > 0
     assert math.isfinite(radial_data["diagnostics"]["max_temperature_change_k"])
     assert math.isfinite(radial_data["diagnostics"]["max_energy_residual_relative"])
+    assert math.isfinite(radial_data["diagnostics"]["max_energy_residual_w"])
 
     two_phase = solve_kiln(LAYERS, params, n_cells=2, mass_flow_kg_s=20.0)
     two_data = two_phase.as_dict()
