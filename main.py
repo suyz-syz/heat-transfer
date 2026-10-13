@@ -1385,6 +1385,7 @@ class ResultScreen(Screen):
             ("单位长度热功率 Q'", f"{sol.Qprime:.1f} W/m"),
             ("径向模型最大温度改变量", f"{sol.max_temperature_change_k:.6g} K"),
             ("径向模型最大相对能量残差", f"{sol.max_energy_residual_relative:.6g}"),
+            ("径向模型最大能量残差", f"{sol.max_energy_residual_w:.6g} W"),
             ("内壁热流密度 q_in", f"{sol.q_in:.1f} W/m²"),
             ("外壁热流密度 q_out", f"{sol.q_out:.1f} W/m²"),
             ("内壁总换热系数 h_in", f"{sol.h_in:.1f} W/m²·K"),
