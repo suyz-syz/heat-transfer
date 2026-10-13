@@ -133,7 +133,14 @@ def solve(req: SolveRequest):
     """求解稳态传热，返回单位长度热功率、热流密度与各分界面温度等。"""
     try:
         layers, params = _to_domain(req)
-        return solve_wall(layers, params).as_dict()
+        result = solve_wall(layers, params).as_dict()
+        result["model_semantics"] = {
+            "result": "radial steady-state wall baseline",
+            "three_phase_wall_model": "linearized network approximation (not returned by this endpoint)",
+            "wsgg_status": "provisional",
+            "industrial_design_or_absolute_thermal_stress_guarantee": False,
+        }
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
