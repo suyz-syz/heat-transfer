@@ -142,6 +142,10 @@ def resolve_bed_geometry(
             "wall_bed_area_source": "manual" if wall_bed_contact_per_length_m is not None else "n/a",
             "assumptions": "geometry helper disabled; legacy/manual areas are used",
         }
+    if gas_bed_area_per_length_m is None:
+        gas_bed_area_per_length_m = config.get("gas_bed_area_per_length_m")
+    if wall_bed_contact_per_length_m is None:
+        wall_bed_contact_per_length_m = config.get("wall_bed_contact_per_length_m")
     mode = config.get("input_mode", "filling_fraction")
     if mode == "filling_fraction":
         geometry = calculate_bed_geometry(
