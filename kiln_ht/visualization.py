@@ -55,6 +55,7 @@ def axial_plot_data(solution) -> Dict[str, List[float]]:
     data["diagnostics"] = axial_result["diagnostics"]
     data["model_semantics"] = axial_result["model_semantics"]
     data["model_scope"] = axial_result["model_scope"]
+    data["bed_geometry"] = axial_result["bed_geometry"]
     return data
 
 
