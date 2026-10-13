@@ -15,7 +15,9 @@ is its local isotopologue ID. Wavenumber and broadening fields retain the source
 units and numerical values. TIPS columns are
 `molecule,isotope,temperature_K,Q`, where molecule and isotope are numeric IDs.
 Both calibration command-line entrypoints accept these same line and TIPS
-schemas.
+schemas. The current offline trial filters line centers to 1975–2425 cm⁻¹ and
+evaluates the 2000–2400 cm⁻¹ band; the wider sample file range does not imply
+full-spectrum validation.
 
 The fixed-width conversion rules are in
 `scripts/prepare_hitemp_benchmark.py`; the audit is reproducible with:
