@@ -820,6 +820,8 @@ def solve_kiln(
         gas_bed_area_per_length_m=gas_bed_area_per_length_m,
         wall_bed_contact_per_length_m=wall_bed_contact_per_length_m,
     )
+    if geometry_metadata.get("enabled") and bed_inlet_temperature_k is None:
+        raise ValueError("bed_geometry requires three-phase mode with bed_inlet_temperature_k")
     if geometry_metadata.get("filling_fraction") == 1.0:
         raise ValueError(
             "bed_geometry filling_fraction=1 (full cross-section) leaves no gas passage; "
