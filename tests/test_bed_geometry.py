@@ -133,3 +133,52 @@ def test_manual_overrides_win_inside_solver_metadata():
     assert data["bed_geometry"]["gas_bed_area_source"] == "manual_override"
     assert data["bed_geometry"]["wall_bed_area_source"] == "manual_override"
     json.dumps(data, allow_nan=False)
+
+
+def test_api_response_and_visualization_keep_geometry_metadata_serializable():
+    from kiln_ht.visualization import axial_plot_data
+    from server import AxialSolveRequest, axial_solve
+
+    request = AxialSolveRequest(
+        layers=[{"name": "brick", "thickness": 0.1, "k": 1.2}],
+        params={"T_gas": 850.0, "L_kiln": 2.0, "L_char": 2.0},
+        n_cells=1, mass_flow_kg_s=20.0,
+        bed_inlet_temperature_k=350.0, bed_mass_flow_kg_s=2.0,
+        cp_bed_j_kg_k=1000.0, gas_bed_h_w_m2_k=20.0,
+        wall_bed_h_w_m2_k=50.0,
+        bed_geometry={"enabled": True, "input_mode": "filling_angle", "filling_angle_deg": 120.0},
+    )
+    api_result = axial_solve(request)
+    meta = api_result["bed_geometry"]
+    assert meta["source"] == "filling_angle_deg"
+    assert meta["filling_angle_deg"] == pytest.approx(120.0)
+    assert meta["gas_bed_area_source"] == "geometry"
+    json.dumps(api_result, allow_nan=False)
+
+    solution = solve_kiln(
+        LAYERS, KilnParams(L_kiln=2.0, T_gas=850.0),
+        bed_geometry={"enabled": True, "input_mode": "filling_fraction", "filling_fraction": 0.3},
+        **bed_kwargs(n_cells=1),
+    )
+    plotted = axial_plot_data(solution)
+    assert plotted["bed_geometry"] == solution.as_dict()["bed_geometry"]
+    json.dumps(plotted, allow_nan=False)
+
+
+def test_schema_config_preserves_and_validates_bed_geometry():
+    from kiln_ht.config_schema import normalize_config
+
+    config = normalize_config({
+        "layers": [{"name": "brick", "thickness_m": 0.1, "k": 1.2}],
+        "bed_geometry": {
+            "enabled": True, "input_mode": "filling_fraction",
+            "filling_fraction": 0.3, "gas_bed_area_per_length_m": 0.7,
+        },
+    })
+    assert config["bed_geometry"]["filling_fraction"] == pytest.approx(0.3)
+    assert config["bed_geometry"]["gas_bed_area_per_length_m"] == pytest.approx(0.7)
+    with pytest.raises(ValueError):
+        normalize_config({
+            "layers": [],
+            "bed_geometry": {"enabled": True, "input_mode": "filling_fraction", "filling_fraction": 1.2},
+        })
