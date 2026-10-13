@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
@@ -36,6 +37,7 @@ MAX_WALL_ITER = 300         # 壁温耦合迭代上限
 WALL_TOL = 1.0e-3           # 壁温收敛容差 (K)
 ENERGY_REL_TOL = 1.0e-7     # 能量平衡相对残差
 DEFAULT_P_TOTAL = 1.01325   # 系统默认总压 (bar，1 atm)
+LOGGER = logging.getLogger(__name__)
 
 
 # ============ 数据模型 ============
@@ -523,6 +525,11 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     q_in = Qprime / (2.0 * math.pi * r_in)     # 内壁面热流密度 W/m²
     q_out = Qprime / (2.0 * math.pi * r_out)   # 外壁面热流密度 W/m²
 
+    LOGGER.info(
+        "solve_wall converged: iterations=%d max_temperature_change_k=%.6g "
+        "max_energy_residual_relative=%.6g",
+        it + 1, max(abs(corr1), abs(corrN)), energy_rel,
+    )
     return WallSolution(
         Qprime=Qprime, q_in=q_in, q_out=q_out,
         h_in=h_in, h_out=h_out,
@@ -831,6 +838,10 @@ def solve_kiln(
         cell_heat.append(q_cell)
         t_gas = t_next
 
+    LOGGER.info(
+        "solve_kiln completed: mode=two_phase iterations=n/a "
+        "max_temperature_change_k=n/a max_energy_residual_w=0 (plug-flow update)",
+    )
     return KilnAxialSolution(
         z_faces_m=z_faces,
         gas_temperature_in_k=gas_in,
@@ -1050,6 +1061,11 @@ def _solve_kiln_three_phase(
             f"three-phase energy balance failed: max_residual={max_residual:.6g} W, "
             f"allowed={1.0e-3 * energy_scale:.6g} W"
         )
+    LOGGER.info(
+        "solve_kiln completed: mode=three_phase iterations=%d "
+        "max_temperature_change_k=%.6g max_energy_residual_w=%.6g",
+        converged_iteration, final_delta, max_residual,
+    )
     return KilnAxialSolution(
         z_faces_m=z_faces,
         gas_temperature_in_k=gas_in,
