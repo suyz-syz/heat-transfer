@@ -44,6 +44,9 @@ def build_report(
         lines.append(f"  wall_solutions  : {semantics.get('wall_solutions', 'n/a')}")
         lines.append(f"  三相壁模型      : {semantics.get('three_phase_wall_model') or 'n/a'}")
         lines.append("  轴向诊断        : " + json.dumps(axial_data.get("diagnostics", {}), ensure_ascii=False, sort_keys=True))
+        geometry = axial_data.get("bed_geometry", {})
+        lines.append("【床层几何】")
+        lines.append("  元数据        : " + json.dumps(geometry, ensure_ascii=False, sort_keys=True))
 
     lines.append("")
     lines.append("【工况参数】")
