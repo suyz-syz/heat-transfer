@@ -14,7 +14,7 @@ WSGG：
 from __future__ import annotations
 import math
 from dataclasses import dataclass
-from .leckner import emissivity as leckner_emissivity
+from .leckner import emissivity as leckner_emissivity, absorptivity as leckner_absorptivity
 
 @dataclass(frozen=True)
 class WSGGResult:
@@ -29,30 +29,36 @@ class WSGGResult:
 DEFAULT_WEIGHTS = (0.20, 0.25, 0.30, 0.20)
 DEFAULT_KAPPA_FACTORS = (0.20, 1.0, 4.0, 16.0)
 
+def _emissivity(T: float, pCO2: float, pH2O: float, L: float) -> float:
+    base_eps = leckner_emissivity(T, pCO2, pH2O, L)
+    if base_eps <= 0.0:
+        return 0.0
+    tau_target = -math.log(max(1e-12, 1.0 - base_eps))
+
+    def eps_at(scale):
+        return sum(w * (1.0 - math.exp(-scale * factor))
+                   for w, factor in zip(DEFAULT_WEIGHTS, DEFAULT_KAPPA_FACTORS))
+
+    # Provisional shape and scale; coefficients are not HITEMP calibrated.
+    scale = 0.85 * tau_target
+    return max(0.0, min(0.999999, eps_at(scale)))
+
+
 def evaluate(T_gas: float, T_wall: float, pCO2: float, pH2O: float, L: float, eps_wall: float = 0.85) -> WSGGResult:
     if T_gas <= 0 or T_wall <= 0 or L <= 0:
         raise ValueError("T、L 必须为正")
-    base_eps = leckner_emissivity(T_gas, pCO2, pH2O, L)
-    if base_eps <= 0:
-        return WSGGResult(0.0, 0.0, 0.0, 0.0, L)
-    tau_target = -math.log(max(1e-12, 1.0 - base_eps))
-    # 求 scale，使 sum(w_j*(1-exp(-scale*f_j))) = base_eps。
-    lo, hi = 0.0, max(1.0, tau_target * 100.0)
-    def eps_at(scale):
-        return sum(w * (1.0 - math.exp(-scale*f)) for w, f in zip(DEFAULT_WEIGHTS, DEFAULT_KAPPA_FACTORS))
-    while eps_at(hi) < base_eps:
-        hi *= 2.0
-        if hi > 1e12:
-            raise RuntimeError("WSGG scale 求解发散")
-    for _ in range(80):
-        mid = 0.5 * (lo + hi)
-        if eps_at(mid) < base_eps:
-            lo = mid
-        else:
-            hi = mid
-    # 第一阶段 provisional WSGG：用 Leckner 的总光学厚度确定尺度，
-    # 但保留独立四灰气体谱形。0.85 是保守的临时尺度因子；该值不是 HITEMP 拟合常数。
-    scale = 0.85 * tau_target
-    eg = eps_at(scale)
-    tau = -math.log(max(1e-12, 1.0 - eg))
-    return WSGGResult(eg, eg, tau / L, tau, L)
+    eg = _emissivity(T_gas, pCO2, pH2O, L)
+    wall_emissivity = _emissivity(T_wall, pCO2, pH2O, L)
+    leckner_gas = leckner_emissivity(T_gas, pCO2, pH2O, L)
+    if leckner_gas <= 0.0:
+        alpha = 0.0
+    else:
+        # Provisional WSGG absorption closure: retain its own wall-temperature
+        # gray-gas fraction and apply the species-scaled Hottel correction
+        # relative to the Leckner reference spectrum.
+        correction = leckner_absorptivity(
+            T_gas, T_wall, pCO2, pH2O, L
+        ) / leckner_gas
+        alpha = max(0.0, min(0.999999, wall_emissivity * correction))
+    tau = 0.0 if eg <= 0.0 else -math.log(1.0 - eg)
+    return WSGGResult(eg, alpha, tau / L, tau, L)
