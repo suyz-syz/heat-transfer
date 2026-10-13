@@ -694,6 +694,7 @@ class KilnAxialSolution:
     max_wall_energy_residual_w: float = 0.0
     wall_energy_residuals_w: List[float] = field(default_factory=list)
     axial_relaxation_factor: Optional[float] = None
+    local_wall_relaxation_factor: Optional[float] = None
 
     @property
     def gas_temperature_mean_k(self) -> List[float]:
@@ -735,6 +736,7 @@ class KilnAxialSolution:
                 "max_wall_energy_residual_w": self.max_wall_energy_residual_w,
                 "wall_energy_residuals_w": list(self.wall_energy_residuals_w),
                 "axial_relaxation_factor": self.axial_relaxation_factor,
+                "local_wall_relaxation_factor": self.local_wall_relaxation_factor,
             },
             "model_scope": (
                 "steady 1-D gas-bed-wall energy network; radial wall conductances "
@@ -907,7 +909,7 @@ def _conductive_wall_rate(
     *,
     tolerance_k: float = 1.0e-6,
     max_iterations: int = 40,
-) -> Tuple[float, int, float]:
+) -> Tuple[float, int, float, float]:
     """Return signed cylindrical wall heat rate (W/m), reevaluating k(T).
 
     Layer interface temperatures are iterated with a damped resistance network.
@@ -916,7 +918,7 @@ def _conductive_wall_rate(
     if not all(math.isfinite(t) and t > 0.0 for t in (T_inner_k, T_outer_k)):
         raise ValueError("wall surface temperatures must be finite and positive")
     if abs(T_inner_k - T_outer_k) <= tolerance_k:
-        return 0.0, 0, abs(T_inner_k - T_outer_k)
+        return 0.0, 0, abs(T_inner_k - T_outer_k), 0.5
     n = len(layers)
     interfaces = [
         T_inner_k + (T_outer_k - T_inner_k) * (r - radii[0]) / (radii[-1] - radii[0])
@@ -950,7 +952,7 @@ def _conductive_wall_rate(
         max_delta = max(abs(a - b) for a, b in zip(target, interfaces))
         if max_delta <= tolerance_k:
             # Recompute from the converged interface temperatures.
-            return qprime, iteration, max_delta
+            return qprime, iteration, max_delta, relaxation
         if previous_delta is not None:
             if max_delta > previous_delta * 1.05:
                 relaxation = max(0.05, relaxation * 0.5)
@@ -996,6 +998,7 @@ def _solve_local_wall_state(
     local_evaluations = 0
     local_root_iterations = 0
     max_k_delta = 0.0
+    min_local_relaxation = 1.0
 
     def q_out(Two):
         h_nat = outer_natural_h(Two, params.T_env, D_out)
@@ -1007,9 +1010,9 @@ def _solve_local_wall_state(
         ) * 2.0 * math.pi * rout
 
     def conductive_rate(Twi, Two):
-        nonlocal local_evaluations, max_k_delta
+        nonlocal local_evaluations, max_k_delta, min_local_relaxation
         try:
-            qcond, count, k_delta = _conductive_wall_rate(
+            qcond, count, k_delta, local_relaxation = _conductive_wall_rate(
                 Twi, Two, layers, radii, tolerance_k=min(tolerance_k, 1.0e-5)
             )
         except Exception as exc:
@@ -1019,6 +1022,8 @@ def _solve_local_wall_state(
             ) from exc
         local_evaluations += 1 + count
         max_k_delta = max(max_k_delta, k_delta)
+        if count:
+            min_local_relaxation = min(min_local_relaxation, local_relaxation)
         return qcond
 
     def solve_outer(Twi):
@@ -1117,6 +1122,7 @@ def _solve_local_wall_state(
     return (
         Twi, Two, q_gw, q_wb, q_out(Two), max_residual,
         local_evaluations, max_k_delta, local_root_iterations,
+        (0.5 if min_local_relaxation == 1.0 else min_local_relaxation),
     )
 
 
@@ -1230,7 +1236,7 @@ def _solve_kiln_three_phase(
                 raise RuntimeError("could not form positive local wall conductances")
 
             if wall_iteration_mode == "semi_nonlinear":
-                twi, two, qgw, qwb_into_wall, qout, local_residual, local_evals, _k_delta, local_iters = (
+                twi, two, qgw, qwb_into_wall, qout, local_residual, local_evals, _k_delta, local_iters, local_relax = (
                     _solve_local_wall_state(
                         cell=i, z_m=z_centres[i], T_gas_k=tgm, T_bed_k=tbm,
                         params=params, layers=layers, radii=base_radii,
@@ -1241,6 +1247,7 @@ def _solve_kiln_three_phase(
                 )
                 local_iteration_total += local_iters
                 local_evaluation_total += local_evals
+                final_local_relax = local_relax
                 wall_residual_values.append(local_residual * dz)
             else:
                 twi = min(tgm, max(params.T_env, base.T_w1))
@@ -1417,4 +1424,7 @@ def _solve_kiln_three_phase(
         max_wall_energy_residual_w=max(final_wall_residuals + [0.0]),
         wall_energy_residuals_w=final_wall_residuals,
         axial_relaxation_factor=final_relax,
+        local_wall_relaxation_factor=(
+            final_local_relax if wall_iteration_mode == "semi_nonlinear" else None
+        ),
     )
