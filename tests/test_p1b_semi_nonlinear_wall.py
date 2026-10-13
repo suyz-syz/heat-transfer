@@ -1,10 +1,12 @@
 """P1b regressions for the semi-nonlinear local wall solve."""
 import json
 import math
+from dataclasses import replace
 
 import pytest
 
 from kiln_ht import KilnParams, Layer, solve_kiln
+from kiln_ht.calc import solve_wall
 from kiln_ht.calc import _conductive_wall_rate
 
 
@@ -55,6 +57,20 @@ def test_local_conduction_recomputes_temperature_dependent_k():
     assert q_polynomial != pytest.approx(q_constant, rel=1e-4)
 
 
+
+def test_vanishing_wall_bed_branch_recovers_radial_baseline():
+    params = KilnParams(L_kiln=4.0, T_gas=850.0)
+    result = solve_kiln(
+        LAYERS,
+        params,
+        **_kwargs(wall_bed_h_w_m2_k=1.0e-9),
+    )
+    for state in result.states:
+        baseline = solve_wall(LAYERS, replace(params, T_gas=state.T_gas_k))
+        assert state.T_wall_inner_k == pytest.approx(baseline.T_w1, abs=2.0e-3)
+        assert state.T_wall_outer_k == pytest.approx(baseline.T_wN, abs=2.0e-3)
+
+
 def test_semi_nonlinear_returns_serializable_cellwise_diagnostics():
     result = solve_kiln(
         LAYERS, KilnParams(L_kiln=6.0, T_gas=800.0), **_kwargs()
@@ -103,10 +119,12 @@ def test_sensitivity_cases_match_linearized_reference_without_silent_fallback(
     assert all(math.isfinite(s.T_wall_inner_k) for s in linearized.states)
     # The two models are both returned explicitly; no exception is caught and
     # relabeled as a successful run of the other model.
-    assert math.isfinite(
-        sum(a.T_wall_inner_k - b.T_wall_inner_k
-            for a, b in zip(nonlinear.states, linearized.states))
-    )
+    wall_deltas = [
+        abs(a.T_wall_inner_k - b.T_wall_inner_k)
+        for a, b in zip(nonlinear.states, linearized.states)
+    ]
+    assert all(math.isfinite(delta) for delta in wall_deltas)
+    assert max(wall_deltas) > 1.0e-6
 
 
 
