@@ -939,14 +939,18 @@ def _solve_kiln_three_phase(
 
             twi = min(tgm, max(params.T_env, base.T_w1))
             two = min(twi, max(params.T_env, base.T_wN))
+            local_converged = False
             for _ in range(100):
                 two_new = (gcond * twi + gout * params.T_env) / (gcond + gout)
                 twi_new = (ggw * tgm + gcond * two_new + gwb * tbm) / (ggw + gcond + gwb)
                 if max(abs(two_new - two), abs(twi_new - twi)) < 1.0e-8:
                     two, twi = two_new, twi_new
+                    local_converged = True
                     break
                 two = 0.5 * two + 0.5 * two_new
                 twi = 0.5 * twi + 0.5 * twi_new
+            if not local_converged:
+                raise RuntimeError(f"local wall-bed network did not converge at cell {i} in 100 iterations")
             qgw = ggw * (tgm - twi)
             qgb = ggb * (tgm - tbm)
             qwb = gwb * (twi - tbm)
@@ -1038,6 +1042,12 @@ def _solve_kiln_three_phase(
         for i in range(n_cells)
     ]
     max_residual = max(gas_residuals + bed_residuals + final_wall_residuals + [0.0])
+    energy_scale = max([abs(q) * dz for q in final_qgas + final_qbed] + [1.0])
+    if not math.isfinite(max_residual) or max_residual > 1.0e-3 * energy_scale:
+        raise RuntimeError(
+            f"three-phase energy balance failed: max_residual={max_residual:.6g} W, "
+            f"allowed={1.0e-3 * energy_scale:.6g} W"
+        )
     return KilnAxialSolution(
         z_faces_m=z_faces,
         gas_temperature_in_k=gas_in,
