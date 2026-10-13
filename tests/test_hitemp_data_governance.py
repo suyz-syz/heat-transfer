@@ -99,5 +99,5 @@ def test_both_calibration_entrypoints_accept_same_canonical_csv_contract(tmp_pat
     slice_lines = load_hitemp_csv(line_path)
     slice_tips = load_tips(tips_path)
     assert len(global_lines) == len(slice_lines) == 1
-    assert set(global_tips) == {"2:1"}
+    assert set(global_tips) == {(2, 1)}
     assert set(slice_tips) == {"CO2:1"}
