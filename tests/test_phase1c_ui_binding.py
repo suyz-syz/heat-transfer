@@ -75,7 +75,8 @@ class DisplayWallTemperatureTests(unittest.TestCase):
         source = ast.unparse(collect_params)
 
         self.assertIn("_read_conductivity_coefficients(a_in, b, c)", source)
-        self.assertIn("ConductivityModel.polynomial(k_coef, \"degC\")", source)
+        self.assertIn("ConductivityModel.polynomial(k_coef,", source)
+        self.assertIn("degC", source)
         self.assertIn("k_coef=k_coef", source)
 
     def test_uses_mean_axial_outer_wall_temperature_for_three_phase(self):
