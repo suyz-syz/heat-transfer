@@ -27,6 +27,9 @@ def build_report(
     lines.append("=" * 56)
     lines.append("水泥窑窑衬传热计算 — 结果报告")
     lines.append("=" * 56)
+    lines.append("模型范围：本报告的径向壁温为稳态基线解；三相壁温（若另行计算）")
+    lines.append("采用线性化网络近似，WSGG 状态为 provisional（暂定、未标定）。")
+    lines.append("结果用于工程估算，不构成工业定型或热应力绝对保证值。")
 
     lines.append("")
     lines.append("【工况参数】")
@@ -66,6 +69,8 @@ def build_report(
     lines.append(f"  内壁面温度        : {sol.T_w1 - 273.15:.1f} ℃")
     lines.append(f"  外壁面温度        : {sol.T_wN - 273.15:.1f} ℃")
     lines.append(f"  耦合迭代步数      : {sol.iterations}")
+    lines.append(f"  最大温度改变量    : {sol.max_temperature_change_k:.6g} K")
+    lines.append(f"  最大相对能量残差  : {sol.max_energy_residual_relative:.6g}")
 
     lines.append("")
     lines.append("【各分界面温度】")
