@@ -2,6 +2,8 @@ name: Build Android APK
 
 on:
   push:
+    branches:
+      - 'feat/phase-1c-p0-semantics-diagnostics'
     tags:
       - 'v*'
   workflow_dispatch:
