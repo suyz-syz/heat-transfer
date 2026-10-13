@@ -129,7 +129,11 @@ def test_axial_adapter_and_export_preserve_model_semantics():
     assert axial["model_semantics"]["states"].startswith("authoritative")
     assert axial["model_semantics"]["wall_solutions"].startswith("radial")
     assert axial["model_semantics"]["three_phase_wall_model"] == "linearized network approximation"
-    report = build_report(LAYERS, params, result.wall_solutions[0])
+    report = build_report(
+        LAYERS, params, result.wall_solutions[0], axial_data=axial
+    )
+    assert "states          : authoritative" in report
+    assert "wall_solutions  : radial" in report
     assert "线性化网络近似" in report
     assert "provisional" in report
     assert "不构成工业定型或热应力绝对保证值" in report
