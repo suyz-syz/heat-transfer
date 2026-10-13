@@ -38,6 +38,18 @@ def test_radiation_chain_300_2000K(T, model):
     assert r.kappa_eff >= 0.0
     assert r.h_rad >= 0.0
 
+@pytest.mark.parametrize("model", ["leckner", "wsgg"])
+def test_zero_radiating_species_are_safe(model):
+    result = get_gas_radiation(
+        1523.15, 900.0, 0.0, 0.0, 3.8, model=model
+    )
+    assert result.emissivity == 0.0
+    assert result.absorptivity == 0.0
+    assert result.kappa_eff == 0.0
+    assert result.optical_thickness == 0.0
+    assert result.q_rad == 0.0
+    assert result.h_rad == 0.0
+
 def test_wsgg_and_leckner_are_distinguishable():
     a = get_gas_radiation(1523.15, 900.0, 0.20*101325.0, 0.08*101325.0, 3.8, model="leckner")
     b = get_gas_radiation(1523.15, 900.0, 0.20*101325.0, 0.08*101325.0, 3.8, model="wsgg")
@@ -48,5 +60,15 @@ def test_solve_wall_backward_compatible_default():
     sol=solve_wall(layers,KilnParams())
     assert math.isfinite(sol.Qprime) and sol.Qprime > 0
     assert 0.0 <= sol.eg <= 1.0
+
+def test_solve_wall_hot_air_mode():
+    layers = [Layer("fiber", 0.15, k=0.10), Layer("shell", 0.012, k=45.0)]
+    params = KilnParams(
+        CO2=0.0, H2O=0.0, N2=0.79, O2=0.21, radiation_model="leckner"
+    )
+    solution = solve_wall(layers, params)
+    assert math.isfinite(solution.Qprime) and solution.Qprime > 0.0
+    assert math.isfinite(solution.T_wN) and solution.T_wN > params.T_env
+    assert solution.eg == 0.0
 
 # Core thermal-model tests intentionally exclude UI/Kivy dependencies.
