@@ -34,6 +34,7 @@ from kiln_ht import (
     solve_kiln,
     compute_temperature_curve,
     ConductivityModel,
+    gas_fractions_for_mode,
     validate_kiln_params,
     normalize_config,
 )
@@ -759,8 +760,22 @@ class InputScreen(Screen):
         self._add_field(thermal, "T_gas", "烟气温度", "°C", "1250")
         self._add_field(thermal, "v_gas", "烟气流速", "m/s", "3")
         self._add_field(thermal, "P_total", "窑内压力", "bar", "1.01325")
+        gas_mode_row = BoxLayout(orientation="horizontal", spacing=dp(8),
+                                 size_hint_y=None, height=dp(40))
+        self.hot_air_mode = CheckBox(active=False, size_hint=(None, 1), width=dp(36))
+        gas_mode_row.add_widget(self.hot_air_mode)
+        gas_mode_row.add_widget(MdLabel(
+            text="热空气模式（洁净空气 79% N2 / 21% O2）",
+            color=TEXT_DIM, font_size=sp(12)))
+        thermal.add_widget(gas_mode_row)
         self._add_field(thermal, "CO2", "CO2 含量", "%", "20")
         self._add_field(thermal, "H2O", "H2O 含量", "%", "8")
+
+        def _toggle_combustion_fields(_checkbox, hot_air):
+            for key in ("CO2", "H2O"):
+                self._fields[key].field.disabled = hot_air
+
+        self.hot_air_mode.bind(active=_toggle_combustion_fields)
         self._add_field(thermal, "eps_wall", "内壁发射率", "", "0.85")
         thermal.add_widget(make_title("【求解控制与输出】"))
         self._add_field(thermal, "N_total", "温度曲线取点数", "点", "100",
@@ -1078,8 +1093,11 @@ class InputScreen(Screen):
             L_char=float(p["L_char"].text),
             L_kiln=float(p["L_kiln"].text),
             P_total=float(p["P_total"].text),
-            CO2=float(p["CO2"].text) / 100.0,
-            H2O=float(p["H2O"].text) / 100.0,
+            **gas_fractions_for_mode(
+                float(p["CO2"].text) / 100.0,
+                float(p["H2O"].text) / 100.0,
+                mode="hot_air" if self.hot_air_mode.active else "combustion",
+            ),
             eps_wall=float(p["eps_wall"].text),
             T_env=float(p["T_env"].text) + 273.15,
             v_amb=float(p["v_amb"].text),
