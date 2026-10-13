@@ -48,7 +48,7 @@ def test_calculation_produces_metrics(app):
     assert not app.exception
     assert not app.error, [e.value for e in app.error]
     labels = {m.label for m in app.metric}
-    assert {"外壁面温度", "内壁面温度", "总热损失 Q'", "烟气发射率"} <= labels
+    assert {"径向基线外壁面温度", "内壁面温度", "总热损失 Q'", "烟气发射率"} <= labels
     # 数值应非空
     for m in app.metric:
         assert m.value
@@ -71,7 +71,7 @@ def test_calculation_matches_core(app):
     # GUI 默认层：4 层，厚度 50mm，导热系数 1.0，无名称
     layers = [Layer(name=f"层{i+1}", thickness=0.050, k=1.0) for i in range(4)]
     sol = solve_wall(layers, KilnParams())
-    assert abs(val["外壁面温度"] - (sol.T_wN - 273.15)) < 0.5
+    assert abs(val["径向基线外壁面温度"] - (sol.T_wN - 273.15)) < 0.5
     assert abs(val["内壁面温度"] - (sol.T_w1 - 273.15)) < 0.5
     assert abs(val["烟气发射率"] - sol.eg) < 0.001
 
@@ -108,7 +108,7 @@ def test_edit_layer_name(app):
 
 
 def test_move_layer_affects_calculation(app):
-    """上下移动衬层后，计算结果（外壁面温度）应随之改变。"""
+    """上下移动衬层后，计算结果（径向基线外壁面温度）应随之改变。"""
     from kiln_ht import KilnParams, Layer, solve_wall
 
     # 给第 0、1 层设置不同的厚度和导热系数，使交换后结果可区分
@@ -118,14 +118,14 @@ def test_move_layer_affects_calculation(app):
     n0[1].set_value("B").run()
     # 设置不同厚度：A 厚 200mm k=0.1(绝缘), B 厚 10mm k=45(钢壳)
     thick0 = [n for n in app.number_input if (n.key or "").endswith("_thick")]
-    a0 = [n for n in app.number_input if (n.key or "").endswith("_a")]
+    a0 = [n for n in app.number_input if (n.key or "").endswith("_lambda0")]
     thick0[0].set_value(200.0).run()
     a0[0].set_value(0.1).run()
     thick0[1].set_value(10.0).run()
     a0[1].set_value(45.0).run()
 
     _click_calc(app)
-    before = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
+    before = float([m.value for m in app.metric if m.label == "径向基线外壁面温度"][0].split()[0])
 
     # 下移第 0 层（与第 1 层交换顺序）
     dn = [b for b in app.button if (b.key or "").endswith("_down") and not b.disabled]
@@ -133,8 +133,8 @@ def test_move_layer_affects_calculation(app):
     dn[0].click().run()
     _click_calc(app)
 
-    after = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
-    assert before != after, "层顺序调换后外壁面温度应发生变化"
+    after = float([m.value for m in app.metric if m.label == "径向基线外壁面温度"][0].split()[0])
+    assert before != after, "层顺序调换后径向基线外壁面温度应发生变化"
 
 
 def test_first_layer_up_disabled(app):
@@ -284,7 +284,7 @@ def test_web_ui_polynomial_coefficients_reach_solver(app):
     assert not app.error, [error.value for error in app.error]
     displayed_outer = float(
         next(metric.value for metric in app.metric
-             if metric.label == "外壁面温度").split()[0]
+             if metric.label == "径向基线外壁面温度").split()[0]
     )
 
     coefficients = (1.8, 0.0000016, -0.00000017)
@@ -313,9 +313,9 @@ def test_web_ui_polynomial_coefficients_reach_solver(app):
 def test_web_ui_material_select(app):
     """衬层应有材料下拉框（用户材料库，无内置材料）。"""
     # 每层应有一个材料选择框（selectbox）；预设已删除，无额外预设框
-    assert len(app.selectbox) == 4   # 4 层材料
-    # 默认应为「自定义」（无任何内置材料）
     mat_sb = [s for s in app.selectbox if (s.key or "").endswith("_material")]
+    assert len(mat_sb) == 4   # 每层一个材料下拉
+    # 默认应为「自定义」（无任何内置材料）
     assert mat_sb
     assert all(s.value == "自定义" for s in mat_sb)
     # 材料下拉仅含「自定义」（用户库为空时）
@@ -347,7 +347,7 @@ def test_web_ui_combustion_composition_is_completed(app):
     expected = solve_wall(layers, KilnParams(**fractions))
     displayed = float(
         next(metric.value for metric in app.metric
-             if metric.label == "外壁面温度").split()[0]
+             if metric.label == "径向基线外壁面温度").split()[0]
     )
     assert displayed == pytest.approx(expected.T_wN - 273.15, abs=0.5)
 
@@ -365,7 +365,7 @@ def test_web_ui_hot_air_mode_uses_clean_air(app):
     expected = solve_wall(layers, KilnParams(**fractions))
     displayed = float(
         next(metric.value for metric in app.metric
-             if metric.label == "外壁面温度").split()[0]
+             if metric.label == "径向基线外壁面温度").split()[0]
     )
     assert displayed == pytest.approx(expected.T_wN - 273.15, abs=0.5)
 
@@ -374,7 +374,9 @@ def test_web_ui_custom_k_coef_fills(app):
     """自定义层 a/b/c 输入应参与计算（而非默认 k=1）。"""
     from kiln_ht import KilnParams, Layer, solve_wall
 
-    # 将第 0 层 a 改为 0.1（硅酸铝纤维的常数项），其余默认 1.0
+    # 切到多项式模式后，第 0 层的系数 a 输入框才会出现。
+    mode = next(s for s in app.selectbox if s.key == "layer_1_conductivity_mode")
+    mode.set_value("polynomial").run()
     a_inputs = [n for n in app.number_input if (n.key or "").endswith("_a")]
     assert a_inputs, "未找到系数 a 输入框"
     a_inputs[0].set_value(0.1).run()
@@ -387,7 +389,7 @@ def test_web_ui_custom_k_coef_fills(app):
 
     # 关键断言：app 实际计算的外壁温度应等于用 a=0.1 的参考值
     # （若 bug 存在，app 会用默认 k=1 计算，外壁温度显著不同）
-    outer_val = float([m.value for m in app.metric if m.label == "外壁面温度"][0].split()[0])
+    outer_val = float([m.value for m in app.metric if m.label == "径向基线外壁面温度"][0].split()[0])
 
     ref_layers = [Layer(name=f"层{i+1}", thickness=0.050,
                         k_coef=(0.1 if i == 0 else 1.0, 0.0, 0.0)) for i in range(4)]
