@@ -79,6 +79,17 @@ class DisplayWallTemperatureTests(unittest.TestCase):
         self.assertIn("degC", source)
         self.assertIn("k_coef=k_coef", source)
 
+    def test_kivy_input_screen_exposes_and_applies_gas_mode_toggle(self):
+        input_screen = next(
+            item for item in TREE.body
+            if isinstance(item, ast.ClassDef) and item.name == "InputScreen"
+        )
+        source = ast.unparse(input_screen)
+
+        self.assertIn("self.hot_air_mode = CheckBox", source)
+        self.assertIn("gas_fractions_for_mode", source)
+        self.assertIn('mode="hot_air" if self.hot_air_mode.active else "combustion"', source)
+
     def test_uses_mean_axial_outer_wall_temperature_for_three_phase(self):
         axial_data = {
             "wall_outer_temperature_k": [900.0, 1100.0, 1300.0],
