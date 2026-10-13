@@ -35,7 +35,7 @@ from .materials import (
 
 __version__ = "1.0.0"
 
-from .gas import GasMixture, DEFAULT_GAS
+from .gas import GasMixture, DEFAULT_GAS, gas_fractions_for_mode
 from .conductivity import ConductivityModel
 from .config_schema import SCHEMA_VERSION, load_config, normalize_config, normalize_layer, validate_kiln_params
 from .properties import get_gas_properties
