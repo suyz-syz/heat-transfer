@@ -185,6 +185,43 @@ def test_api_solve_with_k_coef(api_client):
     assert len(data["k_avg"]) == 1
 
 
+def test_api_solve_with_polynomial_conductivity(api_client):
+    """The API's v2 polynomial payload reaches the solver with all a/b/c values."""
+    from kiln_ht import ConductivityModel, KilnParams, Layer, solve_wall
+
+    coefficients = [1.8, 0.0000016, -0.00000017]
+    payload = {
+        "layers": [{
+            "name": "polynomial",
+            "thickness": 0.10,
+            "thermal_conductivity": {
+                "mode": "polynomial",
+                "temperature_unit": "degC",
+                "coefficients": coefficients,
+            },
+        }],
+        "params": {},
+    }
+    response = api_client.post("/solve", json=payload)
+    assert response.status_code == 200, response.text
+    result = response.json()
+
+    reference = solve_wall([Layer(
+        name="polynomial",
+        thickness=0.10,
+        k=coefficients[0],
+        k_coef=tuple(coefficients),
+        conductivity_model=ConductivityModel.polynomial(coefficients, "degC"),
+    )], KilnParams())
+    constant = solve_wall([Layer(
+        name="constant", thickness=0.10, k=coefficients[0]
+    )], KilnParams())
+
+    assert result["T_wN"] == pytest.approx(reference.T_wN, abs=1e-6)
+    assert result["Qprime"] == pytest.approx(reference.Qprime, rel=1e-9)
+    assert result["T_wN"] != pytest.approx(constant.T_wN, abs=1e-4)
+
+
 def test_api_solve_with_k_compat(api_client):
     """/solve 端点接受旧 k 字段（兼容）。"""
     resp = api_client.post("/solve", json={
@@ -193,6 +230,54 @@ def test_api_solve_with_k_compat(api_client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["Qprime"] > 0
+
+
+def test_web_ui_polynomial_coefficients_reach_solver(app):
+    """Changing the Web UI's a/b/c inputs changes the result and matches core."""
+    from kiln_ht import ConductivityModel, KilnParams, Layer, solve_wall
+
+    mode = next(
+        item for item in app.selectbox
+        if item.key == "layer_1_conductivity_mode"
+    )
+    mode.set_value("polynomial").run()
+
+    for key, value in (
+        ("layer_1_a", 1.8),
+        ("layer_1_b", 0.0000016),
+        ("layer_1_c", -0.00000017),
+    ):
+        field = next(item for item in app.number_input if item.key == key)
+        field.set_value(value).run()
+
+    _click_calc(app)
+    assert not app.exception
+    assert not app.error, [error.value for error in app.error]
+    displayed_outer = float(
+        next(metric.value for metric in app.metric
+             if metric.label == "外壁面温度").split()[0]
+    )
+
+    coefficients = (1.8, 0.0000016, -0.00000017)
+    layers = [Layer(
+        name="层1",
+        thickness=0.05,
+        k=coefficients[0],
+        k_coef=coefficients,
+        conductivity_model=ConductivityModel.polynomial(coefficients, "degC"),
+    )] + [
+        Layer(name=f"层{i+1}", thickness=0.05, k=1.0)
+        for i in range(1, 4)
+    ]
+    reference = solve_wall(layers, KilnParams())
+    constant = solve_wall([
+        Layer(name=f"层{i+1}", thickness=0.05,
+              k=coefficients[0] if i == 0 else 1.0)
+        for i in range(4)
+    ], KilnParams())
+
+    assert displayed_outer == pytest.approx(reference.T_wN - 273.15, abs=0.5)
+    assert displayed_outer != pytest.approx(constant.T_wN - 273.15, abs=0.1)
 
 
 # ============ Streamlit 材料下拉 / 接触热阻 ============
