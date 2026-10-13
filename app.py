@@ -526,7 +526,7 @@ if _ss.get("calc_trigger"):
 
     # ---- 核心指标 Dashboard（径向稳态基线结果）----
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("外壁面温度", f"{sol.T_wN - 273.15:.1f} °C",
+    m1.metric("径向基线外壁面温度", f"{sol.T_wN - 273.15:.1f} °C",
               delta=f"外壁温升 {(sol.T_wN - 273.15) - float(_ss.T_env_C):.1f} °C")
     m2.metric("内壁面温度", f"{sol.T_w1 - 273.15:.1f} °C")
     m3.metric("总热损失 Q'", f"{sol.Qprime:.1f} W/m")
