@@ -80,6 +80,7 @@ def build_report(
     lines.append(f"  耦合迭代步数      : {sol.iterations}")
     lines.append(f"  最大温度改变量    : {sol.max_temperature_change_k:.6g} K")
     lines.append(f"  最大相对能量残差  : {sol.max_energy_residual_relative:.6g}")
+    lines.append(f"  最大能量残差      : {sol.max_energy_residual_w:.6g} W")
 
     lines.append("")
     lines.append("【各分界面温度】")
