@@ -161,3 +161,30 @@ def test_api_solve_response_has_radial_scope_and_stable_diagnostic_keys():
     assert response["model_semantics"]["wsgg_status"] == "provisional"
     assert response["diagnostics"]["converged"] is True
     json.dumps(response, allow_nan=False)
+
+
+def test_axial_api_returns_coupled_states_separate_from_radial_baseline():
+    from server import AxialSolveRequest, KilnParamsIn, LayerIn, axial_solve
+
+    response = axial_solve(AxialSolveRequest(
+        layers=[
+            LayerIn(name="fiber", thickness=0.15, k=0.1),
+            LayerIn(name="steel", thickness=0.012, k=45.0),
+        ],
+        params=KilnParamsIn(T_gas=800.0, L_kiln=6.0),
+        n_cells=2,
+        mass_flow_kg_s=10.0,
+        cp_gas_j_kg_k=1150.0,
+        bed_inlet_temperature_k=350.0,
+        bed_mass_flow_kg_s=2.0,
+        cp_bed_j_kg_k=1000.0,
+        gas_bed_h_w_m2_k=20.0,
+        wall_bed_h_w_m2_k=50.0,
+        gas_bed_area_per_length_m=1.0,
+        wall_bed_contact_per_length_m=0.2,
+    ))
+    assert response["model_semantics"]["states"].startswith("authoritative")
+    assert response["model_semantics"]["wall_solutions"].startswith("radial")
+    assert response["diagnostics"]["converged"] is True
+    assert len(response["states"]) == len(response["wall_solutions"]) == 2
+    json.dumps(response, allow_nan=False)
