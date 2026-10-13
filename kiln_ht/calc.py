@@ -29,6 +29,7 @@ from .gas import GasMixture, DEFAULT_GAS
 from .properties import get_gas_properties
 from .radiation import get_gas_radiation
 from .conductivity import ConductivityModel
+from .bed_geometry import resolve_bed_geometry
 
 # ============ 物理常数 ============
 SIGMA = 5.670374419e-8      # Stefan-Boltzmann 常数 W/(m²·K⁴)
@@ -697,6 +698,17 @@ class KilnAxialSolution:
     wall_energy_residuals_w: List[float] = field(default_factory=list)
     axial_relaxation_factor: Optional[float] = None
     local_wall_relaxation_factor: Optional[float] = None
+    bed_geometry: Dict = field(default_factory=lambda: {
+        "enabled": False, "status": "disabled_legacy_inputs", "source": "n/a",
+        "input_value": None, "inner_diameter_m": None, "filling_fraction": None,
+        "filling_angle_rad": None, "filling_angle_deg": None,
+        "gas_bed_area_per_length_m_computed": None,
+        "wall_bed_contact_per_length_m_computed": None,
+        "gas_bed_area_per_length_m_effective": None,
+        "wall_bed_contact_per_length_m_effective": None,
+        "gas_bed_area_source": "n/a", "wall_bed_area_source": "n/a",
+        "assumptions": "geometry helper disabled; legacy/manual areas are used",
+    })
 
     @property
     def gas_temperature_mean_k(self) -> List[float]:
@@ -723,6 +735,7 @@ class KilnAxialSolution:
             "bed_temperature_in_k": list(self.bed_temperature_in_k),
             "bed_temperature_out_k": list(self.bed_temperature_out_k),
             "bed_flow_direction": self.bed_flow_direction,
+            "bed_geometry": dict(self.bed_geometry),
             "coupling_iterations": self.coupling_iterations,
             "max_energy_residual_w": self.max_energy_residual_w,
             "diagnostics": {
@@ -787,6 +800,7 @@ def solve_kiln(
     wall_iteration_mode: str = "semi_nonlinear",
     local_wall_tolerance_k: float = 1.0e-5,
     local_wall_max_iterations: int = 48,
+    bed_geometry: Optional[Dict] = None,
 ) -> KilnAxialSolution:
     """按轴向控制体积耦合烟气降温与局部径向壁体传热。
 
@@ -801,6 +815,16 @@ def solve_kiln(
         inlet_gas_temperature_k: 可选入口温度；缺省沿用 params.T_gas。
     """
     validate_params(params)
+    gas_bed_area_per_length_m, wall_bed_contact_per_length_m, geometry_metadata = resolve_bed_geometry(
+        bed_geometry, params.L_char,
+        gas_bed_area_per_length_m=gas_bed_area_per_length_m,
+        wall_bed_contact_per_length_m=wall_bed_contact_per_length_m,
+    )
+    if geometry_metadata.get("filling_fraction") == 1.0:
+        raise ValueError(
+            "bed_geometry filling_fraction=1 (full cross-section) leaves no gas passage; "
+            "three-phase plug-flow applicability requires a non-full bed"
+        )
     if wall_iteration_mode not in ("semi_nonlinear", "linearized"):
         raise ValueError("wall_iteration_mode must be 'semi_nonlinear' or 'linearized'")
     if not math.isfinite(local_wall_tolerance_k) or local_wall_tolerance_k <= 0.0:
@@ -816,6 +840,9 @@ def solve_kiln(
             "gas_bed_area_per_length_m": gas_bed_area_per_length_m,
             "wall_bed_contact_per_length_m": wall_bed_contact_per_length_m,
         }
+        if geometry_metadata.get("enabled"):
+            required_bed.pop("gas_bed_area_per_length_m", None)
+            required_bed.pop("wall_bed_contact_per_length_m", None)
         missing_bed = [name for name, value in required_bed.items() if value is None]
         if missing_bed:
             raise ValueError("three-phase mode requires: " + ", ".join(missing_bed))
@@ -836,6 +863,7 @@ def solve_kiln(
             wall_iteration_mode=wall_iteration_mode,
             local_wall_tolerance_k=local_wall_tolerance_k,
             local_wall_max_iterations=local_wall_max_iterations,
+            bed_geometry_metadata=geometry_metadata,
         )
     if not layers:
         raise ValueError("至少需要 1 层衬里结构")
@@ -1161,6 +1189,7 @@ def _solve_kiln_three_phase(
     wall_iteration_mode: str,
     local_wall_tolerance_k: float,
     local_wall_max_iterations: int,
+    bed_geometry_metadata: Dict,
 ) -> KilnAxialSolution:
     """Conservative fixed-point coupling of gas, bed and radial wall nodes.
 
@@ -1183,13 +1212,17 @@ def _solve_kiln_three_phase(
         "cp_bed_j_kg_k": cp_bed_j_kg_k,
         "gas_bed_h_w_m2_k": gas_bed_h_w_m2_k,
         "wall_bed_h_w_m2_k": wall_bed_h_w_m2_k,
-        "gas_bed_area_per_length_m": gas_bed_area_per_length_m,
-        "wall_bed_contact_per_length_m": wall_bed_contact_per_length_m,
         "coupling_tolerance_k": coupling_tolerance_k,
     }
     for name, value in positive.items():
         if not math.isfinite(value) or value <= 0.0:
             raise ValueError(f"{name} must be finite and positive")
+    for name, value in (
+        ("gas_bed_area_per_length_m", gas_bed_area_per_length_m),
+        ("wall_bed_contact_per_length_m", wall_bed_contact_per_length_m),
+    ):
+        if not math.isfinite(value) or value < 0.0:
+            raise ValueError(f"{name} must be finite and non-negative")
     if not isinstance(coupling_max_iterations, int) or coupling_max_iterations < 1:
         raise ValueError("coupling_max_iterations must be a positive integer")
     inlet_gas = params.T_gas if inlet_gas_temperature_k is None else inlet_gas_temperature_k
@@ -1464,4 +1497,5 @@ def _solve_kiln_three_phase(
         local_wall_relaxation_factor=(
             final_local_relax if wall_iteration_mode == "semi_nonlinear" else None
         ),
+        bed_geometry=bed_geometry_metadata,
     )
