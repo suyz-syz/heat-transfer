@@ -51,6 +51,10 @@ def axial_plot_data(solution) -> Dict[str, List[float]]:
     }
     if material is not None:
         data["material_temperature_k"] = material
+    axial_result = solution.as_dict()
+    data["diagnostics"] = axial_result["diagnostics"]
+    data["model_semantics"] = axial_result["model_semantics"]
+    data["model_scope"] = axial_result["model_scope"]
     return data
 
 
