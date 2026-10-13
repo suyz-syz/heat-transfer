@@ -9,7 +9,7 @@ from pathlib import Path
 # Running a script sets sys.path[0] to scripts/, not the repository root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from kiln_ht.models.radiation.hitemp_wsgg_calibration import run_calibration
+from scripts.hitemp_calibration.hitemp_wsgg_calibration import run_calibration
 
 
 def main():
