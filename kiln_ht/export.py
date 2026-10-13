@@ -29,8 +29,13 @@ def build_report(
     lines.append("=" * 56)
     lines.append("水泥窑窑衬传热计算 — 结果报告")
     lines.append("=" * 56)
-    lines.append("模型范围：本报告的径向壁温为稳态基线解；三相壁温（若另行计算）")
-    lines.append("采用线性化网络近似，WSGG 状态为 provisional（暂定、未标定）。")
+    lines.append("模型范围：本报告的径向壁温为稳态基线解；轴向 states 为耦合壁温。")
+    if axial_data:
+        wall_model = axial_data.get("model_semantics", {}).get("three_phase_wall_model")
+        wall_label = "半非线性局部壁面迭代" if wall_model == "semi-nonlinear local wall solve" else "线性化网络近似"
+        lines.append(f"轴向壁面模型：{wall_label}；WSGG 状态为 provisional（暂定、未标定）。")
+    else:
+        lines.append("三相壁温若另行计算，采用线性化网络近似；WSGG 状态为 provisional（暂定、未标定）。")
     lines.append("结果用于工程估算，不构成工业定型或热应力绝对保证值。")
     if axial_data:
         semantics = axial_data.get("model_semantics", {})
