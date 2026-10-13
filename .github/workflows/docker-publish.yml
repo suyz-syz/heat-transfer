@@ -73,7 +73,7 @@ jobs:
           cleanup() { docker rm -f kiln-p0-smoke >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null \\
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null \
               && curl --fail --silent http://127.0.0.1:8501/ >/dev/null; then
               echo "API health and Streamlit Web UI are reachable."
               exit 0
