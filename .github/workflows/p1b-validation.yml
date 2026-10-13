@@ -20,9 +20,13 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements.txt
+      - name: Install headless UI system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri
       - name: Install application and test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt scipy
       - name: Run pytest, schema, and UI regression suite
-        run: python -m pytest tests/ -v
+        run: xvfb-run -a python -m pytest tests/ -v
