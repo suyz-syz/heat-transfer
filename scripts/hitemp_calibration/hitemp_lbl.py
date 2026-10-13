@@ -46,32 +46,44 @@ class SpectralLine:
 
 
 def load_hitemp_csv(path: str | Path) -> list[SpectralLine]:
-    """Load normalized CSV columns: molecule,nu,strength_ref,lower_energy,
-    air_gamma,self_gamma,temp_exponent,partition_ref,partition_exponent.
-    HITEMP exports must be converted to these units/columns explicitly.
+    """Load canonical HITEMP fields and map them to LBL line records.
+
+    Columns: molec_id,local_iso_id,nu,sw,a,gamma_air,gamma_self,elower,n_air,delta_air.
+    Molecule IDs follow HITRAN (1=H2O, 2=CO2); isotope is the local ID.
+    The approximate LBL engine retains but does not currently use a and delta_air.
     """
-    required = {f.name for f in SpectralLine.__dataclass_fields__.values()} - {"isotope"}
+    required = {
+        "molec_id", "local_iso_id", "nu", "sw", "a", "gamma_air",
+        "gamma_self", "elower", "n_air", "delta_air",
+    }
+    species = {"1": "H2O", "2": "CO2"}
     lines = []
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         missing = required - set(reader.fieldnames or [])
         if missing:
-            raise ValueError(f"line-list CSV missing columns: {sorted(missing)}")
+            raise ValueError(f"line-list CSV missing canonical columns: {sorted(missing)}")
         for row in reader:
-            lines.append(SpectralLine(
-                molecule=row["molecule"].strip().upper(),
-                nu=float(row["nu"]), strength_ref=float(row["strength_ref"]),
-                lower_energy=float(row["lower_energy"]), air_gamma=float(row["air_gamma"]),
-                self_gamma=float(row["self_gamma"] or 0.0),
-                temp_exponent=float(row["temp_exponent"]),
-                partition_ref=float(row["partition_ref"]),
-                partition_exponent=float(row["partition_exponent"]),
-                isotope=(row.get("isotope") or "").strip(),
-            ))
+            molecule_id = row["molec_id"].strip()
+            if molecule_id not in species:
+                raise ValueError(f"unsupported HITRAN molecule ID: {molecule_id!r}")
+            try:
+                line = SpectralLine(
+                    molecule=species[molecule_id], nu=float(row["nu"]),
+                    strength_ref=float(row["sw"]), lower_energy=float(row["elower"]),
+                    air_gamma=float(row["gamma_air"]), self_gamma=float(row["gamma_self"]),
+                    temp_exponent=float(row["n_air"]), partition_ref=1.0,
+                    partition_exponent=0.0, isotope=row["local_iso_id"].strip(),
+                )
+                unused_values = (float(row["a"]), float(row["delta_air"]))
+                if not all(math.isfinite(value) for value in unused_values):
+                    raise ValueError("non-finite unused canonical fields")
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"invalid canonical HITEMP row: {row}") from exc
+            lines.append(line)
     if not lines:
         raise ValueError("line-list CSV contains no spectral lines")
     return lines
-
 
 def _partition_ratio(
     line: SpectralLine, temperature: float,
