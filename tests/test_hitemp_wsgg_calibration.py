@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kiln_ht.models.radiation.hitemp_wsgg_calibration import (
+from scripts.hitemp_calibration.hitemp_wsgg_calibration import (
     constrained_bernstein_coefficients,
     evaluate_bernstein_weights,
     simplex_weights,
