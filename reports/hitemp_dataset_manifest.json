@@ -1,0 +1,212 @@
+{
+  "manifest_schema_version": 1,
+  "dataset_id": "hitemp_co2_h2o_narrow_band_sample",
+  "data_scope": "offline narrow-band calibration input; not a complete line database",
+  "provenance": {
+    "hitemp_release": "not recorded in repository; independent source/version audit pending",
+    "tips_release": "not recorded in repository; independent source/version audit pending",
+    "source_authenticity": "not independently authenticated",
+    "isotope_ids": "HITRAN molecule ID plus local isotopologue ID"
+  },
+  "files": {
+    "data/hitemp_co2_h2o_1000_4000_sample.csv": {
+      "sha256": "396693efc16958d1c011c74997a64c0a7a0589205de016e7d81baeec2fbaa5b7",
+      "bytes": 2674293,
+      "records": 40676,
+      "columns": [
+        "molec_id",
+        "local_iso_id",
+        "nu",
+        "sw",
+        "a",
+        "gamma_air",
+        "gamma_self",
+        "elower",
+        "n_air",
+        "delta_air"
+      ],
+      "wavenumber_cm-1": [
+        1000.12804,
+        3999.78743
+      ]
+    },
+    "data/tips_partition_sums_296_2400.csv": {
+      "sha256": "42a0875b99c16e99829d5e70aac74c33e97ba068663cf62ce182c2e84ef7be3f",
+      "bytes": 24453,
+      "records": 1032,
+      "columns": [
+        "molecule",
+        "isotope",
+        "temperature_K",
+        "Q"
+      ],
+      "temperature_K": [
+        296,
+        2400
+      ]
+    }
+  },
+  "isotopologue_coverage": [
+    {
+      "molec_id": 1,
+      "species": "H2O",
+      "local_iso_id": 1,
+      "line_count": 7537,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 1,
+      "species": "H2O",
+      "local_iso_id": 2,
+      "line_count": 2691,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 1,
+      "species": "H2O",
+      "local_iso_id": 3,
+      "line_count": 1920,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 1,
+      "species": "H2O",
+      "local_iso_id": 4,
+      "line_count": 3475,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 1,
+      "species": "H2O",
+      "local_iso_id": 5,
+      "line_count": 290,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 2,
+      "species": "CO2",
+      "local_iso_id": 1,
+      "line_count": 10764,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 2,
+      "species": "CO2",
+      "local_iso_id": 2,
+      "line_count": 3759,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 2,
+      "species": "CO2",
+      "local_iso_id": 3,
+      "line_count": 5610,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 2,
+      "species": "CO2",
+      "local_iso_id": 4,
+      "line_count": 1991,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 2,
+      "species": "CO2",
+      "local_iso_id": 5,
+      "line_count": 1384,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 2,
+      "species": "CO2",
+      "local_iso_id": 6,
+      "line_count": 844,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    },
+    {
+      "molec_id": 2,
+      "species": "CO2",
+      "local_iso_id": 7,
+      "line_count": 411,
+      "tips_rows": 86,
+      "tips_temperature_K": [
+        296,
+        2400
+      ]
+    }
+  ],
+  "conversion_rules": {
+    "line_source": "HITEMP/HITRAN 160-character fixed-width .par record",
+    "line_columns": {
+      "molec_id": "characters 1-2; numeric HITRAN molecule ID",
+      "local_iso_id": "character 3; local isotopologue ID",
+      "nu": "characters 4-15; cm^-1",
+      "sw": "characters 16-25; reference line intensity at 296 K",
+      "a": "characters 26-35; Einstein A value, retained as source field",
+      "gamma_air": "characters 36-40",
+      "gamma_self": "characters 41-45",
+      "elower": "characters 46-55; cm^-1",
+      "n_air": "characters 56-59; air-broadening temperature exponent",
+      "delta_air": "characters 60-67; air pressure shift"
+    },
+    "tips_columns": {
+      "molecule": "numeric HITRAN molecule ID (1=H2O, 2=CO2)",
+      "isotope": "numeric local isotopologue ID",
+      "temperature_K": "kelvin",
+      "Q": "partition sum"
+    },
+    "preprocessor": "scripts/prepare_hitemp_benchmark.py",
+    "normalization": "CSV headers use the canonical source-style line fields; values are not rescaled"
+  },
+  "limitations": [
+    "The exact source release/version and upstream checksum are not documented in the repository.",
+    "Observed isotope IDs describe this sample only and do not establish completeness for either species.",
+    "The sample covers a narrow calibration band and cannot support full-spectrum claims.",
+    "The offline pseudo-Voigt LBL approximation is not an independently validated reference standard."
+  ]
+}
