@@ -316,8 +316,8 @@ def validate_params(params: KilnParams) -> None:
         raise ValueError("温度必须使用绝对温度 K，且需大于 0")
     if params.T_env_rad is not None and params.T_env_rad <= 0:
         raise ValueError("T_env_rad 必须使用绝对温度 K，且需大于 0")
-    if not (0 < params.CO2 < 1):
-        raise ValueError("CO2 体积分数需在 0~1 之间")
+    if not (0 <= params.CO2 < 1):
+        raise ValueError("CO2 体积分数需在 [0, 1) 之间")
     fractions = [params.CO2, params.H2O, params.N2, params.O2]
     if any(x < 0 or x >= 1 for x in fractions):
         raise ValueError("CO2/H2O/N2/O2 体积分数必须在 [0,1) 内")
