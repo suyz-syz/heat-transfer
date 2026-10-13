@@ -30,6 +30,7 @@ from kiln_ht import (
     compute_temperature_curve,
     solve_wall,
     gas_fractions_for_mode,
+    solve_kiln,
 )
 
 app = FastAPI(
@@ -70,6 +71,23 @@ class KilnParamsIn(BaseModel):
 class SolveRequest(BaseModel):
     layers: List[LayerIn] = Field(..., min_length=1, description="衬里结构层")
     params: Optional[KilnParamsIn] = Field(None, description="工况参数（可省略）")
+
+
+class AxialSolveRequest(SolveRequest):
+    n_cells: int = Field(20, ge=1, le=5000, description="轴向控制体数量")
+    mass_flow_kg_s: float = Field(10.0, gt=0)
+    cp_gas_j_kg_k: float = Field(1150.0, gt=0)
+    inlet_gas_temperature_k: Optional[float] = Field(None, gt=0)
+    bed_inlet_temperature_k: Optional[float] = Field(None, gt=0)
+    bed_mass_flow_kg_s: Optional[float] = Field(None, gt=0)
+    cp_bed_j_kg_k: Optional[float] = Field(None, gt=0)
+    gas_bed_h_w_m2_k: Optional[float] = Field(None, gt=0)
+    wall_bed_h_w_m2_k: Optional[float] = Field(None, gt=0)
+    gas_bed_area_per_length_m: Optional[float] = Field(None, gt=0)
+    wall_bed_contact_per_length_m: Optional[float] = Field(None, gt=0)
+    bed_flow_direction: Literal["co-current", "counter-current"] = Field("counter-current")
+    coupling_max_iterations: int = Field(100, ge=1)
+    coupling_tolerance_k: float = Field(1.0e-5, gt=0)
 
 
 def _to_domain(req: SolveRequest):
@@ -119,7 +137,7 @@ def root():
     return {
         "service": "cement-kiln-heat-transfer",
         "version": "1.0.0",
-        "endpoints": ["/solve", "/temperature-curve", "/health"],
+        "endpoints": ["/solve", "/axial-solve", "/temperature-curve", "/health"],
     }
 
 
@@ -143,6 +161,44 @@ def solve(req: SolveRequest):
         return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/axial-solve")
+def axial_solve(req: AxialSolveRequest):
+    """Return axial states, radial baseline wall solutions, and convergence diagnostics."""
+    try:
+        layers, params = _to_domain(req)
+        solution = solve_kiln(
+            layers,
+            params,
+            n_cells=req.n_cells,
+            mass_flow_kg_s=req.mass_flow_kg_s,
+            cp_gas_j_kg_k=req.cp_gas_j_kg_k,
+            inlet_gas_temperature_k=req.inlet_gas_temperature_k,
+            bed_inlet_temperature_k=req.bed_inlet_temperature_k,
+            bed_mass_flow_kg_s=req.bed_mass_flow_kg_s,
+            cp_bed_j_kg_k=req.cp_bed_j_kg_k,
+            gas_bed_h_w_m2_k=req.gas_bed_h_w_m2_k,
+            wall_bed_h_w_m2_k=req.wall_bed_h_w_m2_k,
+            gas_bed_area_per_length_m=req.gas_bed_area_per_length_m,
+            wall_bed_contact_per_length_m=req.wall_bed_contact_per_length_m,
+            bed_flow_direction=req.bed_flow_direction,
+            coupling_max_iterations=req.coupling_max_iterations,
+            coupling_tolerance_k=req.coupling_tolerance_k,
+        )
+        return solution.as_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail={
+            "reason": str(exc),
+            "diagnostics": {
+                "iteration_count": None,
+                "max_temperature_change_k": None,
+                "max_energy_residual_w": None,
+                "converged": False,
+            },
+        })
 
 
 @app.post("/temperature-curve")
