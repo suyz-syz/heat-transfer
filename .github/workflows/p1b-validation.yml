@@ -27,6 +27,6 @@ jobs:
       - name: Install application and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt scipy
+          python -m pip install -r requirements.txt scipy httpx2
       - name: Run pytest, schema, and UI regression suite
         run: xvfb-run -a python -m pytest tests/ -v
