@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'feat/phase-1c-p0-semantics-diagnostics'
+      - 'feat/phase-1c-p1a-radiation-absorption'
     tags:
       - 'v*'
   workflow_dispatch:
