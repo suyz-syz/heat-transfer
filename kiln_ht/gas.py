@@ -100,4 +100,37 @@ class GasMixture:
         return P_pa / (self.gas_constant() * T_k)
 
 
+def gas_fractions_for_mode(co2: float, h2o: float, mode: str = "combustion") -> Dict[str, float]:
+    """Return normalized kiln gas mole fractions for the selected operating mode.
+
+    Combustion mode treats CO2/H2O as the user inputs and distributes the
+    remaining fraction using the legacy N2:O2 ratio (0.69:0.03). Hot-air mode
+    uses dry air and ignores CO2/H2O inputs.
+    """
+    mode = str(mode).lower()
+    if mode == "hot_air":
+        return {"CO2": 0.0, "H2O": 0.0, "N2": 0.79, "O2": 0.21}
+    if mode != "combustion":
+        raise ValueError("气相模式必须为 combustion 或 hot_air")
+
+    co2, h2o = float(co2), float(h2o)
+    if (
+        not math.isfinite(co2) or not math.isfinite(h2o)
+        or co2 < 0.0 or h2o < 0.0
+        or co2 >= 1.0 or h2o >= 1.0
+    ):
+        raise ValueError("CO2/H2O 摩尔分数必须是 [0, 1) 内的有限值")
+    remaining = 1.0 - co2 - h2o
+    if remaining < -1.0e-12:
+        raise ValueError("CO2 与 H2O 摩尔分数之和不能超过 1")
+    remaining = max(0.0, remaining)
+    residual_total = 0.69 + 0.03
+    return {
+        "CO2": co2,
+        "H2O": h2o,
+        "N2": remaining * 0.69 / residual_total,
+        "O2": remaining * 0.03 / residual_total,
+    }
+
+
 DEFAULT_GAS = GasMixture(CO2=0.20, H2O=0.08, N2=0.69, O2=0.03)

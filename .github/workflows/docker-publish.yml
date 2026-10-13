@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, feat/phase-1c-gui-docker-apk]
     tags: ['v*']
   workflow_dispatch:
 
