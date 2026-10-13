@@ -321,10 +321,31 @@ with st.sidebar:
                         step=1.0, key="axial_h_gas_bed")
         st.number_input("壁-物料换热系数 (W/m²·K)", min_value=0.01, value=50.0,
                         step=1.0, key="axial_h_wall_bed")
-        st.number_input("气-物料有效换热面积/长度 (m)", min_value=0.001,
-                        value=1.0, step=0.1, key="axial_area_gas_bed")
-        st.number_input("壁-物料接触长度/长度 (m)", min_value=0.001,
-                        value=0.2, step=0.05, key="axial_contact_wall_bed")
+        st.checkbox("启用圆形截面床层几何估算", value=False, key="bed_geometry_enabled")
+        if _ss.get("bed_geometry_enabled", False):
+            st.selectbox("几何输入方式", ["filling_fraction", "filling_angle"],
+                         format_func=lambda x: "填充率" if x == "filling_fraction" else "填充角",
+                         key="bed_geometry_input_mode")
+            if _ss.get("bed_geometry_input_mode", "filling_fraction") == "filling_fraction":
+                st.number_input("床层填充率 f", min_value=0.0, max_value=1.0,
+                                value=0.25, step=0.01, key="bed_filling_fraction")
+            else:
+                st.number_input("床层填充角 β (°)", min_value=0.0, max_value=360.0,
+                                value=120.0, step=1.0, key="bed_filling_angle_deg")
+            st.checkbox("手动覆盖气-物料面积", value=False, key="bed_override_gas")
+            if _ss.get("bed_override_gas", False):
+                st.number_input("气-物料面积覆盖值/长度 (m)", min_value=0.0,
+                                value=1.0, step=0.1, key="axial_area_gas_bed")
+            st.checkbox("手动覆盖壁-物料接触长度", value=False, key="bed_override_wall")
+            if _ss.get("bed_override_wall", False):
+                st.number_input("壁-物料接触长度覆盖值/长度 (m)", min_value=0.0,
+                                value=0.2, step=0.05, key="axial_contact_wall_bed")
+        else:
+            st.number_input("气-物料有效换热面积/长度 (m)", min_value=0.001,
+                            value=1.0, step=0.1, key="axial_area_gas_bed")
+            st.number_input("壁-物料接触长度/长度 (m)", min_value=0.001,
+                            value=0.2, step=0.05, key="axial_contact_wall_bed")
+        st.caption("几何假设：理想圆形窑截面、静止平坦料面、沿轴向均匀填充；几何面积是估算值，不推导换热系数。")
         st.selectbox("物料流向", ["counter-current", "co-current"],
                      format_func=lambda x: {"counter-current": "逆流", "co-current": "顺流"}[x],
                      key="axial_bed_direction")
@@ -623,10 +644,23 @@ if _ss.get("calc_trigger"):
                 "cp_bed_j_kg_k": float(_ss.get("axial_cp_bed", 1000.0)),
                 "gas_bed_h_w_m2_k": float(_ss.get("axial_h_gas_bed", 20.0)),
                 "wall_bed_h_w_m2_k": float(_ss.get("axial_h_wall_bed", 50.0)),
-                "gas_bed_area_per_length_m": float(_ss.get("axial_area_gas_bed", 1.0)),
-                "wall_bed_contact_per_length_m": float(_ss.get("axial_contact_wall_bed", 0.2)),
                 "bed_flow_direction": _ss.get("axial_bed_direction", "counter-current"),
             })
+            if _ss.get("bed_geometry_enabled", False):
+                _mode = _ss.get("bed_geometry_input_mode", "filling_fraction")
+                _axial_kwargs["bed_geometry"] = {
+                    "enabled": True,
+                    "input_mode": _mode,
+                    "filling_fraction": float(_ss.get("bed_filling_fraction", 0.25)) if _mode == "filling_fraction" else None,
+                    "filling_angle_deg": float(_ss.get("bed_filling_angle_deg", 120.0)) if _mode == "filling_angle" else None,
+                }
+                if _ss.get("bed_override_gas", False):
+                    _axial_kwargs["gas_bed_area_per_length_m"] = float(_ss.get("axial_area_gas_bed", 1.0))
+                if _ss.get("bed_override_wall", False):
+                    _axial_kwargs["wall_bed_contact_per_length_m"] = float(_ss.get("axial_contact_wall_bed", 0.2))
+            else:
+                _axial_kwargs["gas_bed_area_per_length_m"] = float(_ss.get("axial_area_gas_bed", 1.0))
+                _axial_kwargs["wall_bed_contact_per_length_m"] = float(_ss.get("axial_contact_wall_bed", 0.2))
         _axial = solve_kiln(layers, params, **_axial_kwargs)
         _axial_data = axial_plot_data(_axial)
         _axial_x = _axial_data["z_m"]
@@ -658,6 +692,10 @@ if _ss.get("calc_trigger"):
         )
         st.caption(
             "求解诊断：" + json.dumps(_axial.as_dict()["diagnostics"], ensure_ascii=False)
+        )
+        st.caption(
+            "床层几何元数据（含来源、有效面积与假设）：" +
+            json.dumps(_axial.as_dict()["bed_geometry"], ensure_ascii=False)
         )
 
         st.subheader("轴向辐射热流密度")
