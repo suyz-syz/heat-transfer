@@ -1430,9 +1430,14 @@ def _solve_kiln_three_phase(
             f"allowed={1.0e-3 * energy_scale:.6g} W, iterations={converged_iteration}"
         )
     LOGGER.info(
-        "solve_kiln completed: mode=three_phase iterations=%d "
-        "max_temperature_change_k=%.6g max_energy_residual_w=%.6g",
-        converged_iteration, final_delta, max_residual,
+        "solve_kiln completed: mode=three_phase wall_mode=%s iterations=%d "
+        "local_wall_iterations=%d local_wall_evaluations=%d lambda_axial=%.4g "
+        "lambda_local=%.4g max_temperature_change_k=%.6g "
+        "max_wall_energy_residual_w=%.6g max_energy_residual_w=%.6g",
+        wall_iteration_mode, converged_iteration, local_iteration_total,
+        local_evaluation_total, final_relax,
+        (final_local_relax if wall_iteration_mode == "semi_nonlinear" else 0.0),
+        final_delta, max(final_wall_residuals + [0.0]), max_residual,
     )
     return KilnAxialSolution(
         z_faces_m=z_faces,
