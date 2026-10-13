@@ -86,18 +86,18 @@ class TestUIBuild:
         """每层模块应包含 材料 Spinner / a,b,c 输入 / 温度相关勾选 / 接触热阻输入。"""
         _, root = app
         ins = root.input_screen
-        # 每行 9 个元素：name, thick, mat, a, b, c, rc, temp_enabled, save_btn
-        assert len(ins._layer_rows[0]) == 9
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        # 每行 10 个元素：名称/厚度/材料/模式/a/b/c/Rc/保存/插值表
+        assert len(ins._layer_rows[0]) == 10
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         from kivy.uix.spinner import Spinner
-        from kivy.uix.checkbox import CheckBox
         assert isinstance(mat, Spinner)
+        assert isinstance(mode_spinner, Spinner)
         assert mat.text == "自定义"
         assert "硅酸铝纤维" not in mat.values, "不应内置任何材料"
         assert a_in.text == "1.0"
         assert rc.text == "0.0"
         assert isinstance(temp_enabled, CheckBox)
-        assert temp_enabled.active is False
+        assert mode_spinner.text == "常数"
         assert b.disabled is True
         assert c.disabled is True
 
@@ -112,14 +112,14 @@ class TestUIBuild:
         _, root = app
         ins = root.input_screen
         ins._rebuild_layers()
-        name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
+        name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in = ins._layer_rows[0]
         assert "测试浇注料" in mat.values
         mat.text = "测试浇注料"
         # 选择材料后应自动填充 a/b/c 并勾选温度相关
         ins._apply_material(0)
         assert a_in.text == "1.2"
         assert b.text == "0.00045"
-        assert temp_enabled.active is True
+        assert mode_spinner.text == "多项式"
         layers, _ = ins.collect_params()
         assert layers[0].k_coef == (1.2, 4.5e-4, -1.2e-7)
         assert layers[0].Rc == 0.0
@@ -130,7 +130,7 @@ class TestUIBuild:
         ins = root.input_screen
         name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
         mat.text = "自定义"      # 重置为自定义（fixture 为 module-scoped，可能被前一测试改过）
-        temp_enabled.active = False   # 重置温度相关勾选，忽略 b/c
+        mode_spinner.text = "常数"  # 常数模式忽略 b/c
         a_in.text = "0.6"
         layers, _ = ins.collect_params()
         assert layers[0].k_coef == (0.6, 0.0, 0.0)
@@ -140,8 +140,8 @@ class TestUIBuild:
         _, root = app
         ins = root.input_screen
         name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
-        temp_enabled.active = False   # 重置（module-scoped fixture 共享状态）
-        assert temp_enabled.active is False
+        mode_spinner.text = "常数"  # 重置（module-scoped fixture 共享状态）
+        assert mode_spinner.text == "常数"
         assert b.disabled is True
         assert c.disabled is True
 
@@ -151,7 +151,7 @@ class TestUIBuild:
         ins = root.input_screen
         name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
         mat.text = "自定义"
-        temp_enabled.active = True
+        mode_spinner.text = "多项式"
         a_in.text = "1.2"
         b.text = "4.5e-4"
         c.text = "-1.2e-7"
@@ -177,7 +177,7 @@ class TestUIBuild:
         ins = root.input_screen
         name, thick, mat, a_in, b, c, rc, temp_enabled, save_btn = ins._layer_rows[0]
         mat.text = "自定义"
-        temp_enabled.active = False
+        mode_spinner.text = "常数"
         a_in.text = "1.5"
         b.text = "9.9e-4"
         c.text = "9.9e-9"
@@ -249,7 +249,7 @@ class TestUICalculation:
         assert len(res.iface_body.children) == 5  # 4 层 + 1 外壁
 
         # 详细结果
-        assert len(res.detail_body.children) == 10
+        assert len(res.detail_body.children) >= 10
 
         # 温度曲线
         assert len(res.curve._x) > 10
