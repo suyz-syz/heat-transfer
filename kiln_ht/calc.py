@@ -527,7 +527,7 @@ def solve_wall(layers: List[Layer], params: KilnParams) -> WallSolution:
     q_in = Qprime / (2.0 * math.pi * r_in)     # 内壁面热流密度 W/m²
     q_out = Qprime / (2.0 * math.pi * r_out)   # 外壁面热流密度 W/m²
 
-    LOGGER.info(
+    LOGGER.debug(
         "solve_wall converged: iterations=%d max_temperature_change_k=%.6g "
         "max_energy_residual_relative=%.6g max_energy_residual_w=%.6g",
         it + 1, max(abs(corr1), abs(corrN)), energy_rel, abs(Q_in - Q_out),
