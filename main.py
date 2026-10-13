@@ -109,6 +109,14 @@ DANGER      = (0.937, 0.325, 0.314, 1.0)     # #EF5350  错误提示
 
 
 # ============ 工具 ============
+def _read_conductivity_coefficients(a_input, b_input, c_input):
+    """读取窑衬导热系数控件底层 TextInput 的当前 a/b/c 值。"""
+    return tuple(
+        float(control.textinput.text)
+        for control in (a_input, b_input, c_input)
+    )
+
+
 def _get_display_wall_temperature(sol, axial_data=None, use_three_phase=False):
     """选择顶部外壁温度 KPI 的数据源（支持三相轴向平均值与径向基线回退）。"""
     if use_three_phase and isinstance(axial_data, dict):
@@ -1042,10 +1050,11 @@ class InputScreen(Screen):
         """解析界面参数，非法输入抛 ValueError。"""
         layers = []
         for i, (name, thick, mat, a_in, b, c, rc, mode_spinner, save_btn, table_in) in enumerate(self._layer_rows):
-            a = float(a_in.text)
+            # Read the live Kivy TextInput values directly; UnitInput.text is a Python
+            # proxy and is not a Kivy StringProperty suitable for UI-bound data flow.
+            k_coef = _read_conductivity_coefficients(a_in, b, c)
             mode = mode_spinner.text
             if mode == "多项式":
-                k_coef = (a, float(b.text), float(c.text))
                 conductivity_model = ConductivityModel.polynomial(k_coef, "degC")
             elif mode == "插值表":
                 try:
@@ -1055,8 +1064,8 @@ class InputScreen(Screen):
                 conductivity_model = ConductivityModel.table(points)
                 k_coef = (1.0, 0.0, 0.0)
             else:
-                k_coef = (a, 0.0, 0.0)
-                conductivity_model = ConductivityModel.constant(a)
+                k_coef = (k_coef[0], 0.0, 0.0)
+                conductivity_model = ConductivityModel.constant(k_coef[0])
             layers.append(Layer(name=name.text.strip() or f"层{i+1}",
                                 thickness=float(thick.text) / 1000.0,
                                 k_coef=k_coef, Rc=float(rc.text),
