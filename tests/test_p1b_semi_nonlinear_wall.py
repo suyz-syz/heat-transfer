@@ -65,6 +65,8 @@ def test_semi_nonlinear_returns_serializable_cellwise_diagnostics():
     assert diag["local_wall_iteration_count"] > 0
     assert diag["local_wall_evaluation_count"] > 0
     assert diag["max_wall_temperature_change_k"] is not None
+    assert 0.05 <= diag["local_wall_relaxation_factor"] <= 0.7
+    assert diag["wall_temperature_bounds_k"] == [200.0, 3500.0]
     assert diag["max_wall_energy_residual_w"] < 5.0
     assert len(diag["wall_energy_residuals_w"]) == 2
     assert max(diag["wall_energy_residuals_w"]) < 5.0
