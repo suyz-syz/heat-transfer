@@ -47,6 +47,7 @@ jobs:
             type=raw,value=p0-${{ github.sha }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -60,7 +61,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          image="ghcr.io/${GITHUB_REPOSITORY}:p0-${GITHUB_SHA}"
+          image="ghcr.io/${GITHUB_REPOSITORY}@${{ steps.build.outputs.digest }}"
           docker pull --platform linux/amd64 "$image"
           docker run --rm -d --name kiln-p0-smoke -p 8000:8000 -p 8501:8501 "$image"
           cleanup() { docker rm -f kiln-p0-smoke >/dev/null 2>&1 || true; }
