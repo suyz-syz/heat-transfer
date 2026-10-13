@@ -748,7 +748,10 @@ class KilnAxialSolution:
             "model_semantics": {
                 "wall_solutions": "radial steady-state baseline/reference; coupled wall states are stored separately",
                 "states": "authoritative coupled gas-bed-wall axial states" if self.states else None,
-                "three_phase_wall_model": (\n                    "semi-nonlinear local wall solve" if self.wall_iteration_mode == "semi_nonlinear" else "linearized network approximation"\n                ) if self.states else None,
+                "three_phase_wall_model": (
+                    "semi-nonlinear local wall solve" if self.wall_iteration_mode == "semi_nonlinear"
+                    else "linearized network approximation"
+                ) if self.states else None,
                 "wsgg_status": "provisional",
                 "industrial_design_or_absolute_thermal_stress_guarantee": False,
             },
