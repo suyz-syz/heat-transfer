@@ -164,6 +164,14 @@ def test_api_response_and_visualization_keep_geometry_metadata_serializable():
     assert plotted["bed_geometry"] == solution.as_dict()["bed_geometry"]
     json.dumps(plotted, allow_nan=False)
 
+    from kiln_ht.calc import solve_wall
+    from kiln_ht.export import build_report
+    params = KilnParams(L_kiln=2.0, T_gas=850.0)
+    report = build_report(LAYERS, params, solve_wall(LAYERS, params), axial_data=plotted)
+    assert "【床层几何】" in report
+    assert "assumptions" in report
+    assert "filling_fraction" in report
+
 
 def test_schema_config_preserves_and_validates_bed_geometry():
     from kiln_ht.config_schema import normalize_config
