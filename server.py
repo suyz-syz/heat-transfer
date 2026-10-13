@@ -83,8 +83,9 @@ class AxialSolveRequest(SolveRequest):
     cp_bed_j_kg_k: Optional[float] = Field(None, gt=0)
     gas_bed_h_w_m2_k: Optional[float] = Field(None, gt=0)
     wall_bed_h_w_m2_k: Optional[float] = Field(None, gt=0)
-    gas_bed_area_per_length_m: Optional[float] = Field(None, gt=0)
-    wall_bed_contact_per_length_m: Optional[float] = Field(None, gt=0)
+    gas_bed_area_per_length_m: Optional[float] = Field(None, ge=0)
+    wall_bed_contact_per_length_m: Optional[float] = Field(None, ge=0)
+    bed_geometry: Optional[dict] = Field(None, description="可选圆形截面床层几何辅助配置；默认关闭")
     bed_flow_direction: Literal["co-current", "counter-current"] = Field("counter-current")
     coupling_max_iterations: int = Field(100, ge=1)
     coupling_tolerance_k: float = Field(1.0e-5, gt=0)
@@ -192,6 +193,7 @@ def axial_solve(req: AxialSolveRequest):
             wall_iteration_mode=req.wall_iteration_mode,
             local_wall_tolerance_k=req.local_wall_tolerance_k,
             local_wall_max_iterations=req.local_wall_max_iterations,
+            bed_geometry=req.bed_geometry,
         )
         return solution.as_dict()
     except ValueError as exc:
