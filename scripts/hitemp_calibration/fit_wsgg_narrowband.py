@@ -139,8 +139,19 @@ def fit_model(
     if np.unique(u).size < 2:
         raise ValueError("training set must contain at least two distinct pressure*path values")
 
-    # Equal initial weights and evenly spaced initial kappa gaps.
+    # Start from separated, physically useful kappa scales rather than an
+    # evenly spaced partition of the full bound. With the default bounds this
+    # initializes roughly at 0.01, 0.1, 1, and 10 atm^-1 m^-1.
+    span = kappa_max - kappa_min
+    first = max(kappa_min + span * 1e-8, min(0.01, kappa_max * 1e-4))
+    last = min(kappa_max - span * 1e-8, max(first * 10.0, min(10.0, kappa_min + span * 0.1)))
+    if n_gases == 1:
+        initial_kappas = np.asarray([(first + last) * 0.5])
+    else:
+        initial_kappas = np.geomspace(first, last, n_gases)
+    gaps = np.diff(np.r_[kappa_min, initial_kappas, kappa_max])
     initial = np.zeros((n_gases - 1) + n_gases, dtype=float)
+    initial[n_gases - 1:] = np.log(gaps[:-1] / gaps[-1])
 
     def residual(params: np.ndarray) -> np.ndarray:
         weights, kappas = decode_parameters(params, n_gases, kappa_min, kappa_max)
