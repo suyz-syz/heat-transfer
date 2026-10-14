@@ -139,7 +139,7 @@ def predict_tau(
             or (weight_values.ndim == 2 and weight_values.shape[0] != u_values.size)
             or not np.all(np.isfinite(weight_values))
             or not np.all(np.isfinite(kappa_values))):
-        raise ValueError("weights and kappas must be finite, nonempty vectors of equal length")
+        raise ValueError("weights and kappas must be finite, nonempty arrays with matching gas dimensions")
     weight_sums = weight_values.sum(axis=-1)
     if (np.any(weight_values < 0) or not np.allclose(weight_sums, 1.0, atol=1e-12)
             or np.any(kappa_values < 0) or np.any(np.diff(kappa_values) < 0)):
@@ -147,8 +147,15 @@ def predict_tau(
     terms = np.exp(-u_values[:, None] * kappa_values[None, :])
     predicted = (terms @ weight_values if weight_values.ndim == 1
                  else np.sum(terms * weight_values, axis=1))
-    if not np.all(np.isfinite(predicted)) or np.any(predicted < 0) or np.any(predicted > 1):
+    roundoff_tolerance = 32 * np.finfo(float).eps
+    if (not np.all(np.isfinite(predicted))
+            or np.any(predicted < -roundoff_tolerance)
+            or np.any(predicted > 1 + roundoff_tolerance)):
         raise ArithmeticError("WSGG transmittance is outside physical bounds [0, 1]")
+    # Only correct floating-point noise at the physical endpoints; material
+    # violations above raise rather than being silently clipped.
+    predicted = np.clip(predicted, 0.0, 1.0)
+    predicted[u_values == 0] = 1.0
     return predicted
 
 

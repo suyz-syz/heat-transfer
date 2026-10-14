@@ -1,0 +1,104 @@
+{
+  "status": "domain_guard_passed_raw_extension_is_diagnostic_only",
+  "fit_report": "reports\\hitemp_wsgg_smooth_composition_cv.json",
+  "training_domain": {
+    "temperature_K": {
+      "min": 600.0,
+      "max": 2400.0
+    },
+    "pressure_atm": {
+      "min": 0.3,
+      "max": 3.0
+    },
+    "x_co2": {
+      "min": 0.08,
+      "max": 0.2
+    },
+    "x_h2o": {
+      "min": 0.04,
+      "max": 0.1
+    },
+    "optical_path_atm_m": {
+      "min": 0.015,
+      "max": 15.0
+    }
+  },
+  "domain_guard_probes": [
+    {
+      "probe": "temperature_below",
+      "rejected": true,
+      "reason": "temperature_K=500.0 outside calibrated domain [600.0, 2400.0]; refusing extrapolation"
+    },
+    {
+      "probe": "temperature_above",
+      "rejected": true,
+      "reason": "temperature_K=2600.0 outside calibrated domain [600.0, 2400.0]; refusing extrapolation"
+    },
+    {
+      "probe": "x_co2_below",
+      "rejected": true,
+      "reason": "x_co2=0.05 outside calibrated domain [0.08, 0.2]; refusing extrapolation"
+    },
+    {
+      "probe": "x_co2_above",
+      "rejected": true,
+      "reason": "x_co2=0.25 outside calibrated domain [0.08, 0.2]; refusing extrapolation"
+    },
+    {
+      "probe": "x_h2o_below",
+      "rejected": true,
+      "reason": "x_h2o=0.02 outside calibrated domain [0.04, 0.1]; refusing extrapolation"
+    },
+    {
+      "probe": "x_h2o_above",
+      "rejected": true,
+      "reason": "x_h2o=0.15 outside calibrated domain [0.04, 0.1]; refusing extrapolation"
+    },
+    {
+      "probe": "optical_path_above",
+      "rejected": true,
+      "reason": "optical_path_atm_m=18.0 outside calibrated domain [0.015, 15.0]; refusing extrapolation"
+    }
+  ],
+  "raw_formula_stress_scan": {
+    "temperature_K": [
+      300.0,
+      3000.0
+    ],
+    "temperature_sample_count": 601,
+    "composition_cases_x_co2_x_h2o": [
+      [
+        0.05,
+        0.02
+      ],
+      [
+        0.25,
+        0.15
+      ],
+      [
+        0.12,
+        0.08
+      ]
+    ],
+    "u_scan_atm_m": [
+      0.0,
+      20.0
+    ],
+    "weights_finite_and_simplex": true,
+    "weight_minimum": 0.012324866281621065,
+    "weight_maximum": 0.6244274270379492,
+    "maximum_absolute_weight_change_per_K": 0.00026681273009315776,
+    "tau_bounds_violations": 0,
+    "maximum_positive_tau_step_as_u_increases": 0.0,
+    "maximum_absolute_tau_at_u0_minus_one": 0.0
+  },
+  "interpretation": [
+    "The supported prediction path rejected all seven out-of-domain probes.",
+    "The raw polynomial-logit extension was scanned only for numeric shape and physical bounds; no reference truth exists outside the sampled domain.",
+    "The quadratic temperature logits are continuous and the weight scan showed no abrupt high-frequency oscillation; this does not imply out-of-domain accuracy.",
+    "The mixture-of-exponentials remains bounded and non-increasing with optical path when simplex weights and nonnegative shared kappas are enforced."
+  ],
+  "production_solver_changed": false,
+  "leckner_fast_path_changed": false,
+  "provisional_status_removed": false
+}
