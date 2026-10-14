@@ -87,7 +87,16 @@ def lbl_spectrum(lines, tips_map, temperature: float, pressure: float,
                  wing: float = 25.0):
     if step <= 0 or pressure <= 0 or temperature <= 0:
         raise ValueError("step, pressure, and temperature must be positive")
-    wn = np.arange(2000.0, 2400.0 + step * 0.5, step)
+    intervals = int(round((2400.0 - 2000.0) / step))
+    if intervals < 1:
+        raise ValueError("step is too large for the 2000-2400 cm-1 band")
+    effective_step = (2400.0 - 2000.0) / intervals
+    if not math.isclose(effective_step, step, rel_tol=1e-10, abs_tol=1e-12):
+        raise ValueError("step must divide the 2000-2400 cm-1 band into equal intervals")
+    # linspace makes both endpoints exact; arange can omit the final fine-grid
+    # node due to floating-point stop rounding, invalidating grid comparisons.
+    wn = np.linspace(2000.0, 2400.0, intervals + 1)
+    step = effective_step
     alpha = np.zeros(wn.size, dtype=float)
     mol = lines["molec_id"].to_numpy(int)
     iso = lines["local_iso_id"].to_numpy(int)
