@@ -134,15 +134,19 @@ def predict_tau(
         raise ValueError(
             f"optical path outside calibrated domain [{u_min}, {u_max}]; refusing extrapolation"
         )
-    if (weight_values.ndim != 1 or kappa_values.ndim != 1
-            or weight_values.size == 0 or weight_values.size != kappa_values.size
+    if (weight_values.ndim not in (1, 2) or kappa_values.ndim != 1
+            or weight_values.shape[-1] == 0 or weight_values.shape[-1] != kappa_values.size
+            or (weight_values.ndim == 2 and weight_values.shape[0] != u_values.size)
             or not np.all(np.isfinite(weight_values))
             or not np.all(np.isfinite(kappa_values))):
         raise ValueError("weights and kappas must be finite, nonempty vectors of equal length")
-    if (np.any(weight_values < 0) or not np.isclose(weight_values.sum(), 1.0, atol=1e-12)
+    weight_sums = weight_values.sum(axis=-1)
+    if (np.any(weight_values < 0) or not np.allclose(weight_sums, 1.0, atol=1e-12)
             or np.any(kappa_values < 0) or np.any(np.diff(kappa_values) < 0)):
         raise ValueError("WSGG parameters violate simplex or ordered nonnegative kappa constraints")
-    predicted = np.exp(-u_values[:, None] * kappa_values[None, :]) @ weight_values
+    terms = np.exp(-u_values[:, None] * kappa_values[None, :])
+    predicted = (terms @ weight_values if weight_values.ndim == 1
+                 else np.sum(terms * weight_values, axis=1))
     if not np.all(np.isfinite(predicted)) or np.any(predicted < 0) or np.any(predicted > 1):
         raise ArithmeticError("WSGG transmittance is outside physical bounds [0, 1]")
     return predicted

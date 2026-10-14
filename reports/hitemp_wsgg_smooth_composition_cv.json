@@ -1,0 +1,465 @@
+{
+  "status": "offline_experiment_only_requires_independent_validation",
+  "method": "softmax WSGG weights with degree-2 temperature and linear CO2/H2O mole-fraction logits; shared ordered kappas; ridge penalty on non-intercept coefficients",
+  "input": "data\\hitemp_narrowband_tau_reference.csv",
+  "input_sha256": "17bad5d120680b96e52d862835f7eb9389b4e81a46f9d7f6c3b4af289e3f6252",
+  "condition_group_count": 54,
+  "cross_validation": {
+    "outer_folds": 4,
+    "inner_folds": 3,
+    "grouping": "complete (temperature_K, pressure_atm, x_co2, x_h2o) groups; all path rows stay in one fold",
+    "seed": "p3b-smooth-composition-v1",
+    "regularization_grid": [
+      0.01,
+      0.1,
+      1.0
+    ],
+    "selected_regularization_by_outer_fold": [
+      0.1,
+      0.01,
+      0.1,
+      0.01
+    ],
+    "folds": [
+      {
+        "fold": 0,
+        "train_group_count": 40,
+        "validation_group_count": 14,
+        "selected_regularization": 0.1,
+        "inner_cv_rmse_by_regularization": {
+          "0.01": 0.02106416725888152,
+          "0.1": 0.020959874353288832,
+          "1.0": 0.0240902565685594
+        },
+        "validation_rmse_tau": 0.03456860748379635
+      },
+      {
+        "fold": 1,
+        "train_group_count": 40,
+        "validation_group_count": 14,
+        "selected_regularization": 0.01,
+        "inner_cv_rmse_by_regularization": {
+          "0.01": 0.026406635915287694,
+          "0.1": 0.026553649005785582,
+          "1.0": 0.028261438466352453
+        },
+        "validation_rmse_tau": 0.025611899922922864
+      },
+      {
+        "fold": 2,
+        "train_group_count": 41,
+        "validation_group_count": 13,
+        "selected_regularization": 0.1,
+        "inner_cv_rmse_by_regularization": {
+          "0.01": 0.027889896666003174,
+          "0.1": 0.025806034222559046,
+          "1.0": 0.028595985368233608
+        },
+        "validation_rmse_tau": 0.023910785283447908
+      },
+      {
+        "fold": 3,
+        "train_group_count": 41,
+        "validation_group_count": 13,
+        "selected_regularization": 0.01,
+        "inner_cv_rmse_by_regularization": {
+          "0.01": 0.027940679773348773,
+          "0.1": 0.028574849577294004,
+          "1.0": 0.032060052732705346
+        },
+        "validation_rmse_tau": 0.020914917452580346
+      }
+    ]
+  },
+  "out_of_fold_metrics": {
+    "global_shared_weights": {
+      "sample_count": 648,
+      "condition_group_count": 54,
+      "rmse_tau": 0.05332020891132641,
+      "mae_tau": 0.042659178491501436,
+      "max_absolute_error_tau": 0.1725375957602584,
+      "absolute_error_p95_tau": 0.1006325630421566,
+      "mape_percent": 6.823979848292802
+    },
+    "smooth_temperature_composition_weights": {
+      "sample_count": 648,
+      "condition_group_count": 54,
+      "rmse_tau": 0.026885382610596382,
+      "mae_tau": 0.02094978025762743,
+      "max_absolute_error_tau": 0.09054093154576903,
+      "absolute_error_p95_tau": 0.053223932061157685,
+      "mape_percent": 3.320960326887459
+    },
+    "by_temperature": {
+      "T_le_1200K": {
+        "global": {
+          "sample_count": 324,
+          "condition_group_count": 27,
+          "rmse_tau": 0.047605214654634645,
+          "mae_tau": 0.03931171037464523,
+          "max_absolute_error_tau": 0.1266621495625404,
+          "absolute_error_p95_tau": 0.08615413060767818,
+          "mape_percent": 6.705302282225847
+        },
+        "smooth_composition": {
+          "sample_count": 324,
+          "condition_group_count": 27,
+          "rmse_tau": 0.019949619908827366,
+          "mae_tau": 0.016176083159262354,
+          "max_absolute_error_tau": 0.05977921164374933,
+          "absolute_error_p95_tau": 0.03620567802248977,
+          "mape_percent": 2.716381354490478
+        }
+      },
+      "T_gt_1200K": {
+        "global": {
+          "sample_count": 324,
+          "condition_group_count": 27,
+          "rmse_tau": 0.058479337328505555,
+          "mae_tau": 0.04600664660835765,
+          "max_absolute_error_tau": 0.1725375957602584,
+          "absolute_error_p95_tau": 0.12485720372166724,
+          "mape_percent": 6.942657414359756
+        },
+        "smooth_composition": {
+          "sample_count": 324,
+          "condition_group_count": 27,
+          "rmse_tau": 0.03236758041203629,
+          "mae_tau": 0.025723477355992504,
+          "max_absolute_error_tau": 0.09054093154576903,
+          "absolute_error_p95_tau": 0.06170541705748467,
+          "mape_percent": 3.925539299284439
+        }
+      }
+    },
+    "by_composition": {
+      "CO2=0.08;H2O=0.04": {
+        "condition_group_count": 18,
+        "global": {
+          "sample_count": 216,
+          "condition_group_count": 18,
+          "rmse_tau": 0.05661476766433907,
+          "mae_tau": 0.041131370960817766,
+          "max_absolute_error_tau": 0.1725375957602584,
+          "absolute_error_p95_tau": 0.12516657656271057,
+          "mape_percent": 6.001802524530767
+        },
+        "smooth_composition": {
+          "sample_count": 216,
+          "condition_group_count": 18,
+          "rmse_tau": 0.027326866231250264,
+          "mae_tau": 0.02063249644644545,
+          "max_absolute_error_tau": 0.08845633987913004,
+          "absolute_error_p95_tau": 0.056236701121217536,
+          "mape_percent": 3.0938777907779103
+        }
+      },
+      "CO2=0.12;H2O=0.08": {
+        "condition_group_count": 18,
+        "global": {
+          "sample_count": 216,
+          "condition_group_count": 18,
+          "rmse_tau": 0.04680795292221561,
+          "mae_tau": 0.03844755592343036,
+          "max_absolute_error_tau": 0.13752737045156815,
+          "absolute_error_p95_tau": 0.08575262719657689,
+          "mape_percent": 6.090119684664152
+        },
+        "smooth_composition": {
+          "sample_count": 216,
+          "condition_group_count": 18,
+          "rmse_tau": 0.028191861427732834,
+          "mae_tau": 0.022621241855223448,
+          "max_absolute_error_tau": 0.07153522806522639,
+          "absolute_error_p95_tau": 0.05333599385993068,
+          "mape_percent": 3.607921282601681
+        }
+      },
+      "CO2=0.2;H2O=0.1": {
+        "condition_group_count": 18,
+        "global": {
+          "sample_count": 216,
+          "condition_group_count": 18,
+          "rmse_tau": 0.055972472346565424,
+          "mae_tau": 0.04839860859025618,
+          "max_absolute_error_tau": 0.1266621495625404,
+          "absolute_error_p95_tau": 0.09553844436312613,
+          "mape_percent": 8.380017335683485
+        },
+        "smooth_composition": {
+          "sample_count": 216,
+          "condition_group_count": 18,
+          "rmse_tau": 0.02503862467415769,
+          "mae_tau": 0.019595602471213395,
+          "max_absolute_error_tau": 0.09054093154576903,
+          "absolute_error_p95_tau": 0.044918592816740155,
+          "mape_percent": 3.261081907282785
+        }
+      }
+    }
+  },
+  "final_refit_descriptive_parameters": {
+    "regularization": 0.055,
+    "feature_names": [
+      "temperature_linear",
+      "temperature_quadratic",
+      "x_co2",
+      "x_h2o"
+    ],
+    "feature_transform": {
+      "mean_temperature_K_x_co2_x_h2o": [
+        1400.0,
+        0.13333333333333344,
+        0.07333333333333301
+      ],
+      "scale_temperature_K_x_co2_x_h2o": [
+        577.3502691896257,
+        0.04988876515698604,
+        0.02494438257849288
+      ],
+      "temperature_quadratic_mean": 1.0000000000000002,
+      "temperature_quadratic_scale": 1.092520022699813
+    },
+    "free_logit_coefficients_intercept_then_features": [
+      [
+        0.5288399726269059,
+        0.27519392105192186,
+        0.33064781745918154,
+        -0.18869865922603243,
+        -0.13884173053542337
+      ],
+      [
+        -0.25857731620040797,
+        -0.05973478621570174,
+        0.1609771256439776,
+        0.028150143409897126,
+        0.11813997549143856
+      ],
+      [
+        -0.2893324492224074,
+        0.47347274776546455,
+        0.29770775722686604,
+        -0.16244666179730563,
+        -0.10477677087570193
+      ]
+    ],
+    "weights_by_reference_temperature_and_composition": [
+      {
+        "temperature_K": 600.0,
+        "x_co2": 0.08,
+        "x_h2o": 0.04,
+        "weights": [
+          0.476346523449121,
+          0.16812601484718206,
+          0.14430161877505365,
+          0.21122584292864327
+        ]
+      },
+      {
+        "temperature_K": 600.0,
+        "x_co2": 0.12,
+        "x_h2o": 0.08,
+        "weights": [
+          0.38381929287949706,
+          0.24339688861561803,
+          0.1254121908574413,
+          0.24737162764744364
+        ]
+      },
+      {
+        "temperature_K": 600.0,
+        "x_co2": 0.2,
+        "x_h2o": 0.1,
+        "weights": [
+          0.2916749114343734,
+          0.321802126817667,
+          0.10215419963267806,
+          0.28436876211528145
+        ]
+      },
+      {
+        "temperature_K": 1000.0,
+        "x_co2": 0.08,
+        "x_h2o": 0.04,
+        "weights": [
+          0.43867783436878055,
+          0.15353416981198909,
+          0.15922427652029703,
+          0.2485637192989332
+        ]
+      },
+      {
+        "temperature_K": 1000.0,
+        "x_co2": 0.12,
+        "x_h2o": 0.08,
+        "weights": [
+          0.3516319678564068,
+          0.2211179542541942,
+          0.13766283058895,
+          0.289587247300449
+        ]
+      },
+      {
+        "temperature_K": 1000.0,
+        "x_co2": 0.2,
+        "x_h2o": 0.1,
+        "weights": [
+          0.26599330059121146,
+          0.29101003765617156,
+          0.11162031392108798,
+          0.33137634783152903
+        ]
+      },
+      {
+        "temperature_K": 1200.0,
+        "x_co2": 0.08,
+        "x_h2o": 0.04,
+        "weights": [
+          0.4353544593868527,
+          0.14348126584832252,
+          0.17110014216197764,
+          0.2500641326028472
+        ]
+      },
+      {
+        "temperature_K": 1200.0,
+        "x_co2": 0.12,
+        "x_h2o": 0.08,
+        "weights": [
+          0.3507661598072318,
+          0.20770463719355267,
+          0.14869275622374875,
+          0.2928364467754669
+        ]
+      },
+      {
+        "temperature_K": 1200.0,
+        "x_co2": 0.2,
+        "x_h2o": 0.1,
+        "weights": [
+          0.2668451259193916,
+          0.27490927546414984,
+          0.12124828245900883,
+          0.3369973161574498
+        ]
+      },
+      {
+        "temperature_K": 1400.0,
+        "x_co2": 0.08,
+        "x_h2o": 0.04,
+        "weights": [
+          0.4419011203062295,
+          0.13212436294664245,
+          0.18669541178726506,
+          0.2392791049598629
+        ]
+      },
+      {
+        "temperature_K": 1400.0,
+        "x_co2": 0.12,
+        "x_h2o": 0.08,
+        "weights": [
+          0.35972532060183293,
+          0.19324359772921332,
+          0.16392466365574582,
+          0.2831064180132079
+        ]
+      },
+      {
+        "temperature_K": 1400.0,
+        "x_co2": 0.2,
+        "x_h2o": 0.1,
+        "weights": [
+          0.2767328643029977,
+          0.2586404566829962,
+          0.13516935090126359,
+          0.32945732811274253
+        ]
+      },
+      {
+        "temperature_K": 1800.0,
+        "x_co2": 0.08,
+        "x_h2o": 0.04,
+        "weights": [
+          0.4796733564964141,
+          0.10554869393764327,
+          0.22915463503033853,
+          0.1856233145356041
+        ]
+      },
+      {
+        "temperature_K": 1800.0,
+        "x_co2": 0.12,
+        "x_h2o": 0.08,
+        "weights": [
+          0.40435250528049355,
+          0.15986143536479702,
+          0.20835692466573447,
+          0.2274291346889749
+        ]
+      },
+      {
+        "temperature_K": 1800.0,
+        "x_co2": 0.2,
+        "x_h2o": 0.1,
+        "weights": [
+          0.32352055837500354,
+          0.22252923115832635,
+          0.17868737997192188,
+          0.2752628304947481
+        ]
+      },
+      {
+        "temperature_K": 2400.0,
+        "x_co2": 0.08,
+        "x_h2o": 0.04,
+        "weights": [
+          0.560305382948603,
+          0.058857513334461,
+          0.30485970720459493,
+          0.07597739651234117
+        ]
+      },
+      {
+        "temperature_K": 2400.0,
+        "x_co2": 0.12,
+        "x_h2o": 0.08,
+        "weights": [
+          0.5069219885139397,
+          0.09567413557503333,
+          0.29749598836781205,
+          0.09990788754321477
+        ]
+      },
+      {
+        "temperature_K": 2400.0,
+        "x_co2": 0.2,
+        "x_h2o": 0.1,
+        "weights": [
+          0.443350668075896,
+          0.14558022911872048,
+          0.2788891048259884,
+          0.13217999797939506
+        ]
+      }
+    ],
+    "shared_kappa_atm_inv_m_inv": [
+      0.013153025812064376,
+      0.08814605888825615,
+      2.6754392449514373,
+      27.370258307140197
+    ],
+    "weights_nonnegative_and_sum_to_one": true,
+    "kappas_nonnegative_ordered_and_bounded_0_1000": true
+  },
+  "production_solver_changed": false,
+  "leckner_fast_path_changed": false,
+  "provisional_status_removed": false,
+  "limitations": [
+    "The data contain only six temperatures and three compositions; a quadratic temperature surface and linear composition terms are exploratory.",
+    "Nested grouped CV estimates interpolation among represented axis ranges; it does not validate extrapolation or unseen joint-space regions.",
+    "Weights may absorb temperature/composition-dependent spectral physics while kappas are shared; coefficient interpretability is not established.",
+    "The reference inherits incompleteness and pseudo-Voigt line-shape uncertainty; independent spectral validation is still required.",
+    "This prototype is offline only and makes no production or Leckner changes."
+  ]
+}
