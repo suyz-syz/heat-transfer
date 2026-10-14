@@ -1,0 +1,803 @@
+{
+  "status": "offline_experiment_only_requires_independent_validation",
+  "method": "two temperature strata (T <= 1200 K and T > 1200 K), separate simplex weights, shared ordered kappas",
+  "production_solver_changed": false,
+  "leckner_fast_path_changed": false,
+  "provisional_status_removed": false,
+  "input": "data\\hitemp_narrowband_tau_reference.csv",
+  "input_sha256": "17bad5d120680b96e52d862835f7eb9389b4e81a46f9d7f6c3b4af289e3f6252",
+  "split_seed": "p3b-v1",
+  "train_condition_group_count": 43,
+  "holdout_condition_group_count": 11,
+  "calibration_domain_from_training": {
+    "temperature_K": {
+      "min": 600.0,
+      "max": 2400.0
+    },
+    "pressure_atm": {
+      "min": 0.3,
+      "max": 3.0
+    },
+    "x_co2": {
+      "min": 0.08,
+      "max": 0.2
+    },
+    "x_h2o": {
+      "min": 0.04,
+      "max": 0.1
+    },
+    "optical_path_atm_m": {
+      "min": 0.015,
+      "max": 15.0
+    }
+  },
+  "global_optimizer": {
+    "success": true,
+    "message": "`ftol` termination condition is satisfied.",
+    "function_evaluations": 29,
+    "training_rmse_tau": 0.050858368355901726,
+    "training_sse_tau": 1.3346719940214862
+  },
+  "global": {
+    "training": {
+      "sample_count": 516,
+      "condition_group_count": 43,
+      "rmse_tau": 0.050858368355901726,
+      "mae_tau": 0.04143799429203763,
+      "max_absolute_error_tau": 0.15931539358594682,
+      "mape_percent": 6.726354895168769,
+      "relative_error_p95_percent": 15.12924105451544,
+      "absolute_error_p95_tau": 0.09668782183848004,
+      "tau_reference_floor_for_relative_error": 1e-08
+    },
+    "holdout": {
+      "sample_count": 132,
+      "condition_group_count": 11,
+      "rmse_tau": 0.041029016070755604,
+      "mae_tau": 0.028948676128239537,
+      "max_absolute_error_tau": 0.12430516827725657,
+      "mape_percent": 4.405135864483272,
+      "relative_error_p95_percent": 13.621152401114047,
+      "absolute_error_p95_tau": 0.09523966131736494,
+      "tau_reference_floor_for_relative_error": 1e-08
+    }
+  },
+  "temperature_stratified": {
+    "optimizer_success": true,
+    "function_evaluations": 19,
+    "training": {
+      "sample_count": 516,
+      "condition_group_count": 43,
+      "rmse_tau": 0.04791747009707206,
+      "mae_tau": 0.03981541871857756,
+      "max_absolute_error_tau": 0.14246246853800948,
+      "absolute_error_p95_tau": 0.08930579570794414,
+      "mape_percent": 6.515525218939344
+    },
+    "holdout": {
+      "sample_count": 132,
+      "condition_group_count": 11,
+      "rmse_tau": 0.03831893920883393,
+      "mae_tau": 0.027680029596305798,
+      "max_absolute_error_tau": 0.10692834665604967,
+      "absolute_error_p95_tau": 0.0890987090670611,
+      "mape_percent": 4.215803804769841
+    },
+    "weights_by_stratum": {
+      "T_le_1200K": [
+        0.496951247981883,
+        0.14181738031081945,
+        0.12392034762347336,
+        0.23731102408382418
+      ],
+      "T_gt_1200K": [
+        0.5167761717257464,
+        0.12352478988720435,
+        0.24009525657967012,
+        0.11960378180737917
+      ]
+    },
+    "shared_kappa_atm_inv_m_inv": [
+      0.01825370028509079,
+      0.4734341895615072,
+      6.434593698115482,
+      37.26402460466406
+    ],
+    "holdout_by_temperature": {
+      "T_le_1200K": {
+        "global": {
+          "sample_count": 72,
+          "condition_group_count": 6,
+          "rmse_tau": 0.03337213434865075,
+          "mae_tau": 0.026579526591502138,
+          "max_absolute_error_tau": 0.08571788583799839,
+          "mape_percent": 4.38093901019573,
+          "relative_error_p95_percent": 12.138530977295286,
+          "absolute_error_p95_tau": 0.0680708312189474,
+          "tau_reference_floor_for_relative_error": 1e-08
+        },
+        "stratified": {
+          "sample_count": 72,
+          "condition_group_count": 6,
+          "rmse_tau": 0.03507937579660233,
+          "mae_tau": 0.026308951109241994,
+          "max_absolute_error_tau": 0.09535376683115487,
+          "absolute_error_p95_tau": 0.06946902011456677,
+          "mape_percent": 4.26761652003727
+        }
+      },
+      "T_gt_1200K": {
+        "global": {
+          "sample_count": 60,
+          "condition_group_count": 5,
+          "rmse_tau": 0.04865179472778197,
+          "mae_tau": 0.03179165557232442,
+          "max_absolute_error_tau": 0.12430516827725657,
+          "mape_percent": 4.434172089628323,
+          "relative_error_p95_percent": 14.772584846312444,
+          "absolute_error_p95_tau": 0.11966249206709066,
+          "tau_reference_floor_for_relative_error": 1e-08
+        },
+        "stratified": {
+          "sample_count": 60,
+          "condition_group_count": 5,
+          "rmse_tau": 0.04187690648870311,
+          "mae_tau": 0.029325323780782352,
+          "max_absolute_error_tau": 0.10692834665604967,
+          "absolute_error_p95_tau": 0.09749748795564565,
+          "mape_percent": 4.153628546448926
+        }
+      }
+    },
+    "holdout_by_condition": [
+      {
+        "condition": {
+          "temperature_K": 600.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.05932140661971438,
+          "mae_tau": 0.055199336986792656,
+          "max_absolute_error_tau": 0.08571788583799839,
+          "absolute_error_p95_tau": 0.08385021920615768,
+          "mape_percent": 8.557121990863612
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.07065910374439786,
+          "mae_tau": 0.06962395716118391,
+          "max_absolute_error_tau": 0.09535376683115487,
+          "absolute_error_p95_tau": 0.09156813154064014,
+          "mape_percent": 10.54328109768275
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.011314647906546503,
+          "mae_tau": 0.010443323920251343,
+          "max_absolute_error_tau": 0.01757986565296754,
+          "absolute_error_p95_tau": 0.016022507825315505,
+          "mape_percent": 1.5482263850438527
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.03019722553836428,
+          "mae_tau": 0.028154059552663185,
+          "max_absolute_error_tau": 0.046013186722836275,
+          "absolute_error_p95_tau": 0.04574048697619307,
+          "mape_percent": 3.885553253669203
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.022490741287158635,
+          "mae_tau": 0.020280571991764456,
+          "max_absolute_error_tau": 0.03462500082996245,
+          "absolute_error_p95_tau": 0.03414060318067903,
+          "mape_percent": 2.7806149428463454
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.006790530355688816,
+          "mae_tau": 0.005556413388872379,
+          "max_absolute_error_tau": 0.014714680172870476,
+          "absolute_error_p95_tau": 0.012004375469648379,
+          "mape_percent": 0.7703450141036114
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 3.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.019944453166644092,
+          "mae_tau": 0.01567915967679547,
+          "max_absolute_error_tau": 0.043233255025920236,
+          "absolute_error_p95_tau": 0.038060329555662166,
+          "mape_percent": 2.738540593310026
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.015083119755922206,
+          "mae_tau": 0.013931232797508172,
+          "max_absolute_error_tau": 0.020984765128456817,
+          "absolute_error_p95_tau": 0.020868381709607524,
+          "mape_percent": 2.650875092858332
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 3.0,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.04284018079470425,
+          "mae_tau": 0.041491914486909705,
+          "max_absolute_error_tau": 0.0683188028692081,
+          "absolute_error_p95_tau": 0.06069821171035146,
+          "mape_percent": 8.36713481196507
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.03341849826903323,
+          "mae_tau": 0.03276551311889204,
+          "max_absolute_error_tau": 0.04607031297174469,
+          "absolute_error_p95_tau": 0.04350626386429682,
+          "mape_percent": 6.638578239017606
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1200.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.01721190922095674,
+          "mae_tau": 0.016382852486499205,
+          "max_absolute_error_tau": 0.025427423487812573,
+          "absolute_error_p95_tau": 0.02488318002113698,
+          "mape_percent": 2.2939953371454775
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.009401406004352532,
+          "mae_tau": 0.007822530636332306,
+          "max_absolute_error_tau": 0.017365931379888955,
+          "absolute_error_p95_tau": 0.017269802330686118,
+          "mape_percent": 1.117066422892124
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1400.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.010306964771227896,
+          "mae_tau": 0.0087225677618396,
+          "max_absolute_error_tau": 0.021735554679906677,
+          "absolute_error_p95_tau": 0.018624628981881452,
+          "mape_percent": 1.5088932044381915
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.019880458113447328,
+          "mae_tau": 0.017379494149417394,
+          "max_absolute_error_tau": 0.032027734660355245,
+          "absolute_error_p95_tau": 0.030654251977249497,
+          "mape_percent": 2.652392490203717
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1400.0,
+          "pressure_atm": 3.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.02193465945723685,
+          "mae_tau": 0.019270744437844416,
+          "max_absolute_error_tau": 0.034477055046906346,
+          "absolute_error_p95_tau": 0.03403147184536187,
+          "mape_percent": 3.4971024829343023
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.028778269843648608,
+          "mae_tau": 0.022556983196666606,
+          "max_absolute_error_tau": 0.0587731958324359,
+          "absolute_error_p95_tau": 0.054333750981004604,
+          "mape_percent": 3.8882510569687523
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 1800.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.010114889207183267,
+          "mae_tau": 0.008845574482776624,
+          "max_absolute_error_tau": 0.01709675702082758,
+          "absolute_error_p95_tau": 0.015540043914162208,
+          "mape_percent": 1.4329849646893817
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.016890643211164458,
+          "mae_tau": 0.01531460049728943,
+          "max_absolute_error_tau": 0.025358658300522197,
+          "absolute_error_p95_tau": 0.025239752580550168,
+          "mape_percent": 2.3762103624104345
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 2400.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.10170809076332821,
+          "mae_tau": 0.09954159219975824,
+          "max_absolute_error_tau": 0.12430516827725657,
+          "absolute_error_p95_tau": 0.12420997529624918,
+          "mape_percent": 12.439383011903137
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.08433978663648299,
+          "mae_tau": 0.0818272355001445,
+          "max_absolute_error_tau": 0.10692834665604967,
+          "absolute_error_p95_tau": 0.10523363362576911,
+          "mape_percent": 10.3868368807287
+        }
+      },
+      {
+        "condition": {
+          "temperature_K": 2400.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.2,
+          "x_h2o": 0.1
+        },
+        "global": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.028297988134775246,
+          "mae_tau": 0.022577798979403204,
+          "max_absolute_error_tau": 0.05365982020099558,
+          "absolute_error_p95_tau": 0.05087739938679108,
+          "mape_percent": 3.292496784176603
+        },
+        "stratified": {
+          "sample_count": 12,
+          "condition_group_count": 1,
+          "rmse_tau": 0.0121021327603527,
+          "mae_tau": 0.009548305560393872,
+          "max_absolute_error_tau": 0.022506971103756213,
+          "absolute_error_p95_tau": 0.022068392753687844,
+          "mape_percent": 1.4644519419330322
+        }
+      }
+    ],
+    "holdout_path_error_traces_600K_2400K": [
+      {
+        "condition": {
+          "temperature_K": 600.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "paths": [
+          {
+            "path_m": 0.05,
+            "optical_path_atm_m": 0.05,
+            "tau_reference": 0.8119853038872514,
+            "global_tau": 0.798390132966134,
+            "global_error_tau": -0.013595170921117394,
+            "stratified_tau": 0.761651525896571,
+            "stratified_error_tau": -0.050333777990680395
+          },
+          {
+            "path_m": 0.0759955541476467,
+            "optical_path_atm_m": 0.0759955541476467,
+            "tau_reference": 0.7823693536547692,
+            "global_tau": 0.7588722971916205,
+            "global_error_tau": -0.023497056463148702,
+            "stratified_tau": 0.7230386082942181,
+            "stratified_error_tau": -0.05933074536055116
+          },
+          {
+            "path_m": 0.115506485004158,
+            "optical_path_atm_m": 0.115506485004158,
+            "tau_reference": 0.7543793250296352,
+            "global_tau": 0.7209386245780628,
+            "global_error_tau": -0.033440700451572436,
+            "stratified_tau": 0.6923143251477138,
+            "stratified_error_tau": -0.06206499988192138
+          },
+          {
+            "path_m": 0.175559586710757,
+            "optical_path_atm_m": 0.175559586710757,
+            "tau_reference": 0.7290703726980285,
+            "global_tau": 0.6846883904238993,
+            "global_error_tau": -0.04438198227412926,
+            "stratified_tau": 0.6662542323230731,
+            "stratified_error_tau": -0.06281614037495542
+          },
+          {
+            "path_m": 0.266834961560315,
+            "optical_path_atm_m": 0.266834961560315,
+            "tau_reference": 0.706553380713246,
+            "global_tau": 0.6524659150216646,
+            "global_error_tau": -0.054087465691581404,
+            "stratified_tau": 0.6417924035837865,
+            "stratified_error_tau": -0.0647609771294595
+          },
+          {
+            "path_m": 0.405565415394844,
+            "optical_path_atm_m": 0.405565415394844,
+            "tau_reference": 0.6860699732336629,
+            "global_tau": 0.6269305498835559,
+            "global_error_tau": -0.05913942335010702,
+            "stratified_tau": 0.6194434199702795,
+            "stratified_error_tau": -0.0666265532633834
+          },
+          {
+            "path_m": 0.616423369721033,
+            "optical_path_atm_m": 0.616423369721033,
+            "tau_reference": 0.666626837715331,
+            "global_tau": 0.6062552538054627,
+            "global_error_tau": -0.0603715839098683,
+            "stratified_tau": 0.5996601857722692,
+            "stratified_error_tau": -0.06696665194306184
+          },
+          {
+            "path_m": 0.936908711430192,
+            "optical_path_atm_m": 0.936908711430192,
+            "tau_reference": 0.6474959108238021,
+            "global_tau": 0.5851140747891314,
+            "global_error_tau": -0.062381836034670735,
+            "stratified_tau": 0.5798336848016361,
+            "stratified_error_tau": -0.06766222602216598
+          },
+          {
+            "path_m": 1.4240179342179,
+            "optical_path_atm_m": 1.4240179342179,
+            "tau_reference": 0.6281570087172796,
+            "global_tau": 0.5602890633940001,
+            "global_error_tau": -0.06786794532327955,
+            "stratified_tau": 0.5564796847120008,
+            "stratified_error_tau": -0.07167732400527882
+          },
+          {
+            "path_m": 2.16438064054153,
+            "optical_path_atm_m": 2.16438064054153,
+            "tau_reference": 0.6080234031324991,
+            "global_tau": 0.5324345378740213,
+            "global_error_tau": -0.07558886525847786,
+            "stratified_tau": 0.5285998735765786,
+            "stratified_error_tau": -0.07942352955592058
+          },
+          {
+            "path_m": 3.28966612328784,
+            "optical_path_atm_m": 3.28966612328784,
+            "tau_reference": 0.5863364416430366,
+            "global_tau": 0.5040143133174758,
+            "global_error_tau": -0.08232212832556074,
+            "stratified_tau": 0.497865648067363,
+            "stratified_error_tau": -0.08847079357567356
+          },
+          {
+            "path_m": 5.0,
+            "optical_path_atm_m": 5.0,
+            "tau_reference": 0.5622519982583494,
+            "global_tau": 0.476534112420351,
+            "global_error_tau": -0.08571788583799839,
+            "stratified_tau": 0.4668982314271945,
+            "stratified_error_tau": -0.09535376683115487
+          }
+        ]
+      },
+      {
+        "condition": {
+          "temperature_K": 2400.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "paths": [
+          {
+            "path_m": 0.05,
+            "optical_path_atm_m": 0.015,
+            "tau_reference": 0.965267324649153,
+            "global_tau": 0.9057533316736153,
+            "global_error_tau": -0.05951399297553772,
+            "stratified_tau": 0.9256799546416663,
+            "stratified_error_tau": -0.03958737000748669
+          },
+          {
+            "path_m": 0.0759955541476467,
+            "optical_path_atm_m": 0.022798666244294007,
+            "tau_reference": 0.9501194363502706,
+            "global_tau": 0.8721406144286659,
+            "global_error_tau": -0.07797882192160477,
+            "stratified_tau": 0.8972372028293457,
+            "stratified_error_tau": -0.052882233520924915
+          },
+          {
+            "path_m": 0.115506485004158,
+            "optical_path_atm_m": 0.0346519455012474,
+            "tau_reference": 0.9300007175255196,
+            "global_tau": 0.8336626144627004,
+            "global_error_tau": -0.0963381030628192,
+            "stratified_tau": 0.8629551708461325,
+            "stratified_error_tau": -0.06704554667938711
+          },
+          {
+            "path_m": 0.175559586710757,
+            "optical_path_atm_m": 0.052667876013227095,
+            "tau_reference": 0.9045863156038116,
+            "global_tau": 0.7934041251110141,
+            "global_error_tau": -0.11118219049279754,
+            "stratified_tau": 0.8246469510530797,
+            "stratified_error_tau": -0.07993936455073192
+          },
+          {
+            "path_m": 0.266834961560315,
+            "optical_path_atm_m": 0.0800504884680945,
+            "tau_reference": 0.8743193353530659,
+            "global_tau": 0.754081012696668,
+            "global_error_tau": -0.12023832265639789,
+            "stratified_tau": 0.7844531740187534,
+            "stratified_error_tau": -0.08986616133431258
+          },
+          {
+            "path_m": 0.405565415394844,
+            "optical_path_atm_m": 0.12166962461845318,
+            "tau_reference": 0.8404582928540023,
+            "global_tau": 0.7163262027240319,
+            "global_error_tau": -0.1241320901299704,
+            "stratified_tau": 0.7432676017837138,
+            "stratified_error_tau": -0.09719069107028855
+          },
+          {
+            "path_m": 0.616423369721033,
+            "optical_path_atm_m": 0.1849270109163099,
+            "tau_reference": 0.8047001005174316,
+            "global_tau": 0.680394932240175,
+            "global_error_tau": -0.12430516827725657,
+            "stratified_tau": 0.7013734717400006,
+            "stratified_error_tau": -0.10332662877743093
+          },
+          {
+            "path_m": 0.936908711430192,
+            "optical_path_atm_m": 0.2810726134290576,
+            "tau_reference": 0.7685455472849444,
+            "global_tau": 0.6489133620909752,
+            "global_error_tau": -0.11963218519396923,
+            "stratified_tau": 0.6616172006288947,
+            "stratified_error_tau": -0.10692834665604967
+          },
+          {
+            "path_m": 1.4240179342179,
+            "optical_path_atm_m": 0.42720538026536997,
+            "tau_reference": 0.7328807059765472,
+            "global_tau": 0.6241957085816956,
+            "global_error_tau": -0.1086849973948516,
+            "stratified_tau": 0.6290336557391895,
+            "stratified_error_tau": -0.10384705023735774
+          },
+          {
+            "path_m": 2.16438064054153,
+            "optical_path_atm_m": 0.649314192162459,
+            "tau_reference": 0.6981021935534176,
+            "global_tau": 0.6037612573005152,
+            "global_error_tau": -0.09434093625290241,
+            "stratified_tau": 0.6052015398175872,
+            "stratified_error_tau": -0.09290065373583045
+          },
+          {
+            "path_m": 3.28966612328784,
+            "optical_path_atm_m": 0.986899836986352,
+            "tau_reference": 0.664560762827881,
+            "global_tau": 0.5822498898106027,
+            "global_error_tau": -0.08231087301727835,
+            "stratified_tau": 0.5853865403664119,
+            "stratified_error_tau": -0.0791742224614691
+          },
+          {
+            "path_m": 5.0,
+            "optical_path_atm_m": 1.5,
+            "tau_reference": 0.6327935672659277,
+            "global_tau": 0.5569521422442145,
+            "global_error_tau": -0.0758414250217132,
+            "stratified_tau": 0.5635550102954634,
+            "stratified_error_tau": -0.06923855697046433
+          }
+        ]
+      },
+      {
+        "condition": {
+          "temperature_K": 2400.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.2,
+          "x_h2o": 0.1
+        },
+        "paths": [
+          {
+            "path_m": 0.05,
+            "optical_path_atm_m": 0.05,
+            "tau_reference": 0.8520499531671296,
+            "global_tau": 0.798390132966134,
+            "global_error_tau": -0.05365982020099558,
+            "stratified_tau": 0.8295429820633734,
+            "stratified_error_tau": -0.022506971103756213
+          },
+          {
+            "path_m": 0.0759955541476467,
+            "optical_path_atm_m": 0.0759955541476467,
+            "tau_reference": 0.8074731704576988,
+            "global_tau": 0.7588722971916205,
+            "global_error_tau": -0.048600873266078315,
+            "stratified_tau": 0.7894998405538937,
+            "stratified_error_tau": -0.01797332990380518
+          },
+          {
+            "path_m": 0.115506485004158,
+            "optical_path_atm_m": 0.115506485004158,
+            "tau_reference": 0.7600451457104372,
+            "global_tau": 0.7209386245780628,
+            "global_error_tau": -0.03910652113237445,
+            "stratified_tau": 0.7484375197622379,
+            "stratified_error_tau": -0.011607625948199307
+          },
+          {
+            "path_m": 0.175559586710757,
+            "optical_path_atm_m": 0.175559586710757,
+            "tau_reference": 0.713770572653373,
+            "global_tau": 0.6846883904238993,
+            "global_error_tau": -0.029082182229473674,
+            "stratified_tau": 0.7065537171849939,
+            "stratified_error_tau": -0.007216855468379024
+          },
+          {
+            "path_m": 0.266834961560315,
+            "optical_path_atm_m": 0.266834961560315,
+            "tau_reference": 0.6721251051744956,
+            "global_tau": 0.6524659150216646,
+            "global_error_tau": -0.01965919015283102,
+            "stratified_tau": 0.6662596541348248,
+            "stratified_error_tau": -0.005865451039670844
+          },
+          {
+            "path_m": 0.405565415394844,
+            "optical_path_atm_m": 0.405565415394844,
+            "tau_reference": 0.6369702536849582,
+            "global_tau": 0.6269305498835559,
+            "global_error_tau": -0.010039703801402289,
+            "stratified_tau": 0.6325710873523538,
+            "stratified_error_tau": -0.004399166332604398
+          },
+          {
+            "path_m": 0.616423369721033,
+            "optical_path_atm_m": 0.616423369721033,
+            "tau_reference": 0.608359943557875,
+            "global_tau": 0.6062552538054627,
+            "global_error_tau": -0.002104689752412292,
+            "stratified_tau": 0.6078011691473,
+            "stratified_error_tau": -0.0005587744105750581
+          },
+          {
+            "path_m": 0.936908711430192,
+            "optical_path_atm_m": 0.936908711430192,
+            "tau_reference": 0.5849911299753711,
+            "global_tau": 0.5851140747891314,
+            "global_error_tau": 0.0001229448137602951,
+            "stratified_tau": 0.5878631123231332,
+            "stratified_error_tau": 0.002871982347762092
+          },
+          {
+            "path_m": 1.4240179342179,
+            "optical_path_atm_m": 1.4240179342179,
+            "tau_reference": 0.5648424301140541,
+            "global_tau": 0.5602890633940001,
+            "global_error_tau": -0.0045533667200540195,
+            "stratified_tau": 0.566486666522341,
+            "stratified_error_tau": 0.0016442364082869254
+          },
+          {
+            "path_m": 2.16438064054153,
+            "optical_path_atm_m": 2.16438064054153,
+            "tau_reference": 0.5458054899883528,
+            "global_tau": 0.5324345378740213,
+            "global_error_tau": -0.01337095211433148,
+            "stratified_tau": 0.5410915894816544,
+            "stratified_error_tau": -0.0047139005066983986
+          },
+          {
+            "path_m": 3.28966612328784,
+            "optical_path_atm_m": 3.28966612328784,
+            "tau_reference": 0.526193184002139,
+            "global_tau": 0.5040143133174758,
+            "global_error_tau": -0.022178870684663177,
+            "stratified_tau": 0.5126813666689637,
+            "stratified_error_tau": -0.013511817333175302
+          },
+          {
+            "path_m": 5.0,
+            "optical_path_atm_m": 5.0,
+            "tau_reference": 0.5049885853048128,
+            "global_tau": 0.476534112420351,
+            "global_error_tau": -0.028454472884461846,
+            "stratified_tau": 0.4832790293829991,
+            "stratified_error_tau": -0.021709555921813728
+          }
+        ]
+      }
+    ]
+  },
+  "limitations": [
+    "The fixed 1200 K split is exploratory and was selected for this grid; verify it on independent conditions.",
+    "Composition and pressure effects remain unparameterized; weights may absorb correlated effects.",
+    "The reference uses an incomplete line sample and pseudo-Voigt LBL; no independent spectroscopy validation is included.",
+    "No production solver, Leckner fast path, or provisional status is changed."
+  ]
+}
