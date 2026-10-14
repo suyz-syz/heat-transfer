@@ -192,6 +192,29 @@ def error_metrics(rows: Sequence[dict], weights: np.ndarray, kappas: np.ndarray)
     }
 
 
+def condition_group_metrics(
+    rows: Sequence[dict], weights: np.ndarray, kappas: np.ndarray,
+) -> list[dict]:
+    """Return holdout errors for each indivisible thermochemical condition."""
+    grouped: dict[tuple[float, ...], list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(condition_key(row), []).append(row)
+
+    results = []
+    for key, group_rows in sorted(grouped.items()):
+        metrics = error_metrics(group_rows, weights, kappas)
+        results.append({
+            "condition": dict(zip(CONDITION_COLUMNS, key)),
+            **metrics,
+        })
+    # Put the conditions with the largest absolute error first for quick review.
+    return sorted(
+        results,
+        key=lambda item: (item["max_absolute_error_tau"], item["rmse_tau"]),
+        reverse=True,
+    )
+
+
 def run(
     input_csv: Path, output_json: Path, *, n_gases: int = 4,
     holdout_fraction: float = 0.2, seed: str = "p3b-v1",
@@ -259,6 +282,7 @@ def run(
         "metrics": {
             "training": error_metrics(train, weights, kappas),
             "holdout": error_metrics(holdout, weights, kappas),
+            "holdout_by_condition": condition_group_metrics(holdout, weights, kappas),
         },
         "limitations": [
             "This is a narrow-band offline fit and is not a total-spectrum radiation model.",

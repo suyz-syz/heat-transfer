@@ -413,7 +413,196 @@
       "relative_error_p95_percent": 13.621152401114047,
       "absolute_error_p95_tau": 0.09523966131736494,
       "tau_reference_floor_for_relative_error": 1e-08
-    }
+    },
+    "holdout_by_condition": [
+      {
+        "condition": {
+          "temperature_K": 2400.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.10170809076332821,
+        "mae_tau": 0.09954159219975824,
+        "max_absolute_error_tau": 0.12430516827725657,
+        "mape_percent": 12.439383011903137,
+        "relative_error_p95_percent": 15.500787430801058,
+        "absolute_error_p95_tau": 0.12420997529624918,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 600.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.05932140661971438,
+        "mae_tau": 0.055199336986792656,
+        "max_absolute_error_tau": 0.08571788583799839,
+        "mape_percent": 8.557121990863612,
+        "relative_error_p95_percent": 14.582501730290863,
+        "absolute_error_p95_tau": 0.08385021920615768,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 3.0,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.04284018079470425,
+        "mae_tau": 0.041491914486909705,
+        "max_absolute_error_tau": 0.0683188028692081,
+        "mape_percent": 8.36713481196507,
+        "relative_error_p95_percent": 12.406866345559093,
+        "absolute_error_p95_tau": 0.06069821171035146,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 2400.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.2,
+          "x_h2o": 0.1
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.028297988134775246,
+        "mae_tau": 0.022577798979403204,
+        "max_absolute_error_tau": 0.05365982020099558,
+        "mape_percent": 3.292496784176603,
+        "relative_error_p95_percent": 6.144365462317149,
+        "absolute_error_p95_tau": 0.05087739938679108,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 3.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.019944453166644092,
+        "mae_tau": 0.01567915967679547,
+        "max_absolute_error_tau": 0.043233255025920236,
+        "mape_percent": 2.738540593310026,
+        "relative_error_p95_percent": 5.924172197617174,
+        "absolute_error_p95_tau": 0.038060329555662166,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.022490741287158635,
+        "mae_tau": 0.020280571991764456,
+        "max_absolute_error_tau": 0.03462500082996245,
+        "mape_percent": 2.7806149428463454,
+        "relative_error_p95_percent": 3.9972885573076296,
+        "absolute_error_p95_tau": 0.03414060318067903,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1400.0,
+          "pressure_atm": 3.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.02193465945723685,
+        "mae_tau": 0.019270744437844416,
+        "max_absolute_error_tau": 0.034477055046906346,
+        "mape_percent": 3.4971024829343023,
+        "relative_error_p95_percent": 5.649591852848255,
+        "absolute_error_p95_tau": 0.03403147184536187,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1200.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.01721190922095674,
+        "mae_tau": 0.016382852486499205,
+        "max_absolute_error_tau": 0.025427423487812573,
+        "mape_percent": 2.2939953371454775,
+        "relative_error_p95_percent": 2.885345085834686,
+        "absolute_error_p95_tau": 0.02488318002113698,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1400.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.010306964771227896,
+        "mae_tau": 0.0087225677618396,
+        "max_absolute_error_tau": 0.021735554679906677,
+        "mape_percent": 1.5088932044381915,
+        "relative_error_p95_percent": 3.6633849419431717,
+        "absolute_error_p95_tau": 0.018624628981881452,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1000.0,
+          "pressure_atm": 0.3,
+          "x_co2": 0.08,
+          "x_h2o": 0.04
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.011314647906546503,
+        "mae_tau": 0.010443323920251343,
+        "max_absolute_error_tau": 0.01757986565296754,
+        "mape_percent": 1.5482263850438527,
+        "relative_error_p95_percent": 2.599180767098898,
+        "absolute_error_p95_tau": 0.016022507825315505,
+        "tau_reference_floor_for_relative_error": 1e-08
+      },
+      {
+        "condition": {
+          "temperature_K": 1800.0,
+          "pressure_atm": 1.0,
+          "x_co2": 0.12,
+          "x_h2o": 0.08
+        },
+        "sample_count": 12,
+        "condition_group_count": 1,
+        "rmse_tau": 0.010114889207183267,
+        "mae_tau": 0.008845574482776624,
+        "max_absolute_error_tau": 0.01709675702082758,
+        "mape_percent": 1.4329849646893817,
+        "relative_error_p95_percent": 2.396052331422638,
+        "absolute_error_p95_tau": 0.015540043914162208,
+        "tau_reference_floor_for_relative_error": 1e-08
+      }
+    ]
   },
   "limitations": [
     "This is a narrow-band offline fit and is not a total-spectrum radiation model.",
