@@ -1,0 +1,424 @@
+{
+  "report_type": "P3b offline constrained WSGG narrow-band transmittance fit",
+  "status": "provisional_offline_fit_requires_independent_physical_validation",
+  "scope": {
+    "band_cm-1": [
+      2000.0,
+      2400.0
+    ],
+    "target": "band-averaged transmittance",
+    "model": "tau(u) = sum_i a_i * exp(-kappa_i * u)",
+    "u_definition": "pressure_atm * path_m",
+    "kappa_unit": "atm^-1 m^-1",
+    "n_gray_gases": 4,
+    "production_solver_changed": false,
+    "leckner_fast_path_changed": false,
+    "provisional_status_removed": false
+  },
+  "inputs": {
+    "path": "data\\hitemp_narrowband_tau_reference.csv",
+    "sha256": "17bad5d120680b96e52d862835f7eb9389b4e81a46f9d7f6c3b4af289e3f6252",
+    "row_count": 648,
+    "condition_columns": [
+      "temperature_K",
+      "pressure_atm",
+      "x_co2",
+      "x_h2o"
+    ],
+    "split_seed": "p3b-v1",
+    "holdout_fraction": 0.2,
+    "split_method": "deterministic SHA-256 ranking of complete (T, p, x_CO2, x_H2O) groups",
+    "train_condition_groups": [
+      [
+        600.0,
+        0.3,
+        0.08,
+        0.04
+      ],
+      [
+        600.0,
+        0.3,
+        0.12,
+        0.08
+      ],
+      [
+        600.0,
+        0.3,
+        0.2,
+        0.1
+      ],
+      [
+        600.0,
+        1.0,
+        0.12,
+        0.08
+      ],
+      [
+        600.0,
+        1.0,
+        0.2,
+        0.1
+      ],
+      [
+        600.0,
+        3.0,
+        0.08,
+        0.04
+      ],
+      [
+        600.0,
+        3.0,
+        0.12,
+        0.08
+      ],
+      [
+        600.0,
+        3.0,
+        0.2,
+        0.1
+      ],
+      [
+        1000.0,
+        0.3,
+        0.2,
+        0.1
+      ],
+      [
+        1000.0,
+        1.0,
+        0.08,
+        0.04
+      ],
+      [
+        1000.0,
+        1.0,
+        0.12,
+        0.08
+      ],
+      [
+        1000.0,
+        1.0,
+        0.2,
+        0.1
+      ],
+      [
+        1000.0,
+        3.0,
+        0.2,
+        0.1
+      ],
+      [
+        1200.0,
+        0.3,
+        0.08,
+        0.04
+      ],
+      [
+        1200.0,
+        0.3,
+        0.2,
+        0.1
+      ],
+      [
+        1200.0,
+        1.0,
+        0.08,
+        0.04
+      ],
+      [
+        1200.0,
+        1.0,
+        0.12,
+        0.08
+      ],
+      [
+        1200.0,
+        1.0,
+        0.2,
+        0.1
+      ],
+      [
+        1200.0,
+        3.0,
+        0.08,
+        0.04
+      ],
+      [
+        1200.0,
+        3.0,
+        0.12,
+        0.08
+      ],
+      [
+        1200.0,
+        3.0,
+        0.2,
+        0.1
+      ],
+      [
+        1400.0,
+        0.3,
+        0.08,
+        0.04
+      ],
+      [
+        1400.0,
+        0.3,
+        0.12,
+        0.08
+      ],
+      [
+        1400.0,
+        0.3,
+        0.2,
+        0.1
+      ],
+      [
+        1400.0,
+        1.0,
+        0.12,
+        0.08
+      ],
+      [
+        1400.0,
+        1.0,
+        0.2,
+        0.1
+      ],
+      [
+        1400.0,
+        3.0,
+        0.12,
+        0.08
+      ],
+      [
+        1400.0,
+        3.0,
+        0.2,
+        0.1
+      ],
+      [
+        1800.0,
+        0.3,
+        0.08,
+        0.04
+      ],
+      [
+        1800.0,
+        0.3,
+        0.12,
+        0.08
+      ],
+      [
+        1800.0,
+        0.3,
+        0.2,
+        0.1
+      ],
+      [
+        1800.0,
+        1.0,
+        0.08,
+        0.04
+      ],
+      [
+        1800.0,
+        1.0,
+        0.2,
+        0.1
+      ],
+      [
+        1800.0,
+        3.0,
+        0.08,
+        0.04
+      ],
+      [
+        1800.0,
+        3.0,
+        0.12,
+        0.08
+      ],
+      [
+        1800.0,
+        3.0,
+        0.2,
+        0.1
+      ],
+      [
+        2400.0,
+        0.3,
+        0.08,
+        0.04
+      ],
+      [
+        2400.0,
+        0.3,
+        0.2,
+        0.1
+      ],
+      [
+        2400.0,
+        1.0,
+        0.08,
+        0.04
+      ],
+      [
+        2400.0,
+        1.0,
+        0.12,
+        0.08
+      ],
+      [
+        2400.0,
+        3.0,
+        0.08,
+        0.04
+      ],
+      [
+        2400.0,
+        3.0,
+        0.12,
+        0.08
+      ],
+      [
+        2400.0,
+        3.0,
+        0.2,
+        0.1
+      ]
+    ],
+    "holdout_condition_groups": [
+      [
+        600.0,
+        1.0,
+        0.08,
+        0.04
+      ],
+      [
+        1000.0,
+        0.3,
+        0.08,
+        0.04
+      ],
+      [
+        1000.0,
+        0.3,
+        0.12,
+        0.08
+      ],
+      [
+        1000.0,
+        3.0,
+        0.08,
+        0.04
+      ],
+      [
+        1000.0,
+        3.0,
+        0.12,
+        0.08
+      ],
+      [
+        1200.0,
+        0.3,
+        0.12,
+        0.08
+      ],
+      [
+        1400.0,
+        1.0,
+        0.08,
+        0.04
+      ],
+      [
+        1400.0,
+        3.0,
+        0.08,
+        0.04
+      ],
+      [
+        1800.0,
+        1.0,
+        0.12,
+        0.08
+      ],
+      [
+        2400.0,
+        0.3,
+        0.12,
+        0.08
+      ],
+      [
+        2400.0,
+        1.0,
+        0.2,
+        0.1
+      ]
+    ],
+    "train_group_count": 43,
+    "holdout_group_count": 11
+  },
+  "constraints": {
+    "weights_nonnegative": true,
+    "weights_sum": 1.0,
+    "kappa_nonnegative": true,
+    "kappa_sorted_non_decreasing": true,
+    "kappa_bounds": [
+      0.0,
+      1000.0
+    ],
+    "parameterization": "softmax simplex weights and softmax-partitioned ordered kappa gaps"
+  },
+  "parameters": {
+    "weights": [
+      0.5221917072157538,
+      0.13337071694344121,
+      0.2001411811145682,
+      0.1442963947262368
+    ],
+    "kappa_atm_inv_m_inv": [
+      0.02052289606599136,
+      0.6462492476128593,
+      8.470720833291534,
+      43.29036345553972
+    ]
+  },
+  "optimizer": {
+    "success": true,
+    "message": "`ftol` termination condition is satisfied.",
+    "function_evaluations": 29,
+    "training_rmse_tau": 0.050858368355901726,
+    "training_sse_tau": 1.3346719940214862
+  },
+  "metrics": {
+    "training": {
+      "sample_count": 516,
+      "condition_group_count": 43,
+      "rmse_tau": 0.050858368355901726,
+      "mae_tau": 0.04143799429203763,
+      "max_absolute_error_tau": 0.15931539358594682,
+      "mape_percent": 6.726354895168769,
+      "relative_error_p95_percent": 15.12924105451544,
+      "absolute_error_p95_tau": 0.09668782183848004,
+      "tau_reference_floor_for_relative_error": 1e-08
+    },
+    "holdout": {
+      "sample_count": 132,
+      "condition_group_count": 11,
+      "rmse_tau": 0.041029016070755604,
+      "mae_tau": 0.028948676128239537,
+      "max_absolute_error_tau": 0.12430516827725657,
+      "mape_percent": 4.405135864483272,
+      "relative_error_p95_percent": 13.621152401114047,
+      "absolute_error_p95_tau": 0.09523966131736494,
+      "tau_reference_floor_for_relative_error": 1e-08
+    }
+  },
+  "limitations": [
+    "This is a narrow-band offline fit and is not a total-spectrum radiation model.",
+    "Holdout metrics are condition-grouped and must be reviewed before any engineering use.",
+    "The reference data's spectral and line-shape uncertainty is inherited by this fit.",
+    "No production solver, Leckner fast path, or provisional status is changed by this script."
+  ]
+}
