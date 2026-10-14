@@ -42,27 +42,6 @@ jobs:
         run: python -m pip install numpy pandas scipy
       - name: Run full narrow-band reference matrix
         run: python scripts/assess_hitemp_grid_convergence.py
-      - name: Summarize convergence metrics
-        if: always()
-        run: |
-          if [ -f reports/hitemp_grid_convergence.json ]; then
-            python - <<'PY'
-            import json
-            from pathlib import Path
-            r = json.loads(Path("reports/hitemp_grid_convergence.json").read_text())
-            s = Path(__import__("os").environ["GITHUB_STEP_SUMMARY"])
-            m = r["grid_comparison"]
-            s.write_text(
-                "# P3a narrow-band LBL grid convergence\\n\\n"
-                f"- Status: **{r['status']}**\\n"
-                f"- Scope: {r['scope']['band_cm-1'][0]}–{r['scope']['band_cm-1'][1]} cm⁻¹\\n"
-                f"- Matrix cases: {r['matrix']['case_count']}\\n"
-                f"- Grid: {m['coarse_step_cm-1']} vs {m['fine_step_cm-1']} cm⁻¹\\n"
-                f"- Worst-case metrics: `{json.dumps(m['worst_case_metrics'], sort_keys=True)}`\\n",
-                encoding="utf-8",
-            )
-            PY
-          fi
       - name: Upload narrow-band assessment report
         if: always()
         uses: actions/upload-artifact@v4
