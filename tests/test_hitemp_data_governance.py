@@ -47,7 +47,7 @@ def test_canonical_line_schema_maps_to_offline_lbl_model(tmp_path):
 
 def test_preprocessor_preserves_source_ids_and_canonical_fields(tmp_path):
     record = (
-        f"{1:02d}{3:d}{2100.0:12.6f}{1.0e-22:10.3E}{1.0:10.3E}"
+        f"{1:2d}{3:d}{2100.0:12.6f}{1.0e-22:10.3E}{1.0:10.3E}"
         f"{0.07:5.3f}{0.30:5.3f}{50.0:10.4f}{0.70:4.2f}{-0.001:8.4f}"
     )
     parsed = parse_hitemp_line(record, tmp_path / "fixture.par")
