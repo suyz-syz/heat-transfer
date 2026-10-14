@@ -36,7 +36,7 @@ PRESSURE_CASES_ATM = (0.3, 1.0, 3.0)
 CO2_FRACTIONS = (0.0, 0.04, 0.12, 0.20)
 H2O_FRACTIONS = (0.0, 0.02, 0.08, 0.15)
 PATH_LENGTHS_M = tuple(float(v) for v in np.geomspace(0.05, 5.0, 7))
-GRID_STEPS_CM_INV = (0.01, 0.005)
+GRID_STEPS_CM_INV = (0.01, 0.005, 0.0025)
 DEFAULT_THRESHOLDS = {
     "alpha_integral_relative": 0.005,
     "transmittance_max_absolute": 0.002,
@@ -111,21 +111,25 @@ def black_wall_band_flux_proxy(wn, alpha_m_inv, gas_temperature_K, wall_temperat
 def compare_grids(coarse, fine, temperature_K, wall_temperatures_K, path_lengths_m):
     wn_c, alpha_c = coarse
     wn_f, alpha_f = fine
-    alpha_f_at_c = _align_fine_to_coarse(wn_c, wn_f, alpha_f)
-
-    alpha_denominator = max(float(np.trapezoid(np.abs(alpha_f_at_c), wn_c)), 1e-30)
+    if wn_c[0] != wn_f[0] or wn_c[-1] != wn_f[-1]:
+        raise ValueError("coarse and fine grids must cover the same exact band endpoints")
+    # Compare at all fine-grid nodes. Comparing only shared coarse nodes would
+    # return an artificial zero because each pointwise LBL evaluation is
+    # deterministic regardless of the requested grid spacing.
+    alpha_c_at_f = np.interp(wn_f, wn_c, alpha_c)
+    alpha_denominator = max(float(np.trapezoid(np.abs(alpha_f), wn_f)), 1e-30)
     alpha_l1_relative = float(
-        np.trapezoid(np.abs(alpha_c - alpha_f_at_c), wn_c) / alpha_denominator
+        np.trapezoid(np.abs(alpha_c_at_f - alpha_f), wn_f) / alpha_denominator
     )
-    alpha_max_abs = float(np.max(np.abs(alpha_c - alpha_f_at_c)))
+    alpha_max_abs = float(np.max(np.abs(alpha_c_at_f - alpha_f)))
 
     tau_errors = []
     emissivity_errors = []
     emissivity_relative_errors = []
     flux_relative_errors = []
     for path_m in path_lengths_m:
-        tau_c = np.exp(-alpha_c * path_m)
-        tau_f = np.exp(-alpha_f_at_c * path_m)
+        tau_c = np.exp(-alpha_c_at_f * path_m)
+        tau_f = np.exp(-alpha_f * path_m)
         tau_errors.append(np.abs(tau_c - tau_f))
 
         eps_c = band_emissivity(wn_c, alpha_c, temperature_K, path_m)
@@ -157,38 +161,63 @@ def compare_grids(coarse, fine, temperature_K, wall_temperatures_K, path_lengths
     }
 
 
+def _metrics_pass(metrics):
+    return all(metrics[name] <= threshold for name, threshold in DEFAULT_THRESHOLDS.items())
+
+
 def run_matrix(
     line_csv: Path,
     tips_csv: Path,
     *,
     coarse_step: float = GRID_STEPS_CM_INV[0],
     fine_step: float = GRID_STEPS_CM_INV[1],
+    finest_step: float | None = None,
     quick: bool = False,
 ) -> dict:
-    if not (math.isfinite(coarse_step) and math.isfinite(fine_step)
-            and coarse_step > fine_step > 0):
-        raise ValueError("require finite grid steps with coarse_step > fine_step > 0")
+    if finest_step is None:
+        finest_step = fine_step / 2.0
+    if not (
+        math.isfinite(coarse_step)
+        and math.isfinite(fine_step)
+        and math.isfinite(finest_step)
+        and coarse_step > fine_step > finest_step > 0
+    ):
+        raise ValueError("require finite grid steps with coarse_step > fine_step > finest_step > 0")
+    steps = (coarse_step, fine_step, finest_step)
+    for step in steps:
+        intervals = (BAND_CM_INV[1] - BAND_CM_INV[0]) / step
+        if not math.isclose(intervals, round(intervals), rel_tol=0.0, abs_tol=1e-8):
+            raise ValueError(f"grid step {step} must divide the band width exactly")
+
     lines, tips_map = load_inputs(line_csv, tips_csv)
     temperatures = (600.0, 1200.0, 2400.0) if quick else GAS_TEMPERATURES_K
     pressures = (1.0,) if quick else PRESSURE_CASES_ATM
     compositions = ((0.12, 0.08), (0.20, 0.0), (0.0, 0.15)) if quick else composition_matrix()
     paths = PATH_LENGTHS_M[::3] if quick else PATH_LENGTHS_M
+    pair_names = (f"{coarse_step:g}_to_{fine_step:g}", f"{fine_step:g}_to_{finest_step:g}")
     cases = []
     for temperature in temperatures:
         wall_temperatures = matched_wall_temperatures(temperature)
         for pressure in pressures:
             for x_co2, x_h2o in compositions:
-                coarse = lbl_spectrum(
-                    lines, tips_map, temperature, pressure, x_co2, x_h2o,
-                    step=coarse_step,
-                )
-                fine = lbl_spectrum(
-                    lines, tips_map, temperature, pressure, x_co2, x_h2o,
-                    step=fine_step,
-                )
-                metrics = compare_grids(
-                    coarse, fine, temperature, wall_temperatures, paths
-                )
+                spectra = [
+                    lbl_spectrum(
+                        lines, tips_map, temperature, pressure, x_co2, x_h2o,
+                        step=step,
+                    )
+                    for step in steps
+                ]
+                pair_results = {}
+                for pair_name, coarse, fine in zip(
+                    pair_names, spectra[:-1], spectra[1:]
+                ):
+                    metrics = compare_grids(
+                        coarse, fine, temperature, wall_temperatures, paths
+                    )
+                    pair_results[pair_name] = {
+                        "metrics": metrics,
+                        "passed": _metrics_pass(metrics),
+                    }
                 cases.append({
                     "gas_temperature_K": temperature,
                     "wall_temperatures_K": list(wall_temperatures),
@@ -198,21 +227,39 @@ def run_matrix(
                     },
                     "mole_fractions": {"CO2": x_co2, "H2O": x_h2o},
                     "path_lengths_m": list(paths),
-                    "metrics": metrics,
-                    "passed": (
-                        metrics["alpha_integral_relative"] <= DEFAULT_THRESHOLDS["alpha_integral_relative"]
-                        and metrics["transmittance_max_absolute"] <= DEFAULT_THRESHOLDS["transmittance_max_absolute"]
-                        and metrics["band_emissivity_max_absolute"] <= DEFAULT_THRESHOLDS["band_emissivity_max_absolute"]
-                        and metrics["black_wall_flux_max_relative"] <= DEFAULT_THRESHOLDS["black_wall_flux_max_relative"]
-                    ),
+                    "refinement_pairs": pair_results,
                 })
 
     metric_names = tuple(DEFAULT_THRESHOLDS)
-    maxima = {
-        name: max(case["metrics"][name] for case in cases)
-        for name in metric_names
-    }
-    all_passed = all(case["passed"] for case in cases)
+    pair_summary = {}
+    for pair_name in pair_names:
+        pair_cases = [
+            case["refinement_pairs"][pair_name] for case in cases
+        ]
+        maxima = {
+            name: max(item["metrics"][name] for item in pair_cases)
+            for name in metric_names
+        }
+        worst_cases = {}
+        for metric_name in metric_names:
+            worst = max(
+                cases,
+                key=lambda case: case["refinement_pairs"][pair_name]["metrics"][metric_name],
+            )
+            worst_cases[metric_name] = {
+                "value": worst["refinement_pairs"][pair_name]["metrics"][metric_name],
+                "gas_temperature_K": worst["gas_temperature_K"],
+                "pressure_atm": worst["pressure_atm"],
+                "mole_fractions": worst["mole_fractions"],
+            }
+        pair_summary[pair_name] = {
+            "passed": all(item["passed"] for item in pair_cases),
+            "worst_case_metrics": maxima,
+            "worst_cases": worst_cases,
+        }
+
+    finest_pair_name = pair_names[-1]
+    all_passed = pair_summary[finest_pair_name]["passed"]
     return {
         "report_type": "offline HITEMP/TIPS narrow-band LBL grid-convergence assessment",
         "status": "pass" if all_passed else "review_required",
@@ -235,14 +282,17 @@ def run_matrix(
             ],
         },
         "grid_comparison": {
-            "coarse_step_cm-1": coarse_step,
-            "fine_step_cm-1": fine_step,
+            "grid_steps_cm-1": list(steps),
             "grid_points": {
-                "coarse": int(round((BAND_CM_INV[1] - BAND_CM_INV[0]) / coarse_step)) + 1,
-                "fine": int(round((BAND_CM_INV[1] - BAND_CM_INV[0]) / fine_step)) + 1,
+                f"{step:g}": int(round((BAND_CM_INV[1] - BAND_CM_INV[0]) / step)) + 1
+                for step in steps
             },
             "thresholds": DEFAULT_THRESHOLDS,
-            "worst_case_metrics": maxima,
+            "baseline_pair_passed": pair_summary[pair_names[0]]["passed"],
+            "finest_pair": finest_pair_name,
+            "finest_pair_passed": all_passed,
+            "pair_summary": pair_summary,
+            "acceptance_basis": "Only the finest adjacent-grid pair determines the convergence status; baseline failure is reported separately.",
         },
         "matrix": {
             "gas_temperatures_K": list(temperatures),
@@ -272,11 +322,12 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=ROOT / "reports/hitemp_grid_convergence.json")
     parser.add_argument("--coarse-step", type=float, default=GRID_STEPS_CM_INV[0])
     parser.add_argument("--fine-step", type=float, default=GRID_STEPS_CM_INV[1])
+    parser.add_argument("--finest-step", type=float, default=GRID_STEPS_CM_INV[2])
     parser.add_argument("--quick", action="store_true", help="small smoke matrix, not the full reference matrix")
     args = parser.parse_args()
     report = run_matrix(
         args.line_csv, args.tips_csv, coarse_step=args.coarse_step,
-        fine_step=args.fine_step, quick=args.quick,
+        fine_step=args.fine_step, finest_step=args.finest_step, quick=args.quick,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
