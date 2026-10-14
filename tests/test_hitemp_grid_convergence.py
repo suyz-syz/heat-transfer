@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import pandas as pd
 
 from scripts.assess_hitemp_grid_convergence import (
     BAND_CM_INV,
@@ -70,3 +71,18 @@ def test_grid_metrics_detect_a_changed_spectrum():
     assert metrics["alpha_integral_relative"] > 0
     assert metrics["transmittance_max_absolute"] > 0
     assert metrics["band_emissivity_max_absolute"] > 0
+
+def test_lbl_grid_has_exact_band_endpoints_at_both_resolutions():
+    from scripts.hitemp_calibration.hitemp_wsgg_calibration import lbl_spectrum
+
+    lines = pd.DataFrame([{
+        "molec_id": 1, "local_iso_id": 1, "nu": 2200.0, "sw": 1e-22,
+        "a": 1.0, "gamma_air": 0.07, "gamma_self": 0.3,
+        "elower": 50.0, "n_air": 0.7, "delta_air": 0.0,
+    }])
+    tips = {(1, 1): (np.array([296.0, 2400.0]), np.array([100.0, 1000.0]))}
+    for step, expected_points in ((0.01, 40001), (0.005, 80001)):
+        wn, alpha = lbl_spectrum(lines, tips, 1200.0, 1.0, 0.12, 0.08, step=step)
+        assert len(wn) == len(alpha) == expected_points
+        assert wn[0] == 2000.0
+        assert wn[-1] == 2400.0
