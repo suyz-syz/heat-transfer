@@ -72,6 +72,21 @@ def test_grid_metrics_detect_a_changed_spectrum():
     assert metrics["transmittance_max_absolute"] > 0
     assert metrics["band_emissivity_max_absolute"] > 0
 
+
+def test_grid_comparison_detects_features_between_coarse_nodes():
+    coarse_wn = np.linspace(2000.0, 2400.0, 401)
+    fine_wn = np.linspace(2000.0, 2400.0, 801)
+    coarse_alpha = np.full_like(coarse_wn, 0.1)
+    # A narrow feature centered halfway between coarse nodes would be invisible
+    # to a comparison that only sampled the fine spectrum at shared nodes.
+    fine_alpha = 0.1 + 0.5 * np.exp(-((fine_wn - 2000.5) / 0.08) ** 2)
+    metrics = compare_grids(
+        (coarse_wn, coarse_alpha), (fine_wn, fine_alpha),
+        1200.0, (600.0, 900.0), (0.1, 1.0),
+    )
+    assert metrics["alpha_integral_relative"] > 0
+    assert metrics["transmittance_max_absolute"] > 0
+
 def test_lbl_grid_has_exact_band_endpoints_at_both_resolutions():
     from scripts.hitemp_calibration.hitemp_wsgg_calibration import lbl_spectrum
 
@@ -81,7 +96,7 @@ def test_lbl_grid_has_exact_band_endpoints_at_both_resolutions():
         "elower": 50.0, "n_air": 0.7, "delta_air": 0.0,
     }])
     tips = {(1, 1): (np.array([296.0, 2400.0]), np.array([100.0, 1000.0]))}
-    for step, expected_points in ((0.01, 40001), (0.005, 80001)):
+    for step, expected_points in ((0.01, 40001), (0.005, 80001), (0.0025, 160001)):
         wn, alpha = lbl_spectrum(lines, tips, 1200.0, 1.0, 0.12, 0.08, step=step)
         assert len(wn) == len(alpha) == expected_points
         assert wn[0] == 2000.0
