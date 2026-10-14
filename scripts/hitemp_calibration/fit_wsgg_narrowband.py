@@ -118,14 +118,63 @@ def decode_parameters(params: np.ndarray, n_gases: int, kappa_min: float, kappa_
 
 def predict_tau(
     u: Sequence[float], weights: Sequence[float], kappas: Sequence[float],
+    *, u_domain: tuple[float, float],
 ) -> np.ndarray:
     u_values = np.asarray(u, dtype=float)
-    return np.exp(-u_values[:, None] * np.asarray(kappas)[None, :]) @ np.asarray(weights)
+    weight_values = np.asarray(weights, dtype=float)
+    kappa_values = np.asarray(kappas, dtype=float)
+    u_min, u_max = u_domain
+    if (u_values.ndim != 1 or not np.all(np.isfinite(u_values))
+            or np.any(u_values < 0)):
+        raise ValueError("optical path u must contain finite nonnegative values")
+    if (not math.isfinite(u_min) or not math.isfinite(u_max)
+            or u_min < 0 or u_max < u_min):
+        raise ValueError("calibrated optical-path domain must be finite and nonnegative")
+    if np.any(u_values < u_min) or np.any(u_values > u_max):
+        raise ValueError(
+            f"optical path outside calibrated domain [{u_min}, {u_max}]; refusing extrapolation"
+        )
+    if (weight_values.ndim != 1 or kappa_values.ndim != 1
+            or weight_values.size == 0 or weight_values.size != kappa_values.size
+            or not np.all(np.isfinite(weight_values))
+            or not np.all(np.isfinite(kappa_values))):
+        raise ValueError("weights and kappas must be finite, nonempty vectors of equal length")
+    if (np.any(weight_values < 0) or not np.isclose(weight_values.sum(), 1.0, atol=1e-12)
+            or np.any(kappa_values < 0) or np.any(np.diff(kappa_values) < 0)):
+        raise ValueError("WSGG parameters violate simplex or ordered nonnegative kappa constraints")
+    predicted = np.exp(-u_values[:, None] * kappa_values[None, :]) @ weight_values
+    if not np.all(np.isfinite(predicted)) or np.any(predicted < 0) or np.any(predicted > 1):
+        raise ArithmeticError("WSGG transmittance is outside physical bounds [0, 1]")
+    return predicted
 
 
 def _condition_u(row: dict) -> float:
     # kappa uses optical path in atm*m, matching reports/hitemp_wsgg_calibration.json.
     return float(row["pressure_atm"] * row["path_m"])
+
+
+def calibration_domain(rows: Sequence[dict]) -> dict[str, dict[str, float]]:
+    domain: dict[str, dict[str, float]] = {}
+    for name in (*CONDITION_COLUMNS, "optical_path_atm_m"):
+        values = [
+            _condition_u(row) if name == "optical_path_atm_m" else float(row[name])
+            for row in rows
+        ]
+        domain[name] = {"min": min(values), "max": max(values)}
+    return domain
+
+
+def require_within_calibration_domain(rows: Sequence[dict], domain: dict) -> None:
+    for row in rows:
+        values = {name: float(row[name]) for name in CONDITION_COLUMNS}
+        values["optical_path_atm_m"] = _condition_u(row)
+        for name, value in values.items():
+            bounds = domain[name]
+            if value < bounds["min"] or value > bounds["max"]:
+                raise ValueError(
+                    f"{name}={value} outside calibrated domain "
+                    f"[{bounds['min']}, {bounds['max']}]; refusing extrapolation"
+                )
 
 
 def fit_model(
@@ -135,6 +184,7 @@ def fit_model(
     if len(rows) < n_gases + 1:
         raise ValueError(f"training set needs at least n_gases+1={n_gases + 1} observations")
     u = np.asarray([_condition_u(row) for row in rows], dtype=float)
+    u_domain = (float(np.min(u)), float(np.max(u)))
     target = np.asarray([row["tau_reference"] for row in rows], dtype=float)
     if np.unique(u).size < 2:
         raise ValueError("training set must contain at least two distinct pressure*path values")
@@ -155,7 +205,7 @@ def fit_model(
 
     def residual(params: np.ndarray) -> np.ndarray:
         weights, kappas = decode_parameters(params, n_gases, kappa_min, kappa_max)
-        return predict_tau(u, weights, kappas) - target
+        return predict_tau(u, weights, kappas, u_domain=u_domain) - target
 
     result = least_squares(
         residual, initial, method="trf", max_nfev=max_nfev,
@@ -173,10 +223,17 @@ def fit_model(
     }
 
 
-def error_metrics(rows: Sequence[dict], weights: np.ndarray, kappas: np.ndarray) -> dict:
+def error_metrics(
+    rows: Sequence[dict], weights: np.ndarray, kappas: np.ndarray,
+    domain: dict[str, dict[str, float]],
+) -> dict:
+    require_within_calibration_domain(rows, domain)
     target = np.asarray([row["tau_reference"] for row in rows], dtype=float)
     u = np.asarray([_condition_u(row) for row in rows], dtype=float)
-    predicted = predict_tau(u, weights, kappas)
+    u_bounds = domain["optical_path_atm_m"]
+    predicted = predict_tau(
+        u, weights, kappas, u_domain=(u_bounds["min"], u_bounds["max"]),
+    )
     absolute = np.abs(predicted - target)
     relative_percent = absolute / np.maximum(np.abs(target), 1e-8) * 100.0
     return {
@@ -194,6 +251,7 @@ def error_metrics(rows: Sequence[dict], weights: np.ndarray, kappas: np.ndarray)
 
 def condition_group_metrics(
     rows: Sequence[dict], weights: np.ndarray, kappas: np.ndarray,
+    domain: dict[str, dict[str, float]],
 ) -> list[dict]:
     """Return holdout errors for each indivisible thermochemical condition."""
     grouped: dict[tuple[float, ...], list[dict]] = {}
@@ -202,7 +260,7 @@ def condition_group_metrics(
 
     results = []
     for key, group_rows in sorted(grouped.items()):
-        metrics = error_metrics(group_rows, weights, kappas)
+        metrics = error_metrics(group_rows, weights, kappas, domain)
         results.append({
             "condition": dict(zip(CONDITION_COLUMNS, key)),
             **metrics,
@@ -233,6 +291,7 @@ def run(
     weights, kappas, optimizer = fit_model(
         train, n_gases, kappa_min, kappa_max, max_nfev,
     )
+    train_domain = calibration_domain(train)
     # Assertions make any future parameterization regression fail before reporting.
     if np.any(weights < 0) or not np.isclose(weights.sum(), 1.0, atol=1e-12):
         raise AssertionError("weight simplex constraint violated")
@@ -265,6 +324,8 @@ def run(
             "holdout_condition_groups": [list(key) for key in holdout_keys],
             "train_group_count": len(train_keys),
             "holdout_group_count": len(holdout_keys),
+            "calibration_domain_from_training": train_domain,
+            "domain_policy": "Reject values outside training min/max for T, p, mole fractions, or pressure*path; no extrapolation.",
         },
         "constraints": {
             "weights_nonnegative": bool(np.all(weights >= 0)),
@@ -280,9 +341,11 @@ def run(
         },
         "optimizer": optimizer,
         "metrics": {
-            "training": error_metrics(train, weights, kappas),
-            "holdout": error_metrics(holdout, weights, kappas),
-            "holdout_by_condition": condition_group_metrics(holdout, weights, kappas),
+            "training": error_metrics(train, weights, kappas, train_domain),
+            "holdout": error_metrics(holdout, weights, kappas, train_domain),
+            "holdout_by_condition": condition_group_metrics(
+                holdout, weights, kappas, train_domain,
+            ),
         },
         "limitations": [
             "This is a narrow-band offline fit and is not a total-spectrum radiation model.",

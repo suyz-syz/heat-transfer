@@ -357,7 +357,30 @@
       ]
     ],
     "train_group_count": 43,
-    "holdout_group_count": 11
+    "holdout_group_count": 11,
+    "calibration_domain_from_training": {
+      "temperature_K": {
+        "min": 600.0,
+        "max": 2400.0
+      },
+      "pressure_atm": {
+        "min": 0.3,
+        "max": 3.0
+      },
+      "x_co2": {
+        "min": 0.08,
+        "max": 0.2
+      },
+      "x_h2o": {
+        "min": 0.04,
+        "max": 0.1
+      },
+      "optical_path_atm_m": {
+        "min": 0.015,
+        "max": 15.0
+      }
+    },
+    "domain_policy": "Reject values outside training min/max for T, p, mole fractions, or pressure*path; no extrapolation."
   },
   "constraints": {
     "weights_nonnegative": true,
