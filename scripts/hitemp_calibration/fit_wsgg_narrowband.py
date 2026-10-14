@@ -325,7 +325,7 @@ def run(
             "train_group_count": len(train_keys),
             "holdout_group_count": len(holdout_keys),
             "calibration_domain_from_training": train_domain,
-            "domain_policy": "Reject values outside training min/max for T, p, mole fractions, or pressure*path; no extrapolation.",
+            "domain_policy": "Reject values outside componentwise training min/max for T, p, mole fractions, or pressure*path. This axis-aligned guard does not establish joint-space coverage.",
         },
         "constraints": {
             "weights_nonnegative": bool(np.all(weights >= 0)),

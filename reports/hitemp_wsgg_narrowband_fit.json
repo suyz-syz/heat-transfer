@@ -380,7 +380,7 @@
         "max": 15.0
       }
     },
-    "domain_policy": "Reject values outside training min/max for T, p, mole fractions, or pressure*path; no extrapolation."
+    "domain_policy": "Reject values outside componentwise training min/max for T, p, mole fractions, or pressure*path. This axis-aligned guard does not establish joint-space coverage."
   },
   "constraints": {
     "weights_nonnegative": true,
