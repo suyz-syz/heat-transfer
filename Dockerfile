@@ -18,7 +18,7 @@ COPY kiln_ht ./kiln_ht
 COPY server.py .
 COPY app.py .
 RUN mkdir -p /app/data
-COPY data/spectral_grid_alpha_tau.csv data/tips_partition_sums_296_2400.csv data/manifest.json /app/data/
+COPY data/spectral_grid_alpha_f32.z data/tips_partition_sums_296_2400.csv data/manifest.json /app/data/
 COPY .streamlit ./.streamlit
 # 显式复制 supervisord 配置文件到固定位置（CMD 引用的路径）
 COPY supervisord.conf /etc/supervisord.conf

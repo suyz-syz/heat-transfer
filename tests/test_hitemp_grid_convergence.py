@@ -5,14 +5,27 @@ import pandas as pd
 from scripts.assess_hitemp_grid_convergence import (
     BAND_CM_INV,
     CO2_FRACTIONS,
+    DEFAULT_THRESHOLDS,
     GAS_TEMPERATURES_K,
     H2O_FRACTIONS,
     PRESSURE_CASES_ATM,
     _align_fine_to_coarse,
+    _metrics_pass,
     compare_grids,
     composition_matrix,
     matched_wall_temperatures,
 )
+
+
+def test_pointwise_transmittance_max_is_diagnostic_not_convergence_gate():
+    metrics = {name: 0.0 for name in DEFAULT_THRESHOLDS}
+    metrics["transmittance_mean_absolute"] = DEFAULT_THRESHOLDS[
+        "transmittance_mean_absolute"
+    ]
+    metrics["transmittance_max_absolute"] = 0.05
+    assert _metrics_pass(metrics)
+    metrics["transmittance_mean_absolute"] += 1e-9
+    assert not _metrics_pass(metrics)
 
 
 def test_reference_matrix_covers_required_temperatures_pressures_and_independent_compositions():

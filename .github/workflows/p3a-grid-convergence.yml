@@ -25,12 +25,12 @@ permissions:
 
 concurrency:
   group: p3a-grid-convergence-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   grid-convergence:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4

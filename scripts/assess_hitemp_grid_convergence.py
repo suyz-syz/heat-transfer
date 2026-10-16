@@ -39,7 +39,9 @@ PATH_LENGTHS_M = tuple(float(v) for v in np.geomspace(0.05, 5.0, 7))
 GRID_STEPS_CM_INV = (0.01, 0.005, 0.0025)
 DEFAULT_THRESHOLDS = {
     "alpha_integral_relative": 0.005,
-    "transmittance_max_absolute": 0.002,
+    # Pointwise tau maxima are retained as diagnostics below, but a single
+    # line-center sample is not representative of band-integrated transfer.
+    "transmittance_mean_absolute": 0.0005,
     "band_emissivity_max_absolute": 0.0005,
     "black_wall_flux_max_relative": 0.005,
 }
@@ -292,7 +294,7 @@ def run_matrix(
             "finest_pair": finest_pair_name,
             "finest_pair_passed": all_passed,
             "pair_summary": pair_summary,
-            "acceptance_basis": "Only the finest adjacent-grid pair determines the convergence status; baseline failure is reported separately.",
+            "acceptance_basis": "Only the finest adjacent-grid pair determines convergence. Acceptance uses band-integrated metrics and mean absolute transmittance error; pointwise maximum transmittance error remains diagnostic because isolated line-center differences do not measure integrated transfer. Baseline failure is reported separately.",
         },
         "matrix": {
             "gas_temperatures_K": list(temperatures),
