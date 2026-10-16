@@ -118,6 +118,8 @@ def normalize_config(raw: Mapping[str, Any]) -> Dict[str, Any]:
     for key in ("N_total", "L_char", "L_kiln", "P_total", "T_gas", "T_env", "v_gas"):
         if key in params and params[key] <= 0:
             raise ValueError(f"{key} 必须大于 0")
+    if "radiation_model" in params and params["radiation_model"] not in ("leckner", "wsgg", "hitemp_grid"):
+        raise ValueError("radiation_model 必须为 leckner、wsgg 或 hitemp_grid")
     if "N_total" in params and int(params["N_total"]) != params["N_total"]:
         raise ValueError("N_total 必须为整数")
     params["N_total"] = int(params.get("N_total", 100))
@@ -197,6 +199,8 @@ def load_config(path: str | Path) -> Dict[str, Any]:
 def validate_kiln_params(params: Mapping[str, Any], *, require_temperature_domain: bool = False) -> None:
     """Validate cross-field guardrails without binding the UI/API to Pydantic."""
     p = dict(params)
+    if "radiation_model" in p and p["radiation_model"] not in ("leckner", "wsgg", "hitemp_grid"):
+        raise ValueError("radiation_model 必须为 leckner、wsgg 或 hitemp_grid")
     for key in ("T_gas", "T_env", "P_total", "v_gas", "L_char", "L_kiln"):
         if key in p and _finite_number(p[key], key) <= 0:
             raise ValueError(f"{key} 必须大于 0")

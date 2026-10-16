@@ -64,6 +64,8 @@ class KilnParamsIn(BaseModel):
     T_env: float = Field(298.15, gt=0, description="环境温度 (K)")
     v_amb: float = Field(2.0, ge=0, description="环境风速 (m/s)")
     eps_shell: float = Field(0.85, gt=0, le=1, description="外壳发射率")
+    radiation_model: Literal["leckner", "wsgg", "hitemp_grid"] = Field(
+        "leckner", description="辐射模型；hitemp_grid 为带限实验模型，超出标定域将拒绝计算")
     gas_mode: Literal["combustion", "hot_air"] = Field(
         "combustion", description="气相模式：常规燃烧烟气或洁净热空气")
 

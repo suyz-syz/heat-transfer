@@ -1,0 +1,512 @@
+{
+  "created_utc": "2026-10-16T03:00:34.491633+00:00",
+  "source_directory": "E:\\tmp\\hitemp2010",
+  "run_directory": "C:\\Users\\syzyu\\projects\\heat-transfer\\scripts\\hitemp_calibration\\offline_runs\\hitemp2010_20261016",
+  "source_spectral_interval_cm-1": [
+    1000.0,
+    4000.0
+  ],
+  "archive_count": 22,
+  "archives": [
+    {
+      "name": "01_01000-01150_HITEMP2010.zip",
+      "size_bytes": 126160901,
+      "sha256": "caf89d2356d0e3be8308de75f1a29fefb48ccc0d8b0d48e75dd4fd371f766f70",
+      "member": "01_1000-1150_HITEMP2010.par",
+      "uncompressed_size_bytes": 803579454,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        1000.0,
+        1150.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 4960365
+    },
+    {
+      "name": "01_01150-01300_HITEMP2010.zip",
+      "size_bytes": 107136251,
+      "sha256": "08c548a6eab491c99297d08e2c10fcadc0db6932afdb637b0f88893373c7f49e",
+      "member": "01_1150-1300_HITEMP2010.par",
+      "uncompressed_size_bytes": 674437104,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        1150.0,
+        1300.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 4163193
+    },
+    {
+      "name": "01_01300-01500_HITEMP2010.zip",
+      "size_bytes": 114109753,
+      "sha256": "4ae58e775bacd21fd0fe69027ce1ce42575af68d6c9ee7fede6bbbb45f956667",
+      "member": "01_1300-1500_HITEMP2010.par",
+      "uncompressed_size_bytes": 706897206,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        1300.0,
+        1500.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 4363563
+    },
+    {
+      "name": "01_01500-01750_HITEMP2010.zip",
+      "size_bytes": 115078498,
+      "sha256": "ae7d561e7269c8b3acfdefc9d01c2d6339a5ecc3134732706b958cd0caf8d2d3",
+      "member": "01_1500-1750_HITEMP2010.par",
+      "uncompressed_size_bytes": 702518670,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        1500.0,
+        1750.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 4336536
+    },
+    {
+      "name": "01_01750-02000_HITEMP2010.zip",
+      "size_bytes": 127375941,
+      "sha256": "a9c193abf8f649cf703256004b68abc1f2a8e97e33b5e66edfd5f3e8514034f1",
+      "member": "01_1750-2000_HITEMP2010.par",
+      "uncompressed_size_bytes": 608911830,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        1750.0,
+        2000.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 3758714
+    },
+    {
+      "name": "01_02000-02250_HITEMP2010.zip",
+      "size_bytes": 110406372,
+      "sha256": "d2192c5a215fa0cab4c52a799abe3fc373ffe70e70f56d17af3f521e18a76006",
+      "member": "01_2000-2250_HITEMP2010.par",
+      "uncompressed_size_bytes": 531976572,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        2000.0,
+        2250.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 3283806
+    },
+    {
+      "name": "01_02250-02500_HITEMP2010.zip",
+      "size_bytes": 99081911,
+      "sha256": "758a7d8695a67bdd9cd7f6e4c76fda18dbfcae192103d2a1aba5d979a742817b",
+      "member": "01_2250-2500_HITEMP2010.par",
+      "uncompressed_size_bytes": 481377330,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        2250.0,
+        2500.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 2971464
+    },
+    {
+      "name": "01_02500-02750_HITEMP2010.zip",
+      "size_bytes": 99793235,
+      "sha256": "1e1755fb68988fcb2839578308c11c8eccdf258d7cb5d568fb2b8ef6aba98d41",
+      "member": "01_2500-2750_HITEMP2010.par",
+      "uncompressed_size_bytes": 484757622,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        2500.0,
+        2750.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 2992332
+    },
+    {
+      "name": "01_02750-03000_HITEMP2010.zip",
+      "size_bytes": 104103560,
+      "sha256": "c0349b759c374d7d2d5a3036b45ae652d05d51dab34a650faffd1f29592083f3",
+      "member": "01_2750-3000_HITEMP2010.par",
+      "uncompressed_size_bytes": 498402072,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        2750.0,
+        3000.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 3076556
+    },
+    {
+      "name": "01_03000-03250_HITEMP2010.zip",
+      "size_bytes": 93888145,
+      "sha256": "6b8134333686c84c2639d78ae90435e89c4ba0e8da4f9ef7c4a822e1c22c7923",
+      "member": "01_3000-3250_HITEMP2010.par",
+      "uncompressed_size_bytes": 438802434,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        3000.0,
+        3250.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 2708656
+    },
+    {
+      "name": "01_03250-03500_HITEMP2010.zip",
+      "size_bytes": 80916517,
+      "sha256": "5d3bef250306ecc1e1cbad796457f35241262cb8136df1957a18693426e4fb1f",
+      "member": "01_3250-3500_HITEMP2010.par",
+      "uncompressed_size_bytes": 372512358,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        3250.0,
+        3500.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 2299461
+    },
+    {
+      "name": "01_03500-04150_HITEMP2010.zip",
+      "size_bytes": 122819095,
+      "sha256": "133b112f465347576017f1ebe6052c0416f05371931c074f2f3a515527d64464",
+      "member": "01_3500-4150_HITEMP2010.par",
+      "uncompressed_size_bytes": 742593582,
+      "molecule_id": 1,
+      "chunk_interval_cm-1": [
+        3500.0,
+        4150.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 3571793
+    },
+    {
+      "name": "02_01000-01500_HITEMP2010.zip",
+      "size_bytes": 12509016,
+      "sha256": "fea46b7a7cd121c01615a64c2543faed2ff6a92dc2f7834e85fbd806528caf93",
+      "member": "02_1000-1500_HITEMP2010.par",
+      "uncompressed_size_bytes": 61335792,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        1000.0,
+        1500.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 378616
+    },
+    {
+      "name": "02_01500-02000_HITEMP2010.zip",
+      "size_bytes": 16574342,
+      "sha256": "9bb2905ccc08086a333408542447c42dd81663ddfa33ce1106faaf8752148a58",
+      "member": "02_1500-2000_HITEMP2010.par",
+      "uncompressed_size_bytes": 73958022,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        1500.0,
+        2000.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 456531
+    },
+    {
+      "name": "02_02000-02125_HITEMP2010.zip",
+      "size_bytes": 21711676,
+      "sha256": "9a9a3a0c6ad5ec94e80bbcba206e6d8b55cc5d202049123f8aa7127354dfac84",
+      "member": "02_2000-2125_HITEMP2010.par",
+      "uncompressed_size_bytes": 93351042,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        2000.0,
+        2125.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 576240
+    },
+    {
+      "name": "02_02125-02250_HITEMP2010.zip",
+      "size_bytes": 40004215,
+      "sha256": "d91282980e32f9a99ff74494bac0c6ef543f7402aa9756a4abd973451cbd8a85",
+      "member": "02_2125-2250_HITEMP2010.par",
+      "uncompressed_size_bytes": 178689240,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        2125.0,
+        2250.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 1103021
+    },
+    {
+      "name": "02_02250-02500_HITEMP2010.zip",
+      "size_bytes": 18450873,
+      "sha256": "e96feca12a3a8d382a63c46e794874642f313a145d0f42d2e1a2b14db9908de3",
+      "member": "02_2250-2500_HITEMP2010.par",
+      "uncompressed_size_bytes": 82216458,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        2250.0,
+        2500.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 507509
+    },
+    {
+      "name": "02_02500-03000_HITEMP2010.zip",
+      "size_bytes": 6940139,
+      "sha256": "99cedd897afc793a0929b782e62b28904a80d840558373dd2a43a1d3e77e291d",
+      "member": "02_2500-3000_HITEMP2010.par",
+      "uncompressed_size_bytes": 34404426,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        2500.0,
+        3000.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 212373
+    },
+    {
+      "name": "02_03000-03250_HITEMP2010.zip",
+      "size_bytes": 7786435,
+      "sha256": "c9833697bd6dd0f3aede06a577e295275f6cac390c87e13855d61538b3c1a83b",
+      "member": "02_3000-3250_HITEMP2010.par",
+      "uncompressed_size_bytes": 34689546,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        3000.0,
+        3250.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 214133
+    },
+    {
+      "name": "02_03250-03500_HITEMP2010.zip",
+      "size_bytes": 35156937,
+      "sha256": "1d0429f11043e7ab859e015088f17df0091f05a1c264839c709a1ce4225207f8",
+      "member": "02_3250-3500_HITEMP2010.par",
+      "uncompressed_size_bytes": 152187984,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        3250.0,
+        3500.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 939431
+    },
+    {
+      "name": "02_03500-03750_HITEMP2010.zip",
+      "size_bytes": 39129590,
+      "sha256": "4140ceaa96ac4213d0b0cfb16fb3c88090c310489fe91ef732bfe24bb7fe25c4",
+      "member": "02_3500-3750_HITEMP2010.par",
+      "uncompressed_size_bytes": 169590672,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        3500.0,
+        3750.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 1046857
+    },
+    {
+      "name": "02_03750-04000_HITEMP2010.zip",
+      "size_bytes": 7899912,
+      "sha256": "68dd3e8e83ca69eeef9c7a6f62177384a0c1800e9af64628284ff0d0c7a6b0f6",
+      "member": "02_3750-4000_HITEMP2010.par",
+      "uncompressed_size_bytes": 34630578,
+      "molecule_id": 2,
+      "chunk_interval_cm-1": [
+        3750.0,
+        4000.0
+      ],
+      "kept_lines_in_1000_4000_cm-1": 213769
+    }
+  ],
+  "source_chunk_coverage": {
+    "H2O": "continuous 1000-4150 cm-1 chunks; extracted through 4000",
+    "CO2": "continuous 1000-4000 cm-1 chunks"
+  },
+  "full_line_csv": {
+    "file": "hitemp2010_lines_1000_4000_full.csv",
+    "rows_no_strength_cutoff": 48134919,
+    "counts_by_molecule_id": {
+      "1": 42486439,
+      "2": 5648480
+    },
+    "counts_by_isotopologue": {
+      "1:1": 42475072,
+      "1:2": 3115,
+      "1:3": 2312,
+      "1:4": 5106,
+      "1:5": 659,
+      "1:6": 175,
+      "2:1": 2786618,
+      "2:2": 994192,
+      "2:3": 1346004,
+      "2:4": 167397,
+      "2:5": 262237,
+      "2:6": 23478,
+      "2:7": 68554
+    },
+    "rows_at_legacy_sw_ge_1e-26": 41581,
+    "rows_below_legacy_threshold": 48093338,
+    "sha256": "6a54a4192d273299a50b0856967d95f61be9735aeefd98681f75db5aa2861675",
+    "size_bytes": 3405418067
+  },
+  "tips": {
+    "file": "tips_partition_sums_296_2400.csv",
+    "source_hapi": "E:\\tmp\\hitemp2010\\hapi.zip",
+    "hapi_sha256": "169e9037f09ee594d96daf38213228ff5b6bf6b91e7d47a547ae211000a727c1",
+    "temperature_K": [
+      296,
+      2400
+    ],
+    "isotopologue_count": 13,
+    "rows": 1118,
+    "Q_validation": "all generated values finite and positive; no missing isotope/temperature pairs"
+  },
+  "limitations": [
+    "The 1000-4000 cm-1 line interval is not a total-spectrum database.",
+    "Line-strength threshold is reported but not applied to canonical full CSV.",
+    "HITEMP provenance is represented by local archive hashes; upstream licensing/release metadata still needs independent documentation."
+  ],
+  "spectral_grid": {
+    "created_utc": "2026-10-16T03:03:15.123818+00:00",
+    "source_complete_line_csv_sha256": "6a54a4192d273299a50b0856967d95f61be9735aeefd98681f75db5aa2861675",
+    "source_grid_subset_csv_sha256": "a6acdd90f96865d1f410efea3682d4bc4aa0e074effe2176755e63a27a32367e",
+    "grid_subset_minimum_sw_cm_per_molecule": 1e-26,
+    "tips_csv_sha256": "f345702654c4a8edb3381e888ac4ff8b94f57cbcfef82d0da220a249bdf3acab",
+    "reference_model": "pseudo-Voigt LBL; air/self broadening; ideal-gas number density",
+    "spectral_grid_cm-1": {
+      "min": 1025.0,
+      "max": 3975.0,
+      "step": 0.25,
+      "points": 11801,
+      "line_wing_cutoff": 25.0
+    },
+    "source_line_center_interval_cm-1": [
+      1000.0,
+      4000.0
+    ],
+    "temperature_K": [
+      600.0,
+      900.0,
+      1200.0,
+      1500.0,
+      1800.0,
+      2100.0,
+      2400.0
+    ],
+    "pressure_atm": [
+      0.3,
+      1.0,
+      3.0
+    ],
+    "compositions": [
+      {
+        "name": "zero",
+        "x_co2": 0.0,
+        "x_h2o": 0.0
+      },
+      {
+        "name": "trace_equal",
+        "x_co2": 0.005,
+        "x_h2o": 0.005
+      },
+      {
+        "name": "low",
+        "x_co2": 0.04,
+        "x_h2o": 0.08
+      },
+      {
+        "name": "nominal",
+        "x_co2": 0.08,
+        "x_h2o": 0.12
+      },
+      {
+        "name": "high",
+        "x_co2": 0.2,
+        "x_h2o": 0.2
+      },
+      {
+        "name": "co2_rich",
+        "x_co2": 0.2,
+        "x_h2o": 0.05
+      },
+      {
+        "name": "h2o_rich",
+        "x_co2": 0.05,
+        "x_h2o": 0.2
+      }
+    ],
+    "path_m": [
+      0.1,
+      1.0,
+      5.0
+    ],
+    "condition_spectra": 147,
+    "output_file": "spectral_grid_alpha_tau.csv",
+    "limitations": [
+      "Band-limited 1025-3975 cm-1; not full-spectrum radiation.",
+      "Pseudo-Voigt approximation is not independent high-resolution spectroscopy validation.",
+      "Air/self broadening approximates all non-absorbing bath gas as air.",
+      "Results inherit any source completeness and line-strength filtering limitations."
+    ],
+    "output_rows": 1734747,
+    "output_bytes": 185052462,
+    "output_sha256": "dd10138264c3c8acfc0b3542c19f6f82b84d5f2ee257262870b800d758982e7d",
+    "composition_triangles": [
+      [
+        5,
+        1,
+        0
+      ],
+      [
+        1,
+        2,
+        0
+      ],
+      [
+        2,
+        6,
+        0
+      ],
+      [
+        5,
+        2,
+        1
+      ],
+      [
+        3,
+        5,
+        4
+      ],
+      [
+        3,
+        2,
+        5
+      ],
+      [
+        6,
+        3,
+        4
+      ],
+      [
+        2,
+        3,
+        6
+      ]
+    ]
+  },
+  "grid_validation": {
+    "created_utc": "2026-10-16T03:06:04.809228+00:00",
+    "grid_file": "spectral_grid_alpha_tau.csv",
+    "grid_sha256": "dd10138264c3c8acfc0b3542c19f6f82b84d5f2ee257262870b800d758982e7d",
+    "rows": 1734747,
+    "condition_spectra": 147,
+    "expected_points_per_spectrum": 11801,
+    "wrong_spectrum_row_counts": {},
+    "first_last_wavenumber_cm-1": {
+      "min": 1025.0,
+      "max": 3975.0
+    },
+    "checks": {
+      "nonfinite_numeric_rows": 0,
+      "negative_alpha_values": 0,
+      "tau_outside_0_1": 0,
+      "tau_not_decreasing_with_path": 0,
+      "zero_species_not_transparent": 0,
+      "nonincreasing_wavenumber_steps": 0
+    },
+    "passed": true
+  },
+  "line_strength_filter": {
+    "source_file": "hitemp2010_lines_1000_4000_full.csv",
+    "source_sha256": "6a54a4192d273299a50b0856967d95f61be9735aeefd98681f75db5aa2861675",
+    "source_rows": 48134919,
+    "minimum_sw_cm_per_molecule": 1e-26,
+    "kept_rows": 41581,
+    "removed_rows": 48093338,
+    "output_file": "hitemp2010_lines_sw_ge_1e-26.csv",
+    "output_sha256": "a6acdd90f96865d1f410efea3682d4bc4aa0e074effe2176755e63a27a32367e",
+    "warning": "This thresholded subset is used only for a tractable exploratory LBL grid; threshold sensitivity and missing weak-line contribution remain to be validated."
+  },
+  "runtime_bridge": {
+    "status": "experimental_band_limited_lookup",
+    "production_default": "leckner",
+    "out_of_domain": "raise ValueError; no extrapolation or fallback"
+  }
+}

@@ -105,7 +105,7 @@ class KilnParams:
     H2O: float = 0.08           # H2O 体积分数
     N2: float = 0.69            # N2 体积分数
     O2: float = 0.03            # O2 体积分数
-    radiation_model: str = "leckner" # "wsgg" 或 "leckner"
+    radiation_model: str = "leckner" # "leckner" (default), "wsgg" 或实验用 "hitemp_grid"
     property_model: str = "mixture"   # "mixture" 或 "air"（旧基线兼容）
     eps_wall: float = 0.85      # 内壁发射率
     T_env: float = 298.15       # 环境空气温度 (K)，默认 25 ℃
@@ -267,7 +267,9 @@ def inner_radiation_h(T_g: float, T_w: float, eps_wall: float, beam: float,
     """统一烟气辐射接口；pCO2/pH2O 为摩尔分数，P_total 为 bar。"""
     result = get_gas_radiation(
         T_g, T_w, pCO2 * P_total * 1.0e5, pH2O * P_total * 1.0e5,
-        beam, eps_wall=eps_wall, model=model)
+        beam, eps_wall=eps_wall, model=model,
+        total_pressure_atm=P_total * 1.0e5 / 101325.0,
+        x_co2=pCO2, x_h2o=pH2O)
     return result.h_rad, result.emissivity
 
 
@@ -340,8 +342,8 @@ def validate_params(params: KilnParams) -> None:
         raise ValueError("CO2/H2O/N2/O2 体积分数必须在 [0,1) 内")
     if abs(sum(fractions) - 1.0) > 1e-8:
         raise ValueError("CO2+H2O+N2+O2 摩尔分数必须等于 1")
-    if params.radiation_model.lower() not in ("wsgg", "leckner"):
-        raise ValueError("radiation_model 必须为 wsgg 或 leckner")
+    if params.radiation_model.lower() not in ("wsgg", "leckner", "hitemp_grid"):
+        raise ValueError("radiation_model 必须为 wsgg、leckner 或 hitemp_grid")
     if params.property_model.lower() not in ("mixture", "air"):
         raise ValueError("property_model 必须为 mixture 或 air")
     if not (0 < params.eps_wall <= 1):

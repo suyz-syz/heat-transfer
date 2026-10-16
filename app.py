@@ -144,6 +144,7 @@ def _solve():
             float(_ss.H2O) / 100.0,
             mode="hot_air" if _ss.get("hot_air_mode", False) else "combustion",
         ),
+        radiation_model=_ss.get("radiation_model", "leckner"),
         eps_wall=_ss.eps_wall,
         T_env=float(_ss.T_env_C) + 273.15,          # ℃ -> K
         v_amb=_ss.v_amb,
@@ -278,6 +279,14 @@ with st.sidebar:
     L_kiln = st.number_input("窑长 (m)", value=60.0, step=1.0, key="L_kiln")
     P_total = st.number_input("窑内压力 (bar)", value=1.01325, step=0.1, key="P_total")
     st.subheader("【气相与 WSGG 光谱】")
+    st.selectbox(
+        "气体辐射模型",
+        options=("leckner", "wsgg", "hitemp_grid"),
+        format_func=lambda x: {"leckner": "Leckner（默认基线）", "wsgg": "WSGG（provisional）",
+                               "hitemp_grid": "HITEMP 网格（1025–3975 cm⁻¹ 带限实验）"}[x],
+        key="radiation_model",
+        help="HITEMP 网格仅覆盖带限、筛线的离线参考数据；输入超出标定域会明确报错，不会外推或回退。",
+    )
     hot_air_mode = st.checkbox(
         "热空气模式（洁净空气：N₂ 79% / O₂ 21%）",
         value=False, key="hot_air_mode",
@@ -513,6 +522,7 @@ with st.expander("📦 配置导出（JSON / YAML，Schema v2）", expanded=Fals
             "v_gas": float(_ss.get("v_gas", 3.0)), "L_char": float(_ss.get("L_char", 4.0)),
             "L_kiln": float(_ss.get("L_kiln", 60.0)), "P_total": float(_ss.get("P_total", 1.01325)),
             "CO2": float(_ss.get("CO2", 20.0)) / 100.0, "H2O": float(_ss.get("H2O", 8.0)) / 100.0,
+            "radiation_model": _ss.get("radiation_model", "leckner"),
             "eps_wall": float(_ss.get("eps_wall", 0.85)), "v_amb": float(_ss.get("v_amb", 2.0)),
             "eps_shell": float(_ss.get("eps_shell", 0.85)),
         },
