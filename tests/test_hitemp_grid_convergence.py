@@ -7,6 +7,7 @@ from scripts.assess_hitemp_grid_convergence import (
     CO2_FRACTIONS,
     DEFAULT_THRESHOLDS,
     GAS_TEMPERATURES_K,
+    GRID_STEPS_CM_INV,
     H2O_FRACTIONS,
     PRESSURE_CASES_ATM,
     _align_fine_to_coarse,
@@ -14,6 +15,7 @@ from scripts.assess_hitemp_grid_convergence import (
     compare_grids,
     composition_matrix,
     matched_wall_temperatures,
+    run_matrix,
 )
 
 
@@ -38,6 +40,7 @@ def test_reference_matrix_covers_required_temperatures_pressures_and_independent
     assert all(0.0 <= co2 < 1.0 and 0.0 <= h2o < 1.0 and co2 + h2o < 1.0
                for co2, h2o in pairs)
     assert BAND_CM_INV == (2000.0, 2400.0)
+    assert GRID_STEPS_CM_INV == (0.005, 0.0025, 0.00125)
 
 
 def test_wall_temperature_points_are_bounded_and_matched_to_gas_temperature():
@@ -54,6 +57,32 @@ def test_grid_alignment_rejects_noninteger_refinement():
     assert np.array_equal(_align_fine_to_coarse(coarse, fine, fine), coarse)
     with pytest.raises(ValueError, match="integer"):
         _align_fine_to_coarse(coarse, np.linspace(2000.0, 2400.0, 7), np.zeros(7))
+
+
+def test_nested_grid_sampling_matches_independent_lbl_evaluations():
+    from scripts.hitemp_calibration.hitemp_wsgg_calibration import lbl_spectrum
+
+    lines = pd.DataFrame([{
+        "molec_id": 1, "local_iso_id": 1, "nu": 2200.0, "sw": 1e-22,
+        "a": 1.0, "gamma_air": 0.07, "gamma_self": 0.3,
+        "elower": 50.0, "n_air": 0.7, "delta_air": 0.0,
+    }])
+    tips = {(1, 1): (np.array([296.0, 2400.0]), np.array([100.0, 1000.0]))}
+    wn_f, alpha_f = lbl_spectrum(lines, tips, 1200.0, 1.0, 0.1, 0.05, step=0.00125)
+    for step, stride in ((0.005, 4), (0.0025, 2)):
+        wn_independent, alpha_independent = lbl_spectrum(
+            lines, tips, 1200.0, 1.0, 0.1, 0.05, step=step
+        )
+        assert np.array_equal(wn_f[::stride], wn_independent)
+        assert np.array_equal(alpha_f[::stride], alpha_independent)
+
+
+def test_matrix_rejects_steps_that_do_not_form_nested_grids(tmp_path):
+    with pytest.raises(ValueError, match="nested"):
+        run_matrix(
+            tmp_path / "missing-lines.csv", tmp_path / "missing-tips.csv",
+            coarse_step=0.01, fine_step=0.008, finest_step=0.0025,
+        )
 
 
 def test_identical_lbl_grids_have_zero_convergence_error():
@@ -109,7 +138,7 @@ def test_lbl_grid_has_exact_band_endpoints_at_both_resolutions():
         "elower": 50.0, "n_air": 0.7, "delta_air": 0.0,
     }])
     tips = {(1, 1): (np.array([296.0, 2400.0]), np.array([100.0, 1000.0]))}
-    for step, expected_points in ((0.01, 40001), (0.005, 80001), (0.0025, 160001)):
+    for step, expected_points in ((0.005, 80001), (0.0025, 160001), (0.00125, 320001)):
         wn, alpha = lbl_spectrum(lines, tips, 1200.0, 1.0, 0.12, 0.08, step=step)
         assert len(wn) == len(alpha) == expected_points
         assert wn[0] == 2000.0

@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -36,7 +37,7 @@ PRESSURE_CASES_ATM = (0.3, 1.0, 3.0)
 CO2_FRACTIONS = (0.0, 0.04, 0.12, 0.20)
 H2O_FRACTIONS = (0.0, 0.02, 0.08, 0.15)
 PATH_LENGTHS_M = tuple(float(v) for v in np.geomspace(0.05, 5.0, 7))
-GRID_STEPS_CM_INV = (0.01, 0.005, 0.0025)
+GRID_STEPS_CM_INV = (0.005, 0.0025, 0.00125)
 DEFAULT_THRESHOLDS = {
     "alpha_integral_relative": 0.005,
     # Pointwise tau maxima are retained as diagnostics below, but a single
@@ -186,10 +187,15 @@ def run_matrix(
     ):
         raise ValueError("require finite grid steps with coarse_step > fine_step > finest_step > 0")
     steps = (coarse_step, fine_step, finest_step)
+    intervals_by_step = {}
     for step in steps:
         intervals = (BAND_CM_INV[1] - BAND_CM_INV[0]) / step
         if not math.isclose(intervals, round(intervals), rel_tol=0.0, abs_tol=1e-8):
             raise ValueError(f"grid step {step} must divide the band width exactly")
+        intervals_by_step[step] = int(round(intervals))
+    finest_intervals = intervals_by_step[finest_step]
+    if any(finest_intervals % intervals_by_step[step] for step in steps[:-1]):
+        raise ValueError("coarse and fine grid steps must form nested grids")
 
     lines, tips_map = load_inputs(line_csv, tips_csv)
     temperatures = (600.0, 1200.0, 2400.0) if quick else GAS_TEMPERATURES_K
@@ -198,17 +204,23 @@ def run_matrix(
     paths = PATH_LENGTHS_M[::3] if quick else PATH_LENGTHS_M
     pair_names = (f"{coarse_step:g}_to_{fine_step:g}", f"{fine_step:g}_to_{finest_step:g}")
     cases = []
+    total_cases = len(temperatures) * len(pressures) * len(compositions)
+    started = time.perf_counter()
     for temperature in temperatures:
         wall_temperatures = matched_wall_temperatures(temperature)
         for pressure in pressures:
             for x_co2, x_h2o in compositions:
-                spectra = [
-                    lbl_spectrum(
-                        lines, tips_map, temperature, pressure, x_co2, x_h2o,
-                        step=step,
-                    )
-                    for step in steps
-                ]
+                # The requested grids are nested and lbl_spectrum evaluates
+                # the same pointwise model at every node. Calculate only the
+                # finest grid, then select exact nodes for coarser grids.
+                wn_f, alpha_f = lbl_spectrum(
+                    lines, tips_map, temperature, pressure, x_co2, x_h2o,
+                    step=finest_step,
+                )
+                spectra = []
+                for step in steps:
+                    stride = finest_intervals // intervals_by_step[step]
+                    spectra.append((wn_f[::stride], alpha_f[::stride]))
                 pair_results = {}
                 for pair_name, coarse, fine in zip(
                     pair_names, spectra[:-1], spectra[1:]
@@ -231,6 +243,13 @@ def run_matrix(
                     "path_lengths_m": list(paths),
                     "refinement_pairs": pair_results,
                 })
+                if len(cases) % 10 == 0 or len(cases) == total_cases:
+                    elapsed = time.perf_counter() - started
+                    print(
+                        f"Completed {len(cases)}/{total_cases} P3a cases "
+                        f"in {elapsed:.1f} s",
+                        flush=True,
+                    )
 
     metric_names = tuple(DEFAULT_THRESHOLDS)
     pair_summary = {}
