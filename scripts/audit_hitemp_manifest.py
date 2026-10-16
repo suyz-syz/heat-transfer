@@ -72,9 +72,9 @@ def build_manifest(line_path: Path = DEFAULT_LINES, tips_path: Path = DEFAULT_TI
         tips_by_key[(molecule_id, isotope)].append(temperature)
 
     line_keys = set(counts)
-    if line_keys != set(tips_by_key):
-        raise ValueError(f"line/TIPS isotopologue mismatch: line-only={sorted(line_keys-set(tips_by_key))}, "
-                         f"tips-only={sorted(set(tips_by_key)-line_keys)}")
+    missing_tips = line_keys - set(tips_by_key)
+    if missing_tips:
+        raise ValueError(f"line isotopologues are missing TIPS tables: {sorted(missing_tips)}")
 
     isotope_inventory = []
     for molecule_id, isotope in sorted(line_keys, key=lambda key: (int(key[0]), int(key[1]))):
@@ -123,6 +123,11 @@ def build_manifest(line_path: Path = DEFAULT_LINES, tips_path: Path = DEFAULT_TI
             "interpretation": "narrow-band pipeline trial; not total-spectrum coverage",
         },
         "isotopologue_coverage": isotope_inventory,
+        "unused_tips_isotopologues": [
+            {"molec_id": int(molecule_id), "local_iso_id": int(isotope)}
+            for molecule_id, isotope in sorted(set(tips_by_key) - line_keys,
+                                               key=lambda key: (int(key[0]), int(key[1])))
+        ],
         "conversion_rules": {
             "line_source": "HITEMP/HITRAN 160-character fixed-width .par record",
             "line_columns": {

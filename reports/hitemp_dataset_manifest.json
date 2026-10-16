@@ -31,9 +31,9 @@
       ]
     },
     "data/tips_partition_sums_296_2400.csv": {
-      "sha256": "42a0875b99c16e99829d5e70aac74c33e97ba068663cf62ce182c2e84ef7be3f",
-      "bytes": 24453,
-      "records": 1032,
+      "sha256": "f345702654c4a8edb3381e888ac4ff8b94f57cbcfef82d0da220a249bdf3acab",
+      "bytes": 30960,
+      "records": 1118,
       "columns": [
         "molecule",
         "isotope",
@@ -41,10 +41,21 @@
         "Q"
       ],
       "temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     }
+  },
+  "calibration_trial": {
+    "band_cm-1": [
+      2000.0,
+      2400.0
+    ],
+    "line_center_filter_cm-1": [
+      1975.0,
+      2425.0
+    ],
+    "interpretation": "narrow-band pipeline trial; not total-spectrum coverage"
   },
   "isotopologue_coverage": [
     {
@@ -54,8 +65,8 @@
       "line_count": 7537,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -65,8 +76,8 @@
       "line_count": 2691,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -76,8 +87,8 @@
       "line_count": 1920,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -87,8 +98,8 @@
       "line_count": 3475,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -98,8 +109,8 @@
       "line_count": 290,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -109,8 +120,8 @@
       "line_count": 10764,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -120,8 +131,8 @@
       "line_count": 3759,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -131,8 +142,8 @@
       "line_count": 5610,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -142,8 +153,8 @@
       "line_count": 1991,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -153,8 +164,8 @@
       "line_count": 1384,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -164,8 +175,8 @@
       "line_count": 844,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
     },
     {
@@ -175,9 +186,15 @@
       "line_count": 411,
       "tips_rows": 86,
       "tips_temperature_K": [
-        296,
-        2400
+        296.0,
+        2400.0
       ]
+    }
+  ],
+  "unused_tips_isotopologues": [
+    {
+      "molec_id": 1,
+      "local_iso_id": 6
     }
   ],
   "conversion_rules": {
@@ -208,16 +225,5 @@
     "Observed isotope IDs describe this sample only and do not establish completeness for either species.",
     "The sample covers a narrow calibration band and cannot support full-spectrum claims.",
     "The offline pseudo-Voigt LBL approximation is not an independently validated reference standard."
-  ],
-  "calibration_trial": {
-    "band_cm-1": [
-      2000,
-      2400
-    ],
-    "line_center_filter_cm-1": [
-      1975,
-      2425
-    ],
-    "interpretation": "narrow-band pipeline trial; not total-spectrum coverage"
-  }
+  ]
 }

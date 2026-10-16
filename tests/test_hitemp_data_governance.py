@@ -28,6 +28,29 @@ def test_committed_manifest_matches_current_data_and_hashes():
     assert TIPS_COLUMNS == ("molecule", "isotope", "temperature_K", "Q")
 
 
+def test_manifest_accepts_unused_tips_isotopologues_but_requires_line_coverage(tmp_path):
+    line_path = tmp_path / "lines.csv"
+    with line_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=LINE_COLUMNS)
+        writer.writeheader()
+        writer.writerow({
+            "molec_id": 1, "local_iso_id": 3, "nu": 2100.0, "sw": 1e-22,
+            "a": 1.0, "gamma_air": 0.07, "gamma_self": 0.3,
+            "elower": 50.0, "n_air": 0.7, "delta_air": -0.001,
+        })
+    tips_path = tmp_path / "tips.csv"
+    with tips_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=TIPS_COLUMNS)
+        writer.writeheader()
+        writer.writerows([
+            {"molecule": 1, "isotope": 3, "temperature_K": 296, "Q": 100},
+            {"molecule": 1, "isotope": 6, "temperature_K": 296, "Q": 200},
+        ])
+
+    manifest = build_manifest(line_path, tips_path)
+    assert manifest["unused_tips_isotopologues"] == [{"molec_id": 1, "local_iso_id": 6}]
+
+
 def test_canonical_line_schema_maps_to_offline_lbl_model(tmp_path):
     path = tmp_path / "lines.csv"
     with path.open("w", newline="", encoding="utf-8") as stream:
