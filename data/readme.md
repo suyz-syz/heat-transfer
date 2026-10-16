@@ -40,17 +40,19 @@ solver. Production radiation paths and the provisional status are unchanged.
 
 ## Experimental runtime lookup grid
 
-`spectral_grid_alpha_tau.csv` is a separately archived, opt-in lookup table for
-the `hitemp_grid` radiation model. It contains pseudo-Voigt LBL absorption
-coefficients over 1025–3975 cm⁻¹ at 0.25 cm⁻¹ spacing. The 25 cm⁻¹ margins
-come from line centers extracted over 1000–4000 cm⁻¹. The source line list was
-filtered at `sw >= 1e-26 cm/molecule` for this grid. This is a band-limited
-experimental model, not total-spectrum radiation or an independently validated
-production coefficient set.
+`spectral_grid_alpha_f32.z` is the compact, opt-in lookup table for the
+`hitemp_grid` radiation model. It stores little-endian float32 absorption
+coefficients with zlib compression over 1025–3975 cm⁻¹ at 0.25 cm⁻¹ spacing.
+The 25 cm⁻¹ margins come from line centers extracted over 1000–4000 cm⁻¹. The
+source line list was filtered at `sw >= 1e-26 cm/molecule` for this grid. This
+is a band-limited experimental model, not total-spectrum radiation or an
+independently validated production coefficient set.
 
 The `hitemp_grid` option is disabled by default; Leckner remains the baseline.
 The lookup refuses temperatures, pressures, compositions, or path lengths
 outside the recorded grid domain and never silently extrapolates or falls back.
 `manifest.json` records source archive hashes, grid axes, line-selection
-statistics, and the spectral grid checksum. The large grid CSV is stored with
-Git LFS; the 3.4 GB full extracted line table is not part of this data directory.
+statistics, the original CSV source hash, and the compact binary SHA-256. The
+compact grid is about 5.6 MB; the original 185 MB CSV is retained in the offline
+run archive for audit and regeneration. The 3.4 GB full extracted line table is
+not part of this data directory.

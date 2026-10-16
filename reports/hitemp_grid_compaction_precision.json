@@ -1,0 +1,398 @@
+{
+  "scope": "Empirical comparison against the canonical band-limited CSV through kiln_ht.calc.solve_wall; not validation against physical truth.",
+  "reference_csv": "C:\\Users\\syzyu\\projects\\heat-transfer\\scripts\\hitemp_calibration\\offline_runs\\hitemp2010_20261016\\spectral_grid_alpha_tau.csv",
+  "input_csv_bytes": 185052462,
+  "compact_float32_bytes": 5592172,
+  "size_ratio_compact_to_csv": 0.03021938719194128,
+  "storage_reduction_percent": 96.97806128080587,
+  "grid": {
+    "min": 1025.0,
+    "max": 3975.0,
+    "step": 0.25,
+    "points": 11801,
+    "line_wing_cutoff": 25.0
+  },
+  "sweep": {
+    "condition_nodes": 147,
+    "paths_m": [
+      0.1,
+      1.0,
+      3.8,
+      5.0
+    ],
+    "maximum_emissivity_errors": {
+      "packed_float32_0.25cm-1": {
+        "0.1": {
+          "absolute_emissivity_error": 4.959596622278184e-11,
+          "temperature_K": 1200.0,
+          "pressure_atm": 3.0,
+          "composition": "nominal",
+          "x_co2": 0.08,
+          "x_h2o": 0.12,
+          "reference_emissivity": 0.09525744648482312,
+          "candidate_emissivity": 0.09525744653441909
+        },
+        "1.0": {
+          "absolute_emissivity_error": 7.053474471163668e-11,
+          "temperature_K": 900.0,
+          "pressure_atm": 3.0,
+          "composition": "high",
+          "x_co2": 0.2,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.35182013939181217,
+          "candidate_emissivity": 0.3518201393212774
+        },
+        "3.8": {
+          "absolute_emissivity_error": 8.497164083465236e-11,
+          "temperature_K": 600.0,
+          "pressure_atm": 0.3,
+          "composition": "high",
+          "x_co2": 0.2,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.1790596875177806,
+          "candidate_emissivity": 0.17905968743280895
+        },
+        "5.0": {
+          "absolute_emissivity_error": 9.446959881032058e-11,
+          "temperature_K": 600.0,
+          "pressure_atm": 0.3,
+          "composition": "high",
+          "x_co2": 0.2,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.19690012230702722,
+          "candidate_emissivity": 0.19690012221255762
+        }
+      },
+      "float64_1.0cm-1": {
+        "0.1": {
+          "absolute_emissivity_error": 0.0012212816444309854,
+          "temperature_K": 600.0,
+          "pressure_atm": 1.0,
+          "composition": "high",
+          "x_co2": 0.2,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.0842433696555546,
+          "candidate_emissivity": 0.08302208801112361
+        },
+        "1.0": {
+          "absolute_emissivity_error": 0.0018941283020703081,
+          "temperature_K": 600.0,
+          "pressure_atm": 3.0,
+          "composition": "h2o_rich",
+          "x_co2": 0.05,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.3249544461078748,
+          "candidate_emissivity": 0.32306031780580446
+        },
+        "3.8": {
+          "absolute_emissivity_error": 0.00175105324817032,
+          "temperature_K": 600.0,
+          "pressure_atm": 3.0,
+          "composition": "low",
+          "x_co2": 0.04,
+          "x_h2o": 0.08,
+          "reference_emissivity": 0.35125256901684193,
+          "candidate_emissivity": 0.3495015157686716
+        },
+        "5.0": {
+          "absolute_emissivity_error": 0.001742761238618551,
+          "temperature_K": 600.0,
+          "pressure_atm": 3.0,
+          "composition": "co2_rich",
+          "x_co2": 0.2,
+          "x_h2o": 0.05,
+          "reference_emissivity": 0.35800591482195143,
+          "candidate_emissivity": 0.3562631535833329
+        }
+      },
+      "float64_2.0cm-1": {
+        "0.1": {
+          "absolute_emissivity_error": 0.002896480011697674,
+          "temperature_K": 900.0,
+          "pressure_atm": 0.3,
+          "composition": "h2o_rich",
+          "x_co2": 0.05,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.03067331665520413,
+          "candidate_emissivity": 0.033569796666901804
+        },
+        "1.0": {
+          "absolute_emissivity_error": 0.002665698706353848,
+          "temperature_K": 900.0,
+          "pressure_atm": 0.3,
+          "composition": "trace_equal",
+          "x_co2": 0.005,
+          "x_h2o": 0.005,
+          "reference_emissivity": 0.019990621550245308,
+          "candidate_emissivity": 0.022656320256599156
+        },
+        "3.8": {
+          "absolute_emissivity_error": 0.0032366316982256615,
+          "temperature_K": 600.0,
+          "pressure_atm": 0.3,
+          "composition": "high",
+          "x_co2": 0.2,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.1790596875177806,
+          "candidate_emissivity": 0.18229631921600625
+        },
+        "5.0": {
+          "absolute_emissivity_error": 0.0033824856475793974,
+          "temperature_K": 600.0,
+          "pressure_atm": 0.3,
+          "composition": "high",
+          "x_co2": 0.2,
+          "x_h2o": 0.2,
+          "reference_emissivity": 0.19690012230702722,
+          "candidate_emissivity": 0.20028260795460662
+        }
+      }
+    }
+  },
+  "wall_solver_cases": {
+    "nominal_1atm": {
+      "condition": {
+        "temperature_K": 1800.0,
+        "pressure_atm": 1.0,
+        "x_co2": 0.08,
+        "x_h2o": 0.12
+      },
+      "reference_csv_float64": {
+        "T_w1_K": 1772.0675157041815,
+        "T_wN_K": 434.0872577532739,
+        "Qprime_W_m": 31635.58287787937,
+        "q_out_W_m2": 2174.928463329516,
+        "h_rad_in_W_m2K": 87.43108193071238,
+        "emissivity": 0.11394493953124642
+      },
+      "candidates": {
+        "packed_float32_0.25cm-1": {
+          "result": {
+            "T_w1_K": 1772.067515695619,
+            "T_wN_K": 434.08725775270767,
+            "Qprime_W_m": 31635.582877690304,
+            "q_out_W_m2": 2174.928463316518,
+            "h_rad_in_W_m2K": 87.43108190254252,
+            "emissivity": 0.11394493950448956
+          },
+          "delta_inner_wall_C": -8.562437869841233e-09,
+          "delta_outer_wall_C": -5.662172952725086e-10,
+          "delta_Qprime_W_m": -1.8906575860455632e-07,
+          "relative_Qprime_error": 5.9763639992196e-12
+        },
+        "float64_1.0cm-1": {
+          "result": {
+            "T_w1_K": 1772.0717221883283,
+            "T_wN_K": 434.08753592229726,
+            "Qprime_W_m": 31635.67576009285,
+            "q_out_W_m2": 2174.9348489292574,
+            "h_rad_in_W_m2K": 87.44492324918866,
+            "emissivity": 0.11394855674143332
+          },
+          "delta_inner_wall_C": 0.004206484146834555,
+          "delta_outer_wall_C": 0.00027816902337463034,
+          "delta_Qprime_W_m": 0.09288221348106163,
+          "relative_Qprime_error": 2.9359958733117645e-06
+        },
+        "float64_2.0cm-1": {
+          "result": {
+            "T_w1_K": 1771.7342941198542,
+            "T_wN_K": 434.0652211140416,
+            "Qprime_W_m": 31628.22513127067,
+            "q_out_W_m2": 2174.422622403904,
+            "h_rad_in_W_m2K": 86.34771303322258,
+            "emissivity": 0.11331082869523115
+          },
+          "delta_inner_wall_C": -0.3332215843272479,
+          "delta_outer_wall_C": -0.02203663923228305,
+          "delta_Qprime_W_m": -7.357746608700836,
+          "relative_Qprime_error": 0.00023263229530468558
+        }
+      }
+    },
+    "worst_packed_float32_0.25cm-1": {
+      "condition": {
+        "temperature_K": 600.0,
+        "pressure_atm": 0.3,
+        "x_co2": 0.2,
+        "x_h2o": 0.2
+      },
+      "reference_csv_float64": {
+        "T_w1_K": 559.0592114041979,
+        "T_wN_K": 331.67255709927616,
+        "Qprime_W_m": 5376.394206791248,
+        "q_out_W_m2": 369.6240665319468,
+        "h_rad_in_W_m2K": 8.420916836603539,
+        "emissivity": 0.1790596875177806
+      },
+      "candidates": {
+        "packed_float32_0.25cm-1": {
+          "result": {
+            "T_w1_K": 559.0592113914639,
+            "T_wN_K": 331.67255709782887,
+            "Qprime_W_m": 5376.394206524383,
+            "q_out_W_m2": 369.6240665136,
+            "h_rad_in_W_m2K": 8.420916832822375,
+            "emissivity": 0.17905968743280895
+          },
+          "delta_inner_wall_C": -1.273394900636049e-08,
+          "delta_outer_wall_C": -1.4472902876150329e-09,
+          "delta_Qprime_W_m": -2.668648448889144e-07,
+          "relative_Qprime_error": 4.963639841830562e-11
+        },
+        "float64_1.0cm-1": {
+          "result": {
+            "T_w1_K": 559.1228381245616,
+            "T_wN_K": 331.67978847621646,
+            "Qprime_W_m": 5377.727634721818,
+            "q_out_W_m2": 369.7157389494012,
+            "h_rad_in_W_m2K": 8.439839203965455,
+            "emissivity": 0.17991920323651162
+          },
+          "delta_inner_wall_C": 0.06362672036368622,
+          "delta_outer_wall_C": 0.007231376940296741,
+          "delta_Qprime_W_m": 1.3334279305699965,
+          "relative_Qprime_error": 0.00024795378664411907
+        },
+        "float64_2.0cm-1": {
+          "result": {
+            "T_w1_K": 559.4876724779143,
+            "T_wN_K": 331.72124634598435,
+            "Qprime_W_m": 5385.373641447237,
+            "q_out_W_m2": 370.24139759530374,
+            "h_rad_in_W_m2K": 8.549483732283587,
+            "emissivity": 0.18229631921600625
+          },
+          "delta_inner_wall_C": 0.4284610737164485,
+          "delta_outer_wall_C": 0.04868924670819297,
+          "delta_Qprime_W_m": 8.97943465598928,
+          "relative_Qprime_error": 0.0016673744950361873
+        }
+      }
+    },
+    "worst_float64_1.0cm-1": {
+      "condition": {
+        "temperature_K": 600.0,
+        "pressure_atm": 3.0,
+        "x_co2": 0.04,
+        "x_h2o": 0.08
+      },
+      "reference_csv_float64": {
+        "T_w1_K": 584.131271114319,
+        "T_wN_K": 334.49574042655587,
+        "Qprime_W_m": 5902.453024404086,
+        "q_out_W_m2": 405.79031326203796,
+        "h_rad_in_W_m2K": 17.02865636690481,
+        "emissivity": 0.35125256901684193
+      },
+      "candidates": {
+        "packed_float32_0.25cm-1": {
+          "result": {
+            "T_w1_K": 584.1312711144501,
+            "T_wN_K": 334.4957404265705,
+            "Qprime_W_m": 5902.453024406837,
+            "q_out_W_m2": 405.79031326222713,
+            "h_rad_in_W_m2K": 17.02865636716392,
+            "emissivity": 0.3512525690373564
+          },
+          "delta_inner_wall_C": 1.3108092389302328e-10,
+          "delta_outer_wall_C": 1.460875864722766e-11,
+          "delta_Qprime_W_m": 2.751221472863108e-09,
+          "relative_Qprime_error": 4.661149290789298e-13
+        },
+        "float64_1.0cm-1": {
+          "result": {
+            "T_w1_K": 584.0860210151262,
+            "T_wN_K": 334.49069175403,
+            "Qprime_W_m": 5901.502490405507,
+            "q_out_W_m2": 405.7249645862493,
+            "h_rad_in_W_m2K": 16.939449227443447,
+            "emissivity": 0.3495015157686716
+          },
+          "delta_inner_wall_C": -0.0452500991927991,
+          "delta_outer_wall_C": -0.005048672525845177,
+          "delta_Qprime_W_m": -0.950533998578976,
+          "relative_Qprime_error": 0.00016106644030470661
+        },
+        "float64_2.0cm-1": {
+          "result": {
+            "T_w1_K": 584.0976459671457,
+            "T_wN_K": 334.4919887962059,
+            "Qprime_W_m": 5901.746686434575,
+            "q_out_W_m2": 405.7417529253895,
+            "h_rad_in_W_m2K": 16.962318636265923,
+            "emissivity": 0.35029140835806566
+          },
+          "delta_inner_wall_C": -0.033625147173324876,
+          "delta_outer_wall_C": -0.003751630349995594,
+          "delta_Qprime_W_m": -0.7063379695109688,
+          "relative_Qprime_error": 0.00011968286797780016
+        }
+      }
+    },
+    "worst_float64_2.0cm-1": {
+      "condition": {
+        "temperature_K": 600.0,
+        "pressure_atm": 0.3,
+        "x_co2": 0.2,
+        "x_h2o": 0.2
+      },
+      "reference_csv_float64": {
+        "T_w1_K": 559.0592114041979,
+        "T_wN_K": 331.67255709927616,
+        "Qprime_W_m": 5376.394206791248,
+        "q_out_W_m2": 369.6240665319468,
+        "h_rad_in_W_m2K": 8.420916836603539,
+        "emissivity": 0.1790596875177806
+      },
+      "candidates": {
+        "packed_float32_0.25cm-1": {
+          "result": {
+            "T_w1_K": 559.0592113914639,
+            "T_wN_K": 331.67255709782887,
+            "Qprime_W_m": 5376.394206524383,
+            "q_out_W_m2": 369.6240665136,
+            "h_rad_in_W_m2K": 8.420916832822375,
+            "emissivity": 0.17905968743280895
+          },
+          "delta_inner_wall_C": -1.273394900636049e-08,
+          "delta_outer_wall_C": -1.4472902876150329e-09,
+          "delta_Qprime_W_m": -2.668648448889144e-07,
+          "relative_Qprime_error": 4.963639841830562e-11
+        },
+        "float64_1.0cm-1": {
+          "result": {
+            "T_w1_K": 559.1228381245616,
+            "T_wN_K": 331.67978847621646,
+            "Qprime_W_m": 5377.727634721818,
+            "q_out_W_m2": 369.7157389494012,
+            "h_rad_in_W_m2K": 8.439839203965455,
+            "emissivity": 0.17991920323651162
+          },
+          "delta_inner_wall_C": 0.06362672036368622,
+          "delta_outer_wall_C": 0.007231376940296741,
+          "delta_Qprime_W_m": 1.3334279305699965,
+          "relative_Qprime_error": 0.00024795378664411907
+        },
+        "float64_2.0cm-1": {
+          "result": {
+            "T_w1_K": 559.4876724779143,
+            "T_wN_K": 331.72124634598435,
+            "Qprime_W_m": 5385.373641447237,
+            "q_out_W_m2": 370.24139759530374,
+            "h_rad_in_W_m2K": 8.549483732283587,
+            "emissivity": 0.18229631921600625
+          },
+          "delta_inner_wall_C": 0.4284610737164485,
+          "delta_outer_wall_C": 0.04868924670819297,
+          "delta_Qprime_W_m": 8.97943465598928,
+          "relative_Qprime_error": 0.0016673744950361873
+        }
+      }
+    }
+  },
+  "acceptance_thresholds": {
+    "wall_temperature_absolute_C": 1.0
+  },
+  "interpretation": "The \u22641 C condition is assessed only for the listed wall-solver cases and relative to the current CSV model. It does not bound errors from the band-limited/filtered/pseudo-Voigt spectroscopy or sparse thermochemical grid."
+}

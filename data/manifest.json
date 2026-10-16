@@ -469,7 +469,23 @@
         3,
         6
       ]
-    ]
+    ],
+    "compact_binary": {
+      "file": "spectral_grid_alpha_f32.z",
+      "format": "HITGRD01",
+      "dtype": "<f4",
+      "compression": "zlib",
+      "shape": [
+        7,
+        3,
+        7,
+        11801
+      ],
+      "uncompressed_bytes": 6938988,
+      "bytes": 5592172,
+      "sha256": "7ef73affe72f4d680a1a578afafdd5696be92a9a2844c77f10bf12347d84f98e",
+      "source_csv_sha256": "dd10138264c3c8acfc0b3542c19f6f82b84d5f2ee257262870b800d758982e7d"
+    }
   },
   "grid_validation": {
     "created_utc": "2026-10-16T03:06:04.809228+00:00",
